@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3b82f6"/>
+      <stop offset="0.55" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#1e3a8a"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.98"/>
+      <stop offset="1" stop-color="#eaf2ff" stop-opacity="0.96"/>
+    </linearGradient>
+    <linearGradient id="line" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#10b981"/>
+      <stop offset="1" stop-color="#34d399"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#7dd3fc" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#7dd3fc" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- фон -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="404" cy="96" r="150" fill="url(#glow)"/>
+
+  <!-- корпус телефона -->
+  <rect x="146" y="74" width="220" height="364" rx="46" fill="url(#glass)"/>
+  <rect x="158" y="86" width="196" height="340" rx="36" fill="#0f172a" opacity="0.06"/>
+
+  <!-- динамик -->
+  <rect x="226" y="102" width="60" height="11" rx="5.5" fill="#94a3b8" opacity="0.65"/>
+
+  <!-- график внутри экрана -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M186 330 L232 288 L268 308 L308 244 L330 262"
+          stroke="url(#line)" stroke-width="20"/>
+  </g>
+  <circle cx="330" cy="262" r="15" fill="#34d399"/>
+  <circle cx="330" cy="262" r="26" fill="#34d399" opacity="0.22"/>
+
+  <!-- столбики под графиком -->
+  <g fill="#93c5fd" opacity="0.55">
+    <rect x="186" y="352" width="26" height="34" rx="9"/>
+    <rect x="228" y="336" width="26" height="50" rx="9"/>
+    <rect x="270" y="352" width="26" height="34" rx="9"/>
+    <rect x="312" y="318" width="26" height="68" rx="9"/>
+  </g>
+
+  <!-- монета/прибыль -->
+  <g>
+    <circle cx="368" cy="140" r="54" fill="#0b1220" opacity="0.18"/>
+    <circle cx="368" cy="140" r="50" fill="#34d399"/>
+    <circle cx="368" cy="140" r="50" fill="none" stroke="#ffffff" stroke-width="7" opacity="0.45"/>
+    <path d="M368 118 V162 M356 131 H377 A10 10 0 0 1 377 151 H359 A10 10 0 0 1 359 131 H380"
+          stroke="#064e3b" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+</svg>

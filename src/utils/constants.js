@@ -1,0 +1,126 @@
+/**
+ * Справочники: статусы, состояния, категории, цвета, подсказки.
+ *
+ * Восстановлено из production-бандла PhoneBooks. Логика и разметка сохранены без изменений;
+ * локальные имена переменных в теле функций оставлены как в бандле.
+ */
+import {
+  BatteryCharging,
+  Building2,
+  Cable,
+  Film,
+  Grip,
+  Headphones,
+  Megaphone,
+  Package,
+  Plug,
+  ScrollText,
+  Shield,
+  Smartphone,
+  Users,
+  Wrench,
+} from "lucide-react";
+export const PHONE_STATUS_LABELS = {
+    in_stock: "На складе",
+    reserved: "Резерв",
+    repair: "Ремонт",
+    sold: "Продан",
+  },
+  PHONE_STATUS_TONES = {
+    in_stock: "info",
+    reserved: "warning",
+    repair: "violet",
+    sold: "success",
+  },
+  PHONE_CONDITIONS = {
+    new: "Новый",
+    like_new: "Как новый",
+    good: "Хорошее",
+    fair: "Удовлетворительное",
+    broken: "Требует ремонта",
+  },
+  PAYMENT_METHODS = {
+    cash: "Наличные",
+    card: "Карта",
+    transfer: "Перевод на счёт",
+    sbp: "СБП",
+    other: "Другое",
+  },
+  EXPENSE_CATEGORY_SHORT = {
+    rent: "Аренда",
+    salary: "Зарплата",
+    repair: "Ремонт телефонов",
+    tax: "Налоги",
+    marketing: "Реклама",
+    other: "Прочие",
+  },
+  EXPENSE_CATEGORY_ICONS = {
+    rent: Building2,
+    salary: Users,
+    repair: Wrench,
+    tax: ScrollText,
+    marketing: Megaphone,
+    other: Package,
+  },
+  STORAGE_OPTIONS = ["32 ГБ", "64 ГБ", "128 ГБ", "256 ГБ", "512 ГБ", "1 ТБ"],
+  MODEL_SUGGESTIONS = [
+    "iPhone 15 Pro",
+    "iPhone 15",
+    "iPhone 14 Pro Max",
+    "iPhone 14",
+    "iPhone 13",
+    "iPhone 12",
+    "Samsung Galaxy S24 Ultra",
+    "Samsung Galaxy S23",
+    "Xiaomi 13T Pro",
+    "Google Pixel 8",
+  ],
+  ACCOUNT_COLORS = [
+    "#2563eb",
+    "#10b981",
+    "#f59e0b",
+    "#8b5cf6",
+    "#ef4444",
+    "#0891b2",
+    "#64748b",
+  ],
+  ACCESSORY_CATEGORY_LABELS = {
+    case: "Чехлы",
+    glass: "Защитные стёкла",
+    film: "Защитные плёнки",
+    charger: "Зарядные устройства",
+    cable: "Кабели",
+    headphones: "Наушники",
+    powerbank: "Повербанки",
+    holder: "Держатели",
+    other: "Другие аксессуары",
+  },
+  ACCESSORY_CATEGORY_ICONS = {
+    case: Smartphone,
+    glass: Shield,
+    film: Film,
+    charger: Plug,
+    cable: Cable,
+    headphones: Headphones,
+    powerbank: BatteryCharging,
+    holder: Grip,
+    other: Package,
+  },
+  PERIOD_OPTIONS = [
+    {
+      value: "day",
+      label: "День",
+    },
+    {
+      value: "week",
+      label: "Неделя",
+    },
+    {
+      value: "month",
+      label: "Месяц",
+    },
+    {
+      value: "all",
+      label: "Всё",
+    },
+  ];
