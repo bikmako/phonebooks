@@ -1,0 +1,95 @@
+name: Deploy PhoneBooks to GitHub Pages
+
+# Публикация выполняется ТОЛЬКО из main и вручную из интерфейса Actions.
+# Ветка arena/f97f5c94-phonebooks сюда не push'ится: окружение github-pages
+# уже настроено на deployment branch policy = main.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Явные права GITHUB_TOKEN: artifacts читаем, Pages пишем, OIDC нужен deploy-pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Одновременно может идти только одна публикация; текущую не отменяем.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # Официальный action возвращает base_path=/phonebooks для project Pages.
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Vite собирается с явным base=/phonebooks/ (переопределяет base:"./" из
+      # vite.config.js, который удобен только для локального dev/preview).
+      - name: Build for /phonebooks/
+        run: |
+          set -euo pipefail
+          base="${{ steps.pages.outputs.base_path }}"
+          case "$base" in
+            /phonebooks|/phonebooks/) ;;
+            *) echo "::error::Unexpected Pages base path: $base"; exit 1 ;;
+          esac
+          vite_base="${base%/}/"
+          echo "Vite base: $vite_base"
+          npm run build -- --base "$vite_base"
+
+          # Проверяем, что артефакт пригоден именно для /phonebooks/.
+          test -f dist/index.html
+          test -f dist/sw.js
+          test -f dist/404.html
+          test -f dist/manifest.webmanifest
+          test -f dist/.nojekyll
+          grep -q 'src="/phonebooks/assets/app-' dist/index.html
+          grep -q 'href="/phonebooks/assets/app-' dist/index.html
+          grep -q 'phonebooks-v9-' dist/sw.js
+          grep -q '"start_url": "./#/dashboard"' dist/manifest.webmanifest
+
+      # v3 намеренно: включает скрытые файлы, в том числе dist/.nojekyll.
+      # В v4+ dotfiles по умолчанию исключаются и нужен include-hidden-files: true.
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+          retention-days: 1
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Verify deployment ref
+        run: |
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "::error::github-pages environment permits deployments only from main. Run this workflow on main."
+            exit 1
+          fi
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

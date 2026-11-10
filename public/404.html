@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PhoneBooks</title>
+    <!-- Неизвестный адрес внутри сайта -> главная страница приложения.
+         Путь вычисляется от адреса сайта: работает и в корне домена,
+         и в подпапке /phonebooks/ на GitHub Pages. -->
+    <script>
+      (function () {
+        var p = window.location.pathname;
+        var base = p.indexOf("/phonebooks/") === 0 ? "/phonebooks/" : p.replace(/\/?[^/]*$/, "/");
+        window.location.replace(base + "#/dashboard");
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>

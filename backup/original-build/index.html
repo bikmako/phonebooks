@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5.0" />
+    <meta name="theme-color" content="#f5f7fb" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="PhoneBooks — простая бухгалтерия для бизнеса по скупке и продаже смартфонов: склад, касса, прибыль по каждому телефону." />
+    <title>PhoneBooks — бухгалтерия скупки смартфонов</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="PhoneBooks" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
+    <link rel="icon" type="image/svg+xml" href="./icons/icon.svg" />
+
+    <style>
+      /* Первый экран до загрузки React — без белой вспышки */
+      html, body { background: #f5f7fb; margin: 0; }
+      @media (prefers-color-scheme: dark) {
+        html, body { background: #0b1220; }
+      }
+      #boot {
+        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      }
+      #boot .mark {
+        width: 44px; height: 44px; border-radius: 13px;
+        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 8px 24px -8px rgba(37, 99, 235, .5);
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+      #boot .mark svg { width: 22px; height: 22px; color: #fff; }
+      @keyframes pulse { 0%,100% { transform: scale(1); opacity: 1 } 50% { transform: scale(.94); opacity: .85 } }
+    </style>
+    <script type="module" crossorigin src="./assets/index-BAX7GeKn.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/icons-B2J5C2Sm.js">
+    <link rel="modulepreload" crossorigin href="./assets/charts-DM28DfPR.js">
+    <link rel="stylesheet" crossorigin href="./assets/index-D8TNLwJT.css">
+    <script>
+      // Просим браузер не выгружать данные сайта (IndexedDB) при нехватке места
+      try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {}); } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div id="boot" aria-hidden="true">
+      <div class="mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+          <path d="M4 19V10M10 19V5M16 19v-7M22 19v-3" />
+        </svg>
+      </div>
+    </div>
+  </body>
+</html>
