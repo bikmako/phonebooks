@@ -50,6 +50,7 @@ async function recoverJournal(storage = localStorage) {
   const journal = await new Promise((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
   await done;
   if (!journal) return;
+  validateLocal(journal.localStorage);
   writeLocal(journal.localStorage, storage);
   const cleanup = db.transaction('meta', 'readwrite'), cleaned = completion(cleanup);
   cleanup.objectStore('meta').delete('pendingImport'); await cleaned;
@@ -68,7 +69,7 @@ export async function recoverInterruptedImport(storage = localStorage) {
 }
 export async function listRecoveryCopies() {
   const snapshot = await captureSnapshot();
-  return snapshot.indexedDB.meta.filter(x => x.key.startsWith('recovery:')).map(x => ({ id: x.key, at: x.key.slice(9), snapshot: x.value }));
+  return snapshot.indexedDB.meta.filter(x => x.key.startsWith('recovery:')).map(x => ({ id: x.key, at: x.key.slice(9, 33), snapshot: x.value }));
 }
 export async function prepareImport(parsed, storage = localStorage) {
   const before = await captureSnapshot(storage);
@@ -120,8 +121,17 @@ export async function prepareImport(parsed, storage = localStorage) {
             }
           }
           const meta = tx.objectStore('meta');
-          for (const entry of before.indexedDB.meta.filter(x => x.key.startsWith('recovery:'))) meta.put(entry.value, entry.key);
-          const recoveryId = `recovery:${new Date().toISOString()}`;
+          const occupied = new Map(snapshot.indexedDB.meta.map(entry => [entry.key, entry.value]));
+          const uniqueRecoveryId = () => {
+            let key;
+            do { key = `recovery:${new Date().toISOString()}~${crypto.randomUUID()}`; } while (occupied.has(key));
+            occupied.set(key, true); return key;
+          };
+          for (const entry of before.indexedDB.meta.filter(x => x.key.startsWith('recovery:'))) {
+            const key = occupied.has(entry.key) && !same(occupied.get(entry.key), entry.value) ? uniqueRecoveryId() : entry.key;
+            occupied.set(key, entry.value); meta.put(entry.value, key);
+          }
+          const recoveryId = uniqueRecoveryId();
           meta.put(recovery, recoveryId);
           meta.put({ at: new Date().toISOString() }, 'lastSaved');
         } catch (error) { tx.abort(); await done.catch(() => {}); throw error; }

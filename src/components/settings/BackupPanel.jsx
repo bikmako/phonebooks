@@ -57,7 +57,7 @@ export function BackupPanel() {
     <p className="mt-2 text-[12px] text-ink-500">На другом адресе сайта база будет отдельной. Сохраните файл на Netlify, проверьте перенос и оставьте старую установку до завершения проверки. Копия содержит финансовые и личные данные; храните её в защищённом месте.</p>
     <div className="mt-3 flex flex-wrap gap-2">
       <Button variant="secondary" disabled={busy || !!plan} onClick={exportFile}>Скачать полную копию</Button>
-      <label className="btn-secondary btn-md">Загрузить из файла<input aria-label="Файл резервной копии" type="file" accept=".json,application/json" disabled={busy || !!plan} onChange={event => { void read(event.target.files?.[0]); event.target.value = ''; }} /></label>
+      <label className="btn-secondary btn-md">Загрузить из файла<input className="hidden" aria-label="Файл резервной копии" type="file" accept=".json,application/json" disabled={busy || !!plan} onChange={event => { void read(event.target.files?.[0]); event.target.value = ''; }} /></label>
       <Button variant="secondary" disabled={busy || !!plan} onClick={() => store.makeBackup('manual')}>Сделать точку восстановления</Button>
     </div>
     {error && <p role="alert" className="mt-2 text-red-500">{error}</p>}
@@ -71,7 +71,7 @@ export function BackupPanel() {
       {recoveries.map(copy => <div key={copy.id} className="mt-2 flex gap-2"><span>{copy.at}</span><Button size="sm" disabled={busy || !!plan} onClick={() => prepare({ snapshot: copy.snapshot })}>Просмотреть</Button></div>)}
     </details>
     </Card>
-    <Modal open={!!plan} title="Предварительный просмотр импорта" onClose={close} footer={<div className="flex gap-2">
+    <Modal open={!!plan} title="Предварительный просмотр импорта" onClose={close} footer={<div className="flex flex-col gap-2 sm:flex-row">
       <Button variant="secondary" disabled={busy} onClick={close}>Отмена без записи</Button>
       <Button disabled={busy || !overwrite || !acknowledged || !downloaded} onClick={async () => {
         setBusy(true); setError('');

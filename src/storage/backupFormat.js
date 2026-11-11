@@ -7,7 +7,11 @@ const object = x => x !== null && typeof x === 'object' && !Array.isArray(x);
 const fail = message => { throw new Error(message); };
 const text = (x, path) => typeof x === 'string' || fail(`${path}: ожидается строка`);
 const number = (x, path) => (typeof x === 'number' && Number.isFinite(x)) || fail(`${path}: ожидается конечное число`);
-const date = (x, path) => (typeof x === 'string' && Number.isFinite(Date.parse(x))) || fail(`${path}: неверная дата`);
+const date = (x, path) => {
+  if (typeof x !== 'string' || !/^\d{4}-\d{2}-\d{2}(?:$|T)/.test(x) || !Number.isFinite(Date.parse(x))) fail(`${path}: неверная дата`);
+  const day = x.slice(0, 10);
+  if (new Date(day).toISOString().slice(0, 10) !== day) fail(`${path}: неверная календарная дата`);
+};
 const choice = (x, choices, path) => choices.includes(x) || fail(`${path}: неизвестное значение`);
 export function safeJson(value, depth = 0) {
   if (depth > 80) fail('Слишком большая вложенность');
@@ -166,7 +170,9 @@ export function validateSnapshot(snapshot) {
 }
 export function buildExportFile(snapshot) {
   validateSnapshot(snapshot);
-  return { app: 'PhoneBooks', formatVersion: FORMAT_VERSION, schemaVersion: 1, exportedAt: new Date().toISOString(), snapshot: structuredClone(snapshot) };
+  const file = { app: 'PhoneBooks', formatVersion: FORMAT_VERSION, schemaVersion: 1, exportedAt: new Date().toISOString(), snapshot: structuredClone(snapshot) };
+  if (new TextEncoder().encode(JSON.stringify(file, null, 2)).length > MAX_FILE_BYTES) fail('Полная копия больше 32 МБ: импорт такого файла невозможен');
+  return file;
 }
 export function parseImportFile(source) {
   try {

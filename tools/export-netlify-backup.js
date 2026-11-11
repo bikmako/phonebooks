@@ -31,7 +31,9 @@
     if (JSON.stringify(before) !== JSON.stringify(readLocal())) throw new Error('Настройки или черновики изменились во время выгрузки. Повторите экспорт');
     if (!stores.state.some(x => x.key === 'current') || stores.meta.some(x => x.key === 'pendingImport')) throw new Error('Нет текущей базы или есть незавершённый импорт');
     const file = { app: 'PhoneBooks', formatVersion: 2, schemaVersion: 1, exportedAt: new Date().toISOString(), snapshot: { indexedDB: { name: 'phonebooks', version: 1, ...stores }, localStorage: before } };
-    const url = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' }));
+    const source = JSON.stringify(file, null, 2);
+    if (new TextEncoder().encode(source).length > 32 * 1024 * 1024) throw new Error('Полная копия больше 32 МБ: импорт такого файла невозможен');
+    const url = URL.createObjectURL(new Blob([source], { type: 'application/json' }));
     const link = document.createElement('a');
     link.href = url; link.download = `phonebooks-netlify-full-${Date.now()}.json`;
     document.body.appendChild(link); link.click(); link.remove();

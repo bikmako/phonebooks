@@ -1,21 +1,7 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 
-async function snapshot(page) {
-  return page.evaluate(async () => {
-    const db = await new Promise((resolve, reject) => { const req = indexedDB.open('phonebooks', 1); req.onsuccess = () => resolve(req.result); req.onerror = reject; });
-    const result = {};
-    for (const name of ['state', 'backups', 'meta']) result[name] = await new Promise(resolve => { const req = db.transaction(name).objectStore(name).getAll(); req.onsuccess = () => resolve(req.result); });
-    db.close();
-    return { ...result, localStorage: Object.fromEntries(Object.keys(localStorage).map(key => [key, localStorage.getItem(key)])) };
-  });
-}
-async function exportFile(page) {
-  const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Скачать полную копию', exact: true }).click();
-  const file = await download; return JSON.parse(await fs.readFile(await file.path(), 'utf8'));
-}
-const upload = (page, data) => page.getByLabel('Файл резервной копии').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(typeof data === 'string' ? data : JSON.stringify(data)) });
+import { snapshot, exportFile, upload, commitAndReload } from './helpers.js';
 test.beforeEach(async ({ page }) => {
   await page.goto('./#/settings');
   await expect(page.getByRole('button', { name: 'Скачать полную копию', exact: true })).toBeVisible();
@@ -44,7 +30,7 @@ test('export, readonly preview, cancel, confirmations, import, reload and full r
   await page.getByLabel('Я сохранил предварительную копию и подтверждаю импорт').check();
   await expect(page.getByRole('button', { name: 'Подтвердить импорт', exact: true })).toBeDisabled();
   await page.getByLabel('Отдельно разрешаю заменить существующие данные, тему и черновики').check();
-  await page.getByRole('button', { name: 'Подтвердить импорт', exact: true }).click();
+  await commitAndReload(page);
   await expect(page.getByLabel('Название бизнеса')).toHaveValue('Перенесённый бизнес');
   await expect(page.getByRole('heading', { name: 'Предварительный просмотр импорта' })).not.toBeVisible();
   let after = await snapshot(page);
@@ -56,7 +42,7 @@ test('export, readonly preview, cancel, confirmations, import, reload and full r
   await page.getByRole('button', { name: 'Скачать предварительную полную копию' }).click();
   await page.getByLabel('Я сохранил предварительную копию и подтверждаю импорт').check();
   await page.getByLabel('Отдельно разрешаю заменить существующие данные, тему и черновики').check();
-  await page.getByRole('button', { name: 'Подтвердить импорт', exact: true }).click();
+  await commitAndReload(page);
   await expect(page.getByLabel('Название бизнеса')).toHaveValue('Моя скупка');
   after = await snapshot(page);
   expect(after.state).toEqual(before.state);
@@ -122,7 +108,7 @@ test('read-only bridge exports the original build and migrates between origins',
   await page.getByRole('button', { name: 'Скачать предварительную полную копию' }).click();
   await page.getByLabel('Я сохранил предварительную копию и подтверждаю импорт').check();
   await page.getByLabel('Отдельно разрешаю заменить существующие данные, тему и черновики').check();
-  await page.getByRole('button', { name: 'Подтвердить импорт', exact: true }).click();
+  await commitAndReload(page);
   await expect(page.getByRole('heading', { name: 'Предварительный просмотр импорта' })).not.toBeVisible();
   await expect(page.getByRole('button', { name: 'Скачать полную копию', exact: true })).toBeVisible();
   const after = await snapshot(page);

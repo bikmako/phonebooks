@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import 'fake-indexeddb/auto';
@@ -290,4 +291,48 @@ test('malformed active form drafts and inconsistent backup counters rejected', a
   await createBackup(original);
   const bad = await exportFullBackup(); bad.snapshot.indexedDB.backups[0].value.phones = 100;
   assert.ok(parseImportFile(JSON.stringify(bad)).error);
+});
+
+test('exports cannot exceed the parser byte limit, including UTF-8 and pretty-printing', async () => {
+  const snapshot = await captureSnapshot(); snapshot.indexedDB.state[0].value.extension = 'я'.repeat(17 * 1024 * 1024);
+  assert.throws(() => buildExportFile(snapshot), /32 МБ/);
+});
+test('invalid calendar dates are rejected consistently', async () => {
+  for (const at of ['2026-02-30T12:00:00Z', '2026-13-01', '01/02/2026']) {
+    const snapshot = await captureSnapshot(); snapshot.indexedDB.state[0].value.accounts[0].createdAt = at;
+    assert.throws(() => buildExportFile(snapshot), /дата/);
+  }
+});
+test('recovery key collisions preserve both incoming and existing copies', async () => {
+  const existing = await captureSnapshot();
+  const key = 'recovery:2026-01-01T00:00:00.000Z';
+  await runStore('meta', 'readwrite', store => store.put(existing, key));
+  const incoming = await captureSnapshot();
+  incoming.indexedDB.meta.find(x => x.key === key).value.indexedDB.state[0].value.settings.businessName = 'Different recovery';
+  const plan = await prepareImport({ snapshot: incoming }); await plan.commit(options());
+  const copies = (await captureSnapshot()).indexedDB.meta.filter(x => x.key.startsWith('recovery:'));
+  assert.ok(copies.some(x => JSON.stringify(x.value) === JSON.stringify(existing)));
+  assert.ok(copies.some(x => x.value.indexedDB.state[0].value.settings.businessName === 'Different recovery'));
+  assert.equal(copies.length, 3);
+});
+
+test('corrupt recovery journal cannot clear drafts or write unrelated keys', async () => {
+  const before = localStorage.getItem('phonebooks.draft.purchase');
+  await runStore('meta', 'readwrite', store => store.put({ localStorage: [{ key: 'other.app', value: 'overwrite' }] }, 'pendingImport'));
+  await assert.rejects(recoverInterruptedImport(), /localStorage/);
+  assert.equal(localStorage.getItem('phonebooks.draft.purchase'), before);
+  assert.equal(localStorage.getItem('other.app'), 'do not touch');
+  assert.ok(await runStore('meta', 'readonly', store => store.get('pendingImport')));
+});
+
+
+test('read-only migration bridge also refuses exports above the import size limit', async () => {
+  const state = structuredClone(original); state.extension = 'я'.repeat(17 * 1024 * 1024);
+  await persistState(state);
+  const source = await readFile(new URL('../tools/export-netlify-backup.js', import.meta.url), 'utf8');
+  const errors = [], previous = console.error;
+  console.error = (...args) => errors.push(args.join(' '));
+  try { await eval(source); } finally { console.error = previous; }
+  assert.equal(errors.length, 1); assert.match(errors[0], /32 МБ/);
+  assert.equal((await loadState()).extension.length, state.extension.length);
 });
