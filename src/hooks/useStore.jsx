@@ -1,12 +1,13 @@
 /**
  * Контекст состояния приложения и хук useStore.
  *
- * Восстановлено из production-бандла PhoneBooks. Логика и разметка сохранены без изменений;
- * локальные имена переменных в теле функций оставлены как в бандле.
+ * Сохранения сериализованы; перенос блокирует изменения до отмены или завершения.
  */
 import { checkDataIntegrity } from "../domain/integrity.js";
 import { DomainError } from "../domain/shared.js";
 import {
+  downloadJson,
+  acceptPersistedState,
   createBackup,
   getLastSaved,
   getStorageEstimate,
@@ -14,8 +15,8 @@ import {
   loadState,
   migrateLegacyState,
   persistState,
-  readBackup,
 } from "../storage/db.js";
+import { captureSnapshot, prepareImport, exportFullBackup, recoverInterruptedImport } from "../storage/fullBackup.js";
 import { createInitialState } from "../storage/initialState.js";
 import React from "react";
 import { jsx } from "react/jsx-runtime";
@@ -24,6 +25,7 @@ export function normalizeState(s) {
   var n;
   const t = createInitialState();
   return {
+    ...s,
     schemaVersion: s.schemaVersion ?? 1,
     accounts: (n = s.accounts) != null && n.length ? s.accounts : t.accounts,
     phones: s.phones ?? [],
@@ -53,7 +55,10 @@ export function StoreProvider({ children: s }) {
     [m, f] = React.useState([]),
     C = React.useRef(t),
     S = React.useRef(null),
-    g = React.useRef(null);
+    g = React.useRef(null),
+    transferBusy = React.useRef(false),
+    writeQueue = React.useRef(Promise.resolve()),
+    [startupError, setStartupError] = React.useState(null);
   C.current = t;
   const b = React.useCallback((Q) => {
       const V = Math.random().toString(36).slice(2);
@@ -78,7 +83,9 @@ export function StoreProvider({ children: s }) {
     let Q = !1;
     return (
       (async () => {
-        const _ = (await migrateLegacyState()) ?? (await loadState());
+        try {
+        await recoverInterruptedImport();
+        const _ = (await loadState()) ?? (await migrateLegacyState());
         if (!Q) {
           if (_) {
             const k = normalizeState(_);
@@ -92,6 +99,7 @@ export function StoreProvider({ children: s }) {
             p(await listBackups()),
             Q || c(!0));
         }
+        } catch (error) { if (!Q) setStartupError(error.message); }
       })(),
       () => {
         Q = !0;
@@ -103,12 +111,12 @@ export function StoreProvider({ children: s }) {
       if (Q) {
         ((g.current = null), i("saving"));
         try {
-          (await persistState(Q),
+          (await (writeQueue.current = writeQueue.current.catch(() => {}).then(() => persistState(Q))),
             l(new Date().toISOString()),
             i("saved"),
             x(null));
         } catch (V) {
-          (i("error"),
+          (g.current = g.current ?? Q, i("error"),
             x(
               V instanceof Error
                 ? V.message
@@ -130,11 +138,9 @@ export function StoreProvider({ children: s }) {
       g.current && j();
     };
     return (
-      document.addEventListener("visibilitychange", () => {
-        document.visibilityState === "hidden" && Q();
-      }),
+      document.addEventListener("visibilitychange", Q),
       window.addEventListener("pagehide", Q),
-      () => window.removeEventListener("pagehide", Q)
+      () => { window.removeEventListener("pagehide", Q); document.removeEventListener("visibilitychange", Q); }
     );
   }, [j]);
   const N = React.useCallback(
@@ -145,6 +151,7 @@ export function StoreProvider({ children: s }) {
     ),
     E = React.useCallback(
       (Q) => {
+        if (transferBusy.current) return { ok: false };
         const V = C.current;
         try {
           const _ = Q(V);
@@ -186,55 +193,48 @@ export function StoreProvider({ children: s }) {
       async (Q = "manual") => {
         try {
           (await createBackup(C.current, Q), await y());
-        } catch {}
+        } catch (error) { b({ title: "Копия не создана", description: error.message, tone: "error" }); }
       },
-      [y],
+      [y, b],
     ),
-    M = React.useCallback(
-      (Q) => {
-        (R("manual"), N(normalizeState(Q)), j());
-      },
-      [N, R, j],
-    ),
-    G = React.useCallback(() => {
-      (R("manual"),
-        N(createInitialState()),
-        b({
-          title: "Данные очищены",
-          description: "Остался один счёт «Касса» с нулевым остатком",
-          tone: "info",
-        }));
-    }, [N, R, b]),
-    ee = React.useCallback(
-      async (Q) => {
-        const V = await readBackup(Q);
-        return V
-          ? (await createBackup(C.current, "manual"),
-            N(normalizeState(V)),
-            await j(),
-            await y(),
-            b({
-              title: "Данные восстановлены",
-              description: "Из резервной копии",
-              tone: "success",
-            }),
-            !0)
-          : (b({
-              title: "Копия не найдена",
-              tone: "error",
-            }),
-            !1);
-      },
-      [N, j, b, y],
-    );
+    G = React.useCallback(async () => {
+      if (transferBusy.current) return;
+      transferBusy.current = true;
+      try {
+        await j(); await writeQueue.current;
+        await createBackup(C.current, "manual");
+        const next = createInitialState(); await persistState(next);
+        C.current = next; n(next); await y();
+      } catch (error) { b({ title: "Очистка остановлена", description: error.message, tone: "error" }); }
+      finally { transferBusy.current = false; }
+    }, [j, b, y]);
+  const beginImport = React.useCallback(async parsed => {
+    if (transferBusy.current) throw new Error("Другая операция уже выполняется");
+    transferBusy.current = true;
+    try {
+      await j(); await writeQueue.current;
+      if (g.current) throw new Error("Сначала сохраните текущие изменения");
+      return await prepareImport(parsed);
+    } catch (error) { transferBusy.current = false; throw error; }
+  }, [j]);
+  const cancelImport = React.useCallback(plan => {
+    plan?.cancel(); transferBusy.current = false;
+  }, []);
+  const finishImport = React.useCallback(async (plan, options) => {
+    const next = await plan.commit(options);
+    acceptPersistedState(next);
+    C.current = next; n(next); l(new Date().toISOString()); i("saved");
+    await y();
+    transferBusy.current = false;
+  }, [y]);
+  const exportBackup = React.useCallback(async () => {
+    await j(); await writeQueue.current;
+    if (g.current) throw new Error("Сначала сохраните текущие изменения");
+    return exportFullBackup();
+  }, [j]);
   React.useEffect(() => {
     const Q = (V) => {
-      V.key === "phonebooks.ping" &&
-        loadState().then((_) => {
-          _ &&
-            JSON.stringify(_) !== JSON.stringify(C.current) &&
-            ((C.current = _), n(_));
-        });
+      if (V.key === "phonebooks.ping") b({ title: "Данные изменены другой вкладкой", description: "Перезагрузите приложение перед редактированием", tone: "info" });
     };
     return (
       window.addEventListener("storage", Q),
@@ -256,16 +256,26 @@ export function StoreProvider({ children: s }) {
         notify: b,
         dismissToast: B,
         mutate: E,
-        replaceAll: M,
+        startupError,
+        beginImport, cancelImport, finishImport, exportBackup,
         resetData: G,
         makeBackup: R,
-        restoreBackup: ee,
+
         refreshBackups: y,
         storage: w,
         issues: W,
       }),
-      [t, a, r, o, d, v, L, m, b, B, E, M, G, R, ee, y, w, W],
+      [t, a, r, o, d, v, L, m, b, B, E, G, R, y, w, W, startupError, beginImport, cancelImport, finishImport, exportBackup],
     );
+  if (startupError) return <div className="card card-pad" role="alert">
+    <h1>Не удалось открыть данные</h1><p>{startupError}</p>
+    <p>Запись заблокирована. Существующая база сохранена. Закройте другие вкладки и повторите запуск.</p>
+    <button onClick={() => location.reload()}>Повторить запуск</button>
+    <button onClick={async () => {
+      try { downloadJson("phonebooks-diagnostic-recovery.json", { app: "PhoneBooks", diagnostic: true, snapshot: await captureSnapshot() }); }
+      catch (error) { setStartupError(error.message); }
+    }}>Скачать исходные данные для восстановления</button>
+  </div>;
   return <StoreContext.Provider value={ie}>{s}</StoreContext.Provider>;
 }
 export function useStore() {

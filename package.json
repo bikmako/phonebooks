@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test tests/backup.test.js",
+    "test:browser": "playwright test"
   },
   "dependencies": {
     "lucide-react": "0.454.0",
@@ -16,7 +18,9 @@
     "recharts": "2.15.4"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.0",
     "@vitejs/plugin-react": "4.7.0",
+    "fake-indexeddb": "6.2.8",
     "vite": "5.4.21"
   }
 }
