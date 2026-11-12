@@ -5,6 +5,11 @@
  * локальные имена переменных в теле функций оставлены как в бандле.
  */
 import { daysBetween, inPeriod, roundMoney, today } from "./format.js";
+// Repairs are the single source for both cost and account debits.
+export const getPhoneRepairs = phone => phone.repairs ?? [];
+export const getRepairTotal = phone => roundMoney(getPhoneRepairs(phone).reduce((sum, repair) => sum + repair.amount, 0));
+export const getPhoneTotalCost = phone => roundMoney(phone.purchasePrice + getRepairTotal(phone));
+export const getRepairs = state => state.phones.flatMap(phone => getPhoneRepairs(phone));
 export function getAccountBalances(state, t) {
   return state.accounts.map((n) => {
     const a = (l) => !0;
@@ -18,6 +23,8 @@ export function getAccountBalances(state, t) {
     for (const l of state.phones)
       l.purchaseAccountId === n.id &&
         (a(l.purchaseDate), (r += l.purchasePrice), i++);
+    for (const repair of getRepairs(state))
+      if (repair.amount > 0 && repair.accountId === n.id) { r += repair.amount; i++; }
     for (const l of state.expenses)
       l.accountId === n.id && (a(l.date), (r += l.amount), i++);
     for (const l of state.transfers)
@@ -64,6 +71,7 @@ export function getAccountDelta(state, t) {
     a.status === "completed" && a.accountId === t && (n += getSaleRevenue(a));
   for (const a of state.phones)
     a.purchaseAccountId === t && (n -= a.purchasePrice);
+  for (const repair of getRepairs(state)) if (repair.accountId === t) n -= repair.amount;
   for (const a of state.expenses) a.accountId === t && (n -= a.amount);
   for (const a of state.transfers)
     (a.fromAccountId === t && (n -= a.amount),
@@ -94,7 +102,7 @@ export function getSaleRevenue(s) {
 export function getSaleProfit(s, t) {
   if (s.status !== "completed") return 0;
   const n = t.find((a) => a.id === s.phoneId);
-  return n ? roundMoney(getSaleRevenue(s) - n.purchasePrice) : 0;
+  return n ? roundMoney(getSaleRevenue(s) - getPhoneTotalCost(n)) : 0;
 }
 export function getSaleMargin(s, t) {
   const n = getSaleRevenue(s);
@@ -122,7 +130,7 @@ export function getPhonesInStock(state) {
 }
 export function getStockValue(state) {
   return roundMoney(
-    getPhonesInStock(state).reduce((t, n) => t + n.purchasePrice, 0),
+    getPhonesInStock(state).reduce((t, n) => t + getPhoneTotalCost(n), 0),
   );
 }
 export function getStats(state, t) {
@@ -136,7 +144,7 @@ export function getStats(state, t) {
     o = roundMoney(
       n.reduce((u, N) => {
         const E = a.get(N.phoneId);
-        return u + ((E == null ? void 0 : E.purchasePrice) ?? 0);
+        return u + (E ? getPhoneTotalCost(E) : 0);
       }, 0),
     ),
     l = state.accessorySales.filter(
@@ -199,7 +207,7 @@ export function getStats(state, t) {
       .map((u) => {
         const N = getSaleRevenue(u),
           E = a.get(u.phoneId);
-        return N > 0 && E ? (N - E.purchasePrice) / N : 0;
+        return N > 0 && E ? (N - getPhoneTotalCost(E)) / N : 0;
       })
       .filter((u) => Number.isFinite(u));
   return {
@@ -222,7 +230,7 @@ export function getStats(state, t) {
     withdrawals: g,
     transfersIn: b,
     transfersOut: B,
-    cashFlow: roundMoney(A - y - w - m + S - g),
+    cashFlow: roundMoney(A - y - w - m - getRepairs(state).filter(repair => inPeriod(repair.date, t)).reduce((sum, repair) => sum + repair.amount, 0) + S - g),
     phoneRevenue: i,
     phoneCogs: o,
     accRevenue: d,

@@ -69,9 +69,33 @@ export function validateState(input, { legacy = false } = {}) {
   const ids = Object.fromEntries(COLLECTIONS.map(name => [name, new Set(state[name].map(x => x.id))]));
   const ref = (value, name, path) => ids[name].has(value) || fail(`${path}: ссылка на отсутствующую запись`);
   for (const row of state.accounts) choice(row.type, ['cash', 'bank', 'card', 'other'], 'accounts.type');
+  const repairIds = new Set();
   for (const row of state.phones) {
     ref(row.purchaseAccountId, 'accounts', 'phones.purchaseAccountId');
     choice(row.status, ['in_stock', 'reserved', 'repair', 'sold'], 'phones.status');
+    // Optional nested extension: old v1 phones and backups remain byte-for-byte
+    // intact. No extra object store or duplicated expense/payment is created.
+    if (row.repairSessionId !== undefined && row.repairSessionId !== null) {
+      text(row.repairSessionId, 'phones.repairSessionId');
+      if (!row.repairSessionId || row.status !== 'repair') fail('Неверный активный ремонт');
+      if (repairIds.has(row.repairSessionId)) fail('Повторный id ремонта');
+      repairIds.add(row.repairSessionId);
+    }
+    if (row.repairs !== undefined) {
+      if (!Array.isArray(row.repairs)) fail('phones.repairs: ожидается массив');
+      for (const repair of row.repairs) {
+        if (!object(repair) || typeof repair.id !== 'string' || !repair.id || repairIds.has(repair.id)) fail('Неверный или повторный id ремонта');
+        repairIds.add(repair.id);
+        number(repair.amount, 'repairs.amount');
+        if (repair.amount < 0 || !Number.isSafeInteger(Math.round(repair.amount * 100)) || Math.abs(repair.amount * 100 - Math.round(repair.amount * 100)) > 0.00001) fail('Неверная сумма ремонта');
+        if (repair.amount > 0) ref(repair.accountId, 'accounts', 'repairs.accountId');
+        else if (repair.accountId !== null) fail('Нулевой ремонт не должен списывать деньги');
+        text(repair.comment, 'repairs.comment');
+        date(repair.date, 'repairs.date'); date(repair.createdAt, 'repairs.createdAt'); date(repair.updatedAt, 'repairs.updatedAt');
+      }
+      const total = row.purchasePrice + row.repairs.reduce((sum, repair) => sum + repair.amount, 0);
+      if (!Number.isSafeInteger(Math.round(total * 100))) fail('Слишком большая себестоимость');
+    }
   }
   for (const name of ['sales', 'expenses', 'cashOps', 'accessorySales']) for (const row of state[name]) ref(row.accountId, 'accounts', `${name}.accountId`);
   for (const row of state.transfers) {

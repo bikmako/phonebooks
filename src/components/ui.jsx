@@ -203,6 +203,9 @@ export function Modal({
       return (
         (document.body.style.overflow = "hidden"),
         setTimeout(() => {
+          // A notification or input update must not steal focus from a user
+          // who is already typing inside the dialog.
+          if (d.current?.contains(document.activeElement)) return;
           var L;
           const A =
             (L = d.current) == null

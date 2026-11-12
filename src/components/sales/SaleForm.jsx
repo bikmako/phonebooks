@@ -1,3 +1,4 @@
+import { getPhoneTotalCost } from "../../utils/calculations.js";
 /**
  * Восстановленный модуль PhoneBooks.
  *
@@ -110,7 +111,7 @@ export function SaleForm({
     M = Number(x.price) || 0,
     G = Number(x.discount) || 0,
     ee = Math.max(0, M - G),
-    W = R ? ee - R.purchasePrice : 0,
+    W = R ? ee - getPhoneTotalCost(R) : 0,
     ie = G > M,
     Q = c.accessoryItems.find((P) => P.id === B),
     V = C.reduce((P, H) => P + H.qty * H.unitPrice, 0),

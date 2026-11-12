@@ -1,3 +1,4 @@
+import { getPhoneTotalCost } from "../../utils/calculations.js";
 /**
  * Восстановленный модуль PhoneBooks.
  *
@@ -15,7 +16,7 @@ import { Chip, cx } from "../ui.jsx";
 import { jsx, jsxs } from "react/jsx-runtime";
 export function PhoneSummaryCard({ data: s, phone: t, price: n }) {
   const a = findCompletedSale(s, t.id),
-    c = n - t.purchasePrice;
+    c = n - getPhoneTotalCost(t);
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5">
       <div className="flex items-start justify-between gap-2">

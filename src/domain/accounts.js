@@ -28,7 +28,7 @@ export function saveAccount(state, t) {
   const r = toNumber(t.openingBalance);
   if (a && a.openingBalance !== r) {
     const l =
-      state.phones.some((d) => d.purchaseAccountId === a.id) ||
+      state.phones.some((d) => d.purchaseAccountId === a.id || (d.repairs ?? []).some(repair => repair.accountId === a.id)) ||
       state.sales.some((d) => d.accountId === a.id) ||
       state.expenses.some((d) => d.accountId === a.id) ||
       state.transfers.some(
