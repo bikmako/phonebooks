@@ -151,3 +151,5 @@ vite.config.ts.timestamp-*
 # Browser verification artifacts
 test-results/
 playwright-report/
+public/scanner-assets/
+work/

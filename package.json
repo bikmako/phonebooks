@@ -5,21 +5,28 @@
   "type": "module",
   "description": "PhoneBooks — бухгалтерия скупки смартфонов (восстановленный исходный проект React + Vite)",
   "scripts": {
+    "predev": "node tools/prepare-scanner-assets.js",
     "dev": "vite",
+    "prebuild": "node tools/prepare-scanner-assets.js",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test tests/backup.test.js",
+    "test": "node --test tests/*.test.js",
     "test:browser": "playwright test"
   },
   "dependencies": {
+    "@tesseract.js-data/eng": "1.0.0",
+    "@zxing/library": "0.21.3",
     "lucide-react": "0.454.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "recharts": "2.15.4"
+    "recharts": "2.15.4",
+    "tesseract.js": "6.0.1",
+    "tesseract.js-core": "6.1.2"
   },
   "devDependencies": {
     "@playwright/test": "1.65.0",
     "@vitejs/plugin-react": "4.7.0",
+    "bwip-js": "4.7.0",
     "fake-indexeddb": "6.2.8",
     "vite": "5.4.21"
   }
