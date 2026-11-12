@@ -38,6 +38,7 @@ import {
 } from "../utils/format.js";
 import { ChevronRight, Plus, Search, ShoppingBag, X } from "lucide-react";
 import React from "react";
+import { createPortal } from "react-dom";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 export function PurchasePage({
   formOpen: s,
@@ -45,7 +46,7 @@ export function PurchasePage({
   onCloseForm: n,
   onSell: a,
 }) {
-  const { data: c, mutate: r, notify: i } = useStore(),
+  const { data: c, mutatePersisted, notify: i } = useStore(),
     [o, l] = React.useState(""),
     [d, x] = React.useState("all"),
     [v, p] = React.useState(null),
@@ -101,16 +102,17 @@ export function PurchasePage({
             : E.purchaseDate.localeCompare(N.purchaseDate),
         );
     }, [c.phones, d, o]),
-    B = () => {
+    B = async () => {
       if (!L) return;
-      (r((j) => deletePhone(j, L.id)).ok &&
+      const result = await mutatePersisted(j => deletePhone(j, L.id));
+      if (result.ok) {
         i({
           title: "Закупка удалена",
           description: "Деньги вернулись на счёт",
           tone: "info",
-        }),
-        O(null),
-        p(null));
+        });
+        O(null); p(null);
+      }
     };
   return (
     <div className="space-y-4">
@@ -447,18 +449,18 @@ export function PurchasePage({
           </div>
         </div>
       )}
-      <ConfirmDialog
+      {createPortal(<ConfirmDialog
         open={!!L}
         onClose={() => O(null)}
         onConfirm={B}
         title="Удалить закупку?"
         description={
           L
-            ? `«${L.model}» будет удалён из базы, ${formatMoney(L.purchasePrice)} вернутся на счёт.`
+            ? `«${L.model}» будет удалён из базы. Закупка ${formatMoney(L.purchasePrice)} вернётся на счёт закупки.${L.repairs?.length ? ` Ремонты (${formatMoney(L.repairs.reduce((sum, repair) => sum + repair.amount, 0))}) будут удалены, их суммы вернутся на исходные счета.` : ""}`
             : void 0
         }
         confirmLabel="Удалить"
-      />
+      />, document.body)}
     </div>
   );
 }

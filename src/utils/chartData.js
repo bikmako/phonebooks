@@ -4,7 +4,7 @@
  * Восстановлено из production-бандла PhoneBooks. Логика и разметка сохранены без изменений;
  * локальные имена переменных в теле функций оставлены как в бандле.
  */
-import { getSaleProfit, getSaleRevenue } from "./calculations.js";
+import { getSaleProfit, getSaleRevenue, getPhoneTotalCost } from "./calculations.js";
 import {
   addDays,
   daysBetween,
@@ -93,7 +93,7 @@ export function getChartData(state, t, n = today()) {
   for (const d of state.sales) {
     if (d.status !== "completed" || !inPeriod(d.date, a)) continue;
     const x = state.phones.find((v) => v.id === d.phoneId);
-    (o(d.date, getSaleRevenue(d), 0), x && o(d.date, 0, x.purchasePrice));
+    (o(d.date, getSaleRevenue(d), 0), x && o(d.date, 0, getPhoneTotalCost(x)));
   }
   for (const d of state.accessorySales) {
     if (d.status !== "completed" || !inPeriod(d.date, a)) continue;

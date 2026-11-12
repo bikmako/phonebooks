@@ -4,7 +4,7 @@
  * Восстановлено из production-бандла PhoneBooks. Логика и разметка сохранены без изменений;
  * локальные имена переменных в теле функций оставлены как в бандле.
  */
-import { findCompletedSale, getSaleRevenue } from "../utils/calculations.js";
+import { findCompletedSale, getSaleRevenue, getPhoneTotalCost } from "../utils/calculations.js";
 import { formatMoney, today } from "../utils/format.js";
 import { normalizePhone } from "./phones.js";
 import {
@@ -33,7 +33,7 @@ export function buildSale(state, t) {
     (assert(n.status !== "sold", "Этот телефон уже продан", "phoneId"),
       assert(
         n.status !== "repair",
-        "Телефон в ремонте — продажа недоступна. Переведите его на склад.",
+        "Телефон в ремонте — продажа недоступна. Завершите ремонт.",
         "phoneId",
       ));
     const d = findCompletedSale(state, n.id);
@@ -110,7 +110,7 @@ export function createSale(state, t) {
       "sale",
       n.id,
       `Продан ${a.model} за ${formatMoney(getSaleRevenue(n))}`,
-      `Покупатель: ${n.buyerName}; себестоимость ${formatMoney(a.purchasePrice)}; прибыль ${formatMoney(getSaleRevenue(n) - a.purchasePrice)}`,
+      `Покупатель: ${n.buyerName}; себестоимость ${formatMoney(getPhoneTotalCost(a))}; прибыль ${formatMoney(getSaleRevenue(n) - getPhoneTotalCost(a))}`,
     ),
   );
 }
@@ -200,6 +200,7 @@ export function restoreSale(state, t) {
     assert(n.status === "cancelled", "Продажа не отменена"));
   const a = state.phones.find((i) => i.id === n.phoneId);
   assert(a, "Телефон не найден");
+  assert(a.status !== "repair", "Телефон в ремонте — сначала завершите ремонт", "phoneId");
   const c = findCompletedSale(state, n.phoneId);
   assert(
     !c,

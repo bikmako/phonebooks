@@ -220,6 +220,25 @@ export function StoreProvider({ children: s }) {
   const cancelImport = React.useCallback(plan => {
     plan?.cancel(); transferBusy.current = false;
   }, []);
+  // Financial repair dialogs report success only after the whole state commits.
+  // The existing database lease also rejects writes from stale browser tabs.
+  const mutatePersisted = React.useCallback(async change => {
+    if (transferBusy.current) return { ok: false, error: new DomainError("Другая операция ещё выполняется") };
+    transferBusy.current = true;
+    try {
+      await j(); await writeQueue.current.catch(() => {});
+      if (g.current) throw new Error("Сначала сохраните текущие изменения");
+      const next = change(C.current);
+      i("saving");
+      await (writeQueue.current = writeQueue.current.catch(() => {}).then(() => persistState(next)));
+      C.current = next; n(next); l(new Date().toISOString()); i("saved"); x(null);
+      return { ok: true };
+    } catch (error) {
+      if (!(error instanceof DomainError)) { i("error"); x(error.message); }
+      b({ title: "Не удалось выполнить", description: error.message, tone: "error" });
+      return { ok: false, error };
+    } finally { transferBusy.current = false; }
+  }, [j, b]);
   const finishImport = React.useCallback(async (plan, options) => {
     const next = await plan.commit(options);
     acceptPersistedState(next);
@@ -256,6 +275,7 @@ export function StoreProvider({ children: s }) {
         notify: b,
         dismissToast: B,
         mutate: E,
+        mutatePersisted,
         startupError,
         beginImport, cancelImport, finishImport, exportBackup,
         resetData: G,
@@ -265,7 +285,7 @@ export function StoreProvider({ children: s }) {
         storage: w,
         issues: W,
       }),
-      [t, a, r, o, d, v, L, m, b, B, E, G, R, y, w, W, startupError, beginImport, cancelImport, finishImport, exportBackup],
+      [t, a, r, o, d, v, L, m, b, B, E, G, R, y, w, W, startupError, beginImport, cancelImport, finishImport, exportBackup, mutatePersisted],
     );
   if (startupError) return <div className="card card-pad" role="alert">
     <h1>Не удалось открыть данные</h1><p>{startupError}</p>

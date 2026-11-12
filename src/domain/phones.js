@@ -5,6 +5,7 @@
  * локальные имена переменных в теле функций оставлены как в бандле.
  */
 import { findCompletedSale } from "../utils/calculations.js";
+import { getRepairSessionId } from "./repairs.js";
 import { formatMoney, today } from "../utils/format.js";
 import {
   DomainError,
@@ -65,6 +66,8 @@ export function buildPhone(state, t) {
       "supplierPhone",
     );
   const x = t.status ?? (a == null ? void 0 : a.status) ?? "in_stock";
+  assert(["in_stock", "reserved", "repair"].includes(x), "Недопустимый статус", "status");
+  assert(a?.status !== "repair" || x === "repair", "Сначала завершите ремонт", "status");
   if (
     (assert(
       x !== "sold",
@@ -100,6 +103,8 @@ export function buildPhone(state, t) {
   }
   return {
     phone: {
+      ...a,
+      repairSessionId: x === "repair" ? (a?.status === "repair" ? getRepairSessionId(a) : makeId("repair")) : null,
       id: (a == null ? void 0 : a.id) ?? makeId("ph"),
       model: c,
       storage: clean(t.storage) || "—",
@@ -187,8 +192,12 @@ export function setPhoneStatus(state, t, n) {
     "Проданный телефон нельзя вернуть в склад без отмены продажи",
     "status",
   );
+  assert(["in_stock", "reserved", "repair"].includes(n), "Недопустимый статус", "status");
+  assert(a.status !== "repair" || n === "repair", "Сначала завершите ремонт", "status");
+  if (a.status === n) return state;
   const c = {
       ...a,
+      repairSessionId: n === "repair" ? makeId("repair") : null,
       status: n,
       updatedAt: nowISO(),
     },
@@ -234,7 +243,7 @@ export function deletePhone(state, t) {
         "phone",
         t,
         `Удалена закупка ${n.model}`,
-        `Закупка ${formatMoney(n.purchasePrice)}`,
+        `Закупка ${formatMoney(n.purchasePrice)}; отменено ремонтов: ${(n.repairs ?? []).length}, возвращено ${formatMoney((n.repairs ?? []).reduce((sum, repair) => sum + repair.amount, 0))} на исходные счета`,
       ),
     )
   );

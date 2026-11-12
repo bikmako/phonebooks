@@ -32,6 +32,14 @@ export function getAllOperations(state) {
         phoneId: m.id,
       },
     });
+  for (const phone of state.phones) for (const repair of phone.repairs ?? [])
+    c.push({
+      id: `repair:${repair.id}`, kind: "repair", type: "expense",
+      date: repair.date, createdAt: repair.createdAt,
+      title: `Ремонт · ${phone.model}`, subtitle: repair.comment || "Ремонт завершён",
+      amount: -repair.amount, moneyEffect: -repair.amount, accountId: repair.accountId,
+      icon: "expense", meta: { phoneId: phone.id, account: n.get(repair.accountId)?.name ?? "—" },
+    });
   for (const m of state.sales) {
     const f = t.get(m.phoneId);
     c.push({
