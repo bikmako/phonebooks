@@ -1,8 +1,8 @@
+import { BackupPanel } from "../components/settings/BackupPanel.jsx";
 /**
  * Настройки, бэкапы, проверка данных.
  *
- * Восстановлено из production-бандла PhoneBooks. Логика и разметка сохранены без изменений;
- * локальные имена переменных в теле функций оставлены как в бандле.
+ * Полный перенос и восстановление вынесены в BackupPanel.
  */
 import { AuditLogModal } from "../components/settings/AuditLogModal.jsx";
 import {
@@ -12,30 +12,20 @@ import {
   Chip,
   ConfirmDialog,
   Input,
-  Modal,
   cx,
 } from "../components/ui.jsx";
 import { checkDataIntegrity } from "../domain/integrity.js";
 import { useStore } from "../hooks/useStore.jsx";
 import { ThemePicker } from "../hooks/useTheme.jsx";
-import {
-  buildExportFile,
-  downloadJson,
-  getStorageEstimate,
-  parseImportFile,
-} from "../storage/db.js";
-import { formatDateTime, plural, today } from "../utils/format.js";
+import { getStorageEstimate } from "../storage/db.js";
+import { formatDateTime, plural } from "../utils/format.js";
 import {
   CircleCheck,
-  Download,
   HardDrive,
   History,
-  RotateCcw,
-  Shield,
   Smartphone,
   Trash2,
   TriangleAlert,
-  Upload,
 } from "lucide-react";
 import React from "react";
 import { jsx, jsxs } from "react/jsx-runtime";
@@ -58,27 +48,20 @@ export function formatSavedAt(s) {
         : formatDateTime(s);
 }
 export function SettingsPage() {
-  var G, ee;
   const {
       data: s,
-      replaceAll: t,
+      mutate: mutateState,
       resetData: n,
       notify: a,
       saveState: c,
       savedAt: r,
       saveError: i,
-      backups: o,
-      makeBackup: l,
-      restoreBackup: d,
       storage: x,
       issues: v,
     } = useStore(),
     [p, w] = React.useState(s.settings.businessName),
     [A, L] = React.useState(!1),
-    [O, m] = React.useState(null),
-    [f, C] = React.useState(null),
     [S, g] = React.useState(!1),
-    [b, B] = React.useState(!1),
     [y, j] = React.useState(x);
   (React.useEffect(() => w(s.settings.businessName), [s.settings.businessName]),
     React.useEffect(() => {
@@ -88,41 +71,17 @@ export function SettingsPage() {
     N = () => {
       const W = p.trim();
       W.length < 2 ||
-        (t({
-          ...s,
+        (mutateState(current => ({
+          ...current,
           settings: {
-            ...s.settings,
+            ...current.settings,
             businessName: W,
           },
-        }),
+        })),
         a({
           title: "Название сохранено",
           tone: "success",
         }));
-    },
-    E = () => {
-      (downloadJson(`phonebooks-${today()}.json`, buildExportFile(s)),
-        a({
-          title: "Файл сохранён",
-          description: "Копия базы данных скачана на устройство",
-          tone: "success",
-        }));
-    },
-    R = (W) => {
-      const ie = new FileReader();
-      ((ie.onload = () => {
-        const { data: Q, error: V } = parseImportFile(String(ie.result));
-        if (!Q) {
-          a({
-            title: "Не удалось прочитать файл",
-            description: V ?? "Ошибка",
-            tone: "error",
-          });
-          return;
-        }
-        m(Q);
-      }),
-        ie.readAsText(W));
     },
     M = {
       phones: s.phones.length,
@@ -204,63 +163,10 @@ export function SettingsPage() {
         </p>
         <p className="mt-1.5 text-[11px] leading-relaxed text-ink-400">
           База хранится локально в браузере, в облако ничего не отправляется.
-          Данные остаются после закрытия Safari и перезагрузки телефона.
+          Для защиты от очистки браузера, удаления PWA и смены адреса сохраняйте копии в файлы.
         </p>
       </Card>
-      <Card className="card-pad">
-        <CardHeader
-          title="Резервные копии"
-          subtitle={
-            o.length
-              ? `${o.length} ${plural(o.length, "копия", "копии", "копий")} внутри приложения`
-              : "Пока нет копий"
-          }
-        />
-        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <Button
-            variant="secondary"
-            icon={<Download className="h-4 w-4" />}
-            onClick={E}
-            className="justify-start"
-          >
-            Скачать файл
-          </Button>
-          <label className="btn-secondary btn-md cursor-pointer justify-start">
-            <Upload className="h-4 w-4" />
-            {" Загрузить из файла"}
-            <input
-              type="file"
-              accept="application/json,.json"
-              className="hidden"
-              onChange={(W) => {
-                var Q;
-                const ie = (Q = W.target.files) == null ? void 0 : Q[0];
-                (ie && R(ie), (W.target.value = ""));
-              }}
-            />
-          </label>
-          <Button
-            variant="secondary"
-            icon={<RotateCcw className="h-4 w-4" />}
-            onClick={() => B(!0)}
-            className="justify-start"
-          >
-            Точки восстановления ({o.length})
-          </Button>
-          <Button
-            variant="secondary"
-            icon={<Shield className="h-4 w-4" />}
-            onClick={() => void l("manual")}
-            className="justify-start"
-          >
-            Сделать копию сейчас
-          </Button>
-        </div>
-        <p className="mt-2.5 text-[11.5px] leading-relaxed text-ink-500">
-          Файл с расширением .json можно сохранить в «Файлы» на iPhone или
-          отправить себе — из него база восстанавливается на любом устройстве.
-        </p>
-      </Card>
+      <BackupPanel />
       <Card className="card-pad">
         <CardHeader
           title="Проверка данных"
@@ -347,47 +253,6 @@ export function SettingsPage() {
         PhoneBooks · бухгалтерия скупки смартфонов · данные принадлежат вам
       </p>
       <AuditLogModal open={S} onClose={() => g(!1)} />
-      <Modal
-        open={b}
-        onClose={() => B(!1)}
-        title="Точки восстановления"
-        description="Автоматические копии последних изменений — хранятся 10 штук на устройстве"
-      >
-        <div className="space-y-2">
-          {o.length === 0 && (
-            <p className="py-6 text-center text-[13px] text-ink-400">
-              Копий пока нет
-            </p>
-          )}
-          {o.map((W) => (
-            <div
-              className="flex items-center gap-3 rounded-xl border border-slate-100 px-3 py-2.5"
-              key={W.id}
-            >
-              <div className="min-w-0 flex-1">
-                <p className="text-[12.5px] font-medium text-ink-900">
-                  {formatDateTime(W.at)}
-                </p>
-                <p className="text-[11px] text-ink-400">
-                  {W.phones}{" "}
-                  {plural(W.phones, "телефон", "телефона", "телефонов")}
-                  {" · "}
-                  {W.sales} {plural(W.sales, "продажа", "продажи", "продаж")}
-                  {" ·"}{" "}
-                  {W.reason === "manual"
-                    ? "вручную"
-                    : W.reason === "import"
-                      ? "перед импортом"
-                      : "авто"}
-                </p>
-              </div>
-              <Button size="sm" variant="secondary" onClick={() => C(W.id)}>
-                Восстановить
-              </Button>
-            </div>
-          ))}
-        </div>
-      </Modal>
       <ConfirmDialog
         open={A}
         onClose={() => L(!1)}
@@ -395,39 +260,6 @@ export function SettingsPage() {
         title="Очистить все данные?"
         description="Будут удалены все телефоны, продажи, расходы и операции. Останется одна пустая касса. Перед очисткой создаётся резервная копия — восстановить можно здесь же."
         confirmLabel="Очистить всё"
-      />
-      <ConfirmDialog
-        open={!!O}
-        onClose={() => m(null)}
-        onConfirm={() => {
-          (O &&
-            (t(O),
-            a({
-              title: "Данные восстановлены",
-              description: "Файл загружен",
-              tone: "success",
-            })),
-            m(null));
-        }}
-        title="Восстановить из файла?"
-        description={
-          O
-            ? `В файле ${((G = O.phones) == null ? void 0 : G.length) ?? 0} телефонов и ${((ee = O.sales) == null ? void 0 : ee.length) ?? 0} продаж. Текущие данные будут заменены, старая база сохранится в точках восстановления.`
-            : void 0
-        }
-        confirmLabel="Восстановить"
-        tone="primary"
-      />
-      <ConfirmDialog
-        open={!!f}
-        onClose={() => C(null)}
-        onConfirm={async () => {
-          (f && (await d(f)), C(null), B(!1));
-        }}
-        title="Вернуть данные из копии?"
-        description="Текущее состояние тоже сохранится в точках восстановления — вернуться назад можно будет всегда."
-        confirmLabel="Восстановить"
-        tone="primary"
       />
     </div>
   );

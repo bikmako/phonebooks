@@ -1,8 +1,8 @@
+import { parseImportFile, validateState } from "./backupFormat.js";
 /**
  * IndexedDB, резервные копии, экспорт/импорт и миграция localStorage.
  *
- * Восстановлено из production-бандла PhoneBooks. Логика и разметка сохранены без изменений;
- * локальные имена переменных в теле функций оставлены как в бандле.
+ * Совместимая схема v1; завершение записи подтверждается транзакцией IndexedDB.
  */
 export const DB_NAME = "phonebooks",
   DB_VERSION = 1,
@@ -45,17 +45,15 @@ export function openDatabase() {
     dbPromise)
   );
 }
-export function runStore(s, t, n) {
-  return openDatabase().then(
-    (a) =>
-      new Promise((c, r) => {
-        const i = a.transaction(s, t),
-          o = n(i.objectStore(s));
-        ((o.onsuccess = () => c(o.result)),
-          (o.onerror = () => r(o.error ?? new Error("Ошибка записи в базу"))),
-          (i.onabort = () => r(i.error ?? new Error("Транзакция прервана"))));
-      }),
-  );
+export function runStore(name, mode, operation) {
+  return openDatabase().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(name, mode);
+    let request;
+    try { request = operation(tx.objectStore(name)); }
+    catch (error) { tx.abort(); reject(error); return; }
+    tx.oncomplete = () => resolve(request.result);
+    tx.onabort = tx.onerror = () => reject(tx.error || request.error || new Error("Транзакция прервана"));
+  }));
 }
 export function isValidState(s) {
   if (!s || typeof s != "object") return !1;
@@ -66,33 +64,40 @@ export function isValidState(s) {
     Array.isArray(t.phones)
   );
 }
+let expectedState;
+export function acceptPersistedState(state) { expectedState = JSON.stringify(state); }
 export async function loadState() {
-  try {
-    const s = await runStore(STORE_STATE, "readonly", (n) =>
-      n.get(KEY_CURRENT),
-    );
-    if (isValidState(s)) return s;
-    const t = (await listBackups())[0];
-    if (t) {
-      const n = JSON.parse(t.payload);
-      if (isValidState(n)) return n;
-    }
-    return null;
-  } catch {
-    return null;
+  const state = await runStore(STORE_STATE, "readonly", store => store.get(KEY_CURRENT));
+  if (state === undefined) {
+    const backups = await runStore(STORE_BACKUPS, "readonly", store => store.count());
+    if (backups) throw new Error("Текущее состояние отсутствует, но есть резервные копии. Автоматическое создание пустой базы заблокировано");
+    expectedState = undefined; return null;
   }
+  if (!isValidState(state)) throw new Error("Текущее состояние повреждено. Автоматическая перезапись заблокирована");
+  const checked = validateState(state, { legacy: true });
+  acceptPersistedState(state);
+  return checked;
 }
-export async function persistState(s) {
-  const t = s;
-  (await runStore(STORE_STATE, "readwrite", (n) => n.put(t, KEY_CURRENT)),
-    await runStore(STORE_META, "readwrite", (n) =>
-      n.put(
-        {
-          at: new Date().toISOString(),
-        },
-        "lastSaved",
-      ),
-    ));
+export async function persistState(state) {
+  const db = await openDatabase();
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction([STORE_STATE, STORE_META], "readwrite");
+    let failure;
+    const request = tx.objectStore(STORE_STATE).get(KEY_CURRENT);
+    request.onsuccess = () => {
+      if (JSON.stringify(request.result) !== expectedState) {
+        failure = new Error("База изменена другой вкладкой. Перезагрузите приложение"); tx.abort(); return;
+      }
+      const pending = tx.objectStore(STORE_META).get("pendingImport");
+      pending.onsuccess = () => {
+        if (pending.result) { failure = new Error("Выполняется импорт в другой вкладке"); tx.abort(); return; }
+        tx.objectStore(STORE_STATE).put(state, KEY_CURRENT);
+        tx.objectStore(STORE_META).put({ at: new Date().toISOString() }, "lastSaved");
+      };
+    };
+    tx.oncomplete = () => { acceptPersistedState(state); resolve(); };
+    tx.onabort = tx.onerror = () => reject(failure || tx.error || new Error("Ошибка сохранения"));
+  });
 }
 export async function getLastSaved() {
   try {
@@ -137,49 +142,16 @@ export async function readBackup(s) {
   }
 }
 export async function migrateLegacyState() {
-  try {
-    const s = localStorage.getItem(LEGACY_STORAGE_KEY);
-    if (!s) return null;
-    const t = JSON.parse(s);
-    return isValidState(t)
-      ? (await persistState(t),
-        await createBackup(t, "manual"),
-        localStorage.removeItem(LEGACY_STORAGE_KEY),
-        t)
-      : null;
-  } catch {
-    return null;
-  }
+  const source = localStorage.getItem(LEGACY_STORAGE_KEY);
+  if (!source) return null;
+  const parsed = parseImportFile(source);
+  if (!parsed.data) throw new Error(parsed.error);
+  await persistState(parsed.data);
+  await createBackup(parsed.data, "manual");
+  // Retain the legacy source as an additional recovery route.
+  return parsed.data;
 }
-export function buildExportFile(s) {
-  return {
-    app: "PhoneBooks",
-    version: s.schemaVersion ?? 1,
-    exportedAt: new Date().toISOString(),
-    data: s,
-  };
-}
-export function parseImportFile(s) {
-  let t;
-  try {
-    t = JSON.parse(s);
-  } catch {
-    return {
-      data: null,
-      error: "Файл повреждён: это не JSON",
-    };
-  }
-  const n = t && typeof t == "object" && "data" in t ? t.data : t;
-  return isValidState(n)
-    ? {
-        data: n,
-        error: null,
-      }
-    : {
-        data: null,
-        error: "В файле нет данных PhoneBooks",
-      };
-}
+export { buildExportFile, parseImportFile } from "./backupFormat.js";
 export function downloadJson(s, t) {
   const n = JSON.stringify(t, null, 2),
     a = new Blob([n], {
