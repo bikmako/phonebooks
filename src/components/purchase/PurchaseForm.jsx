@@ -27,10 +27,12 @@ import {
   today,
 } from "../../utils/format.js";
 import { Button, Field, Input, Select, Textarea, cx } from "../ui.jsx";
-import { Check, CircleAlert, Package, Smartphone } from "lucide-react";
+import { Camera, Check, CircleAlert, Package, Smartphone } from "lucide-react";
+import { ImeiScanner } from "./ImeiScanner.jsx";
 import React from "react";
 import { jsx, jsxs } from "react/jsx-runtime";
 export function PurchaseForm({ phone: s, onDone: t, onCancel: n }) {
+  const [scannerOpen, setScannerOpen] = React.useState(false);
   const { data: a, mutate: c, notify: r } = useStore(),
     i = a.accounts.filter((j) => !j.archived),
     o = React.useRef(!1),
@@ -259,16 +261,21 @@ export function PurchaseForm({ phone: s, onDone: t, onCancel: n }) {
           </Field>
         </div>
         <Field label="IMEI" htmlFor="imei" error={x.imei}>
-          <Input
-            id="imei"
-            value={l.imei}
-            onChange={(j) =>
-              b("imei", j.target.value.replace(/\D/g, "").slice(0, 15))
-            }
-            placeholder="356789012345671"
-            inputMode="numeric"
-            className={cx("font-mono tracking-wide")}
-          />
+          <div className="imei-input-row">
+            <Input
+              id="imei"
+              value={l.imei}
+              onChange={(j) =>
+                b("imei", j.target.value.replace(/\D/g, "").slice(0, 15))
+              }
+              placeholder="356789012345671"
+              inputMode="numeric"
+              className={cx("font-mono tracking-wide")}
+            />
+            <Button type="button" variant="secondary" aria-label="Сканировать IMEI" title="Сканировать IMEI" onClick={() => setScannerOpen(true)}>
+              <Camera size={20} />
+            </Button>
+          </div>
         </Field>
         <Field label="Состояние" htmlFor="condition">
           <Select
@@ -516,7 +523,10 @@ export function PurchaseForm({ phone: s, onDone: t, onCancel: n }) {
           {s ? "Сохранить" : "Купить телефон"}
         </Button>
       </div>
-      {"    "}
+      {scannerOpen && <ImeiScanner
+        onClose={() => setScannerOpen(false)}
+        onConfirm={imei => { b("imei", imei); setScannerOpen(false); }}
+      />}
     </div>
   );
 }

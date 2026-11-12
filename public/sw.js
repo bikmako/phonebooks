@@ -50,13 +50,15 @@ self.addEventListener('fetch', (event) => {
   // Шрифты: cache-first без сетевых запросов после первого скачивания.
   // В новой сборке шрифты лежат в assets/ с хэшем в имени, поэтому проверяем и расширение.
   if (url.pathname.startsWith(BASE + 'fonts/') || url.pathname.endsWith('.woff2')) {
-    event.respondWith(caches.match(request).then((r) => r || fetch(request)));
+    event.respondWith(caches.match(request, { ignoreVary: true }).then((r) => r || fetch(request)));
     return;
   }
 
   // Ассеты: cache-first с фоновым обновлением
   event.respondWith(
-    caches.match(request).then((cached) => {
+    // Same-origin static files: module requests include Origin, while precache
+    // requests do not. Vary: Origin (e.g. Vite preview) must not hide offline assets.
+    caches.match(request, { ignoreVary: true }).then((cached) => {
       const network = fetch(request)
         .then((res) => {
           if (res && res.status === 200) {
