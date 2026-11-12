@@ -34,3 +34,22 @@ test('all camera tracks stop; unavailable streams are safe; camera errors are ac
   assert.equal(count, 2);
   for (const [name, text] of [['NotAllowedError', 'запрещён'], ['NotFoundError', 'не найдена'], ['NotReadableError', 'занята'], ['Unknown', 'Не удалось']]) assert.ok(cameraError({ name }).includes(text));
 });
+
+test('moderate OCR requires corroboration; duplicate readings from one pass do not count', async () => {
+  const { reliableOcr, ocrReadings } = await import('../src/utils/imei.js');
+  assert.deepEqual(reliableOcr([{ imei: first, confidence: 72, pass: 0 }]), []);
+  assert.deepEqual(reliableOcr([{ imei: first, confidence: 72, pass: 0 }, { imei: first, confidence: 72, pass: 0 }]), []);
+  assert.deepEqual(reliableOcr([{ imei: first, confidence: 72, pass: 0 }, { imei: first, confidence: 65, pass: 1 }]), [first]);
+  assert.deepEqual(reliableOcr([{ imei: '490154203237519', confidence: 99, pass: 0 }]), []);
+  assert.deepEqual(ocrReadings(data([{ text: 'IMEI1:', confidence: 10 }, { text: first, confidence: 94 }])), [{ imei: first, confidence: 94 }]);
+});
+
+test('camera retries relaxed constraints but never repeats a denied permission prompt', async () => {
+  const { openCamera } = await import('../src/scanner/media.js');
+  const constraints = [], stream = {};
+  assert.equal(await openCamera({ getUserMedia: async options => { constraints.push(options); if (constraints.length < 3) throw new DOMException('', 'OverconstrainedError'); return stream; } }), stream);
+  assert.equal(constraints[2].video, true);
+  let calls = 0;
+  await assert.rejects(openCamera({ getUserMedia: async () => { calls++; throw new DOMException('', 'NotAllowedError'); } }));
+  assert.equal(calls, 1);
+});

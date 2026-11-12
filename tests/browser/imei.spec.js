@@ -45,15 +45,14 @@ async function textImage(page, lines) {
 }
 async function recognize(page, fixture) {
   await page.getByLabel('Изображение с IMEI', { exact: true }).setInputFiles(fixture);
-  await expect(page.locator('.imei-scanner-body')).toHaveAttribute('aria-busy', 'false', { timeout: 60000 });
+  await expect.poll(async () => page.locator('.imei-scanner-body[aria-busy="true"]').count(), { timeout: 60000 }).toBe(0);
 }
 async function choose(page, imei) {
-  await page.getByRole('radio', { name: imei, exact: true }).check();
-  await page.getByRole('button', { name: 'Подтвердить IMEI' }).click();
+  if (await page.getByRole('dialog').count()) await page.getByRole('button', { name: `Выбрать IMEI ${imei}`, exact: true }).click();
   await expect(page.locator('#imei').last()).toHaveValue(imei);
 }
 
-test('real OCR: dual-SIM screen, confirmation, purchase persistence, editing and manual input', async ({ page, context }) => {
+test('real OCR: dual-SIM screen, automatic filling, purchase persistence, editing and manual input', async ({ page, context }) => {
   await denyCamera(page); await ready(page);
   const requests = [];
   context.on('request', request => requests.push({ url: request.url(), method: request.method() }));
@@ -62,8 +61,7 @@ test('real OCR: dual-SIM screen, confirmation, purchase persistence, editing and
   await page.locator('#imei').last().fill('123');
   await open(page);
   await recognize(page, await textImage(page, ['*#06#', 'IMEI1:', first, 'IMEI2:', second]));
-  await expect(page.getByRole('dialog').getByRole('radio')).toHaveCount(2);
-  await expect(page.getByRole('button', { name: 'Подтвердить IMEI' })).toBeDisabled();
+  await expect(page.getByRole('dialog').getByRole('button', { name: /^Выбрать IMEI/ })).toHaveCount(2);
   await expect(page.locator('#imei').last()).toHaveValue('123');
   expect((await snapshot(page)).state).toEqual(before.state);
   await choose(page, first);
@@ -82,11 +80,11 @@ test('real OCR: dual-SIM screen, confirmation, purchase persistence, editing and
   expect(requests.filter(r => /^https?:/.test(r.url) && (!r.url.startsWith('http://127.0.0.1:4173/') || r.method !== 'GET'))).toEqual([]);
 });
 
-test('real OCR rejects incomplete, bad checksum, longer EID and ambiguous text; cancel preserves manual entry', async ({ page }) => {
+test('real OCR rejects incomplete, bad checksum, longer EID and ambiguous text; closing preserves manual entry', async ({ page }) => {
   await denyCamera(page); await ready(page); await page.locator('#imei').last().fill(first); await open(page);
   await recognize(page, await textImage(page, ['IMEI: 490154203237519', 'IMEI: 49015420323751', 'EID: 89049032000000000000000000000000', 'IMEI: 4901542XX237518']));
-  await expect(page.getByRole('dialog').getByRole('radio')).toHaveCount(0);
-  await expect(page.getByRole('alert')).toContainText('Надёжный IMEI не найден');
+  await expect(page.getByRole('dialog').getByRole('button', { name: /^Выбрать IMEI/ })).toHaveCount(0);
+  await expect(page.getByRole('alert')).toContainText('IMEI не найден');
   await page.getByRole('button', { name: 'Закрыть сканер' }).click();
   await expect(page.locator('#imei').last()).toHaveValue(first);
   await page.locator('#imei').last().fill(second); await expect(page.locator('#imei').last()).toHaveValue(second);
@@ -133,12 +131,12 @@ test('camera cleanup covers active streams, late permission grants, retries and 
   await page.evaluate(() => window.cameraGrants.shift()());
   await expect.poll(() => page.evaluate(() => window.cameraStops)).toBe(1);
   await open(page); await page.evaluate(() => window.cameraGrants.shift()());
-  await expect(page.getByRole('button', { name: 'Распознать кадр' })).toBeVisible();
+  await expect(page.getByLabel('Предпросмотр камеры', { exact: true })).toBeVisible();
   await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, value: true }); document.dispatchEvent(new Event('visibilitychange')); });
   await expect.poll(() => page.evaluate(() => window.cameraStops)).toBe(2);
-  await page.getByRole('button', { name: 'Включить камеру', exact: true }).click();
+  await page.getByRole('button', { name: 'Камера', exact: true }).click();
   await page.evaluate(() => window.cameraGrants.shift()());
-  await expect(page.getByRole('button', { name: 'Распознать кадр' })).toBeVisible();
+  await expect(page.getByLabel('Предпросмотр камеры', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Закрыть сканер' }).click();
   await expect.poll(() => page.evaluate(() => window.cameraStops)).toBe(3);
 });
@@ -152,13 +150,16 @@ test('captured camera frame uses real OCR, releases camera and respects duplicat
     Object.defineProperty(HTMLMediaElement.prototype, 'srcObject', { configurable: true, set(value) { this._testStream = value; } });
     Object.defineProperty(HTMLVideoElement.prototype, 'videoWidth', { get: () => 1200 });
     Object.defineProperty(HTMLVideoElement.prototype, 'videoHeight', { get: () => 650 });
+    Object.defineProperty(HTMLMediaElement.prototype, 'readyState', { get: () => 4 });
     HTMLMediaElement.prototype.play = async () => {};
+    window.cameraFrames = 0;
     const draw = CanvasRenderingContext2D.prototype.drawImage;
     CanvasRenderingContext2D.prototype.drawImage = function(source, ...args) {
       if (!(source instanceof HTMLVideoElement)) return draw.call(this, source, ...args);
+      window.cameraFrames++;
       this.fillStyle = '#fff'; this.fillRect(0, 0, 1200, 650);
       this.fillStyle = '#111'; this.font = '48px monospace';
-      this.fillText('IMEI 490154203237518', 60, 140);
+      this.fillText('IMEI 490154203237518', 100, 340);
     };
   });
   await ready(page);
@@ -167,9 +168,11 @@ test('captured camera frame uses real OCR, releases camera and respects duplicat
   await expect.poll(async () => (await snapshot(page)).state[0].phones.length).toBe(1);
   await page.locator('main').getByRole('button', { name: 'Скупка', exact: true }).click();
   await page.locator('#model').fill('Duplicate phone'); await page.locator('#price').fill('1000');
-  await open(page); await page.getByRole('button', { name: 'Распознать кадр' }).click();
-  await expect(page.getByRole('radio', { name: first, exact: true })).toBeVisible({ timeout: 60000 });
+  await open(page);
+  await expect(page.locator('#imei').last()).toHaveValue(first, { timeout: 60000 });
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => window.cameraStops)).toBe(1);
+  expect(await page.evaluate(() => window.cameraFrames)).toBeGreaterThanOrEqual(4);
   await choose(page, first);
   await page.getByRole('button', { name: 'Купить телефон', exact: true }).click();
   await expect(page.getByText(/Телефон с IMEI .* уже есть на складе/).first()).toBeVisible();
@@ -192,10 +195,10 @@ test('two side-by-side box barcodes are distinct candidates, including vertical 
     return rotated.toDataURL().split(',')[1];
   }, barcodes);
   await open(page); await recognize(page, { name: 'dual-sim-box.png', mimeType: 'image/png', buffer: Buffer.from(encoded, 'base64') });
-  await expect(page.getByRole('dialog').getByRole('radio')).toHaveCount(2);
-  await page.getByRole('button', { name: 'Повернуть фото' }).click();
-  await expect(page.locator('.imei-scanner-body')).toHaveAttribute('aria-busy', 'false', { timeout: 60000 });
-  await expect(page.getByRole('dialog').getByRole('radio')).toHaveCount(2);
+  await expect(page.getByRole('dialog').getByRole('button', { name: /^Выбрать IMEI/ })).toHaveCount(2);
+  await page.getByRole('button', { name: 'Повернуть', exact: true }).click();
+  await expect.poll(async () => page.locator('.imei-scanner-body[aria-busy="true"]').count(), { timeout: 60000 }).toBe(0);
+  await expect(page.getByRole('dialog').getByRole('button', { name: /^Выбрать IMEI/ })).toHaveCount(2);
   await choose(page, second);
 });
 
@@ -209,8 +212,36 @@ test.describe('scanner loading failures', () => {
   await page.getByRole('button', { name: 'Закрыть сканер' }).click();
   await page.route('**/scanner-assets/**/worker.min.js', route => route.abort());
   await open(page); await recognize(page, await textImage(page, ['IMEI', first]));
-  await expect(page.getByRole('alert')).toContainText('Не удалось распознать текст');
-  await expect(page.getByRole('button', { name: 'Подтвердить IMEI' })).toBeDisabled();
+  await expect(page.getByRole('alert')).toContainText('Не удалось загрузить распознавание текста');
 });
 
+});
+
+for (const [name, seed, font, size, contrast, angle] of [
+  ['small box label', '86279804123456', 'Arial', 22, 85, -3],
+  ['grey label and JPEG compression', '35391805234165', 'Arial', 26, 145, 2],
+  ['serif label', '35824005123456', 'Georgia', 28, 65, -2],
+  ['phone screen in dark mode', '35175609123456', 'Arial', 32, 240, 0],
+]) test(`actual OCR reads ${name} with a different valid IMEI`, async ({ page }) => {
+  await denyCamera(page); await ready(page);
+  const { isValidImei } = await import('../../src/utils/imei.js');
+  const imei = [...Array(10).keys()].map(digit => seed + digit).find(isValidImei);
+  const encoded = await page.evaluate(({ imei, font, size, contrast, angle, name }) => {
+    const canvas = document.createElement('canvas'); canvas.width = 1600; canvas.height = 1100;
+    const ctx = canvas.getContext('2d');
+    const dark = name.includes('dark');
+    ctx.fillStyle = dark ? '#17191e' : '#e5e0d7'; ctx.fillRect(0, 0, 1600, 1100);
+    ctx.fillStyle = dark ? '#f3f3f5' : '#444'; ctx.font = '38px Arial'; ctx.fillText(dark ? '*#06#' : 'Smartphone / 128 GB', 450, 260);
+    ctx.save(); ctx.translate(440, 540); ctx.rotate(angle * Math.PI / 180);
+    ctx.fillStyle = `rgb(${contrast},${contrast},${contrast})`; ctx.font = `${size}px ${font}`;
+    ctx.fillText('IMEI: ' + imei, 0, 0);
+    ctx.font = '19px Arial'; ctx.fillText('S/N: XAJ6749TEST', 0, 55);
+    ctx.fillText('EID: 89049032000000000000000000000000', 0, 95);
+    ctx.restore();
+    return canvas.toDataURL('image/jpeg', .68).split(',')[1];
+  }, { imei, font, size, contrast, angle, name });
+  await open(page);
+  await recognize(page, { name: 'box-photo.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(encoded, 'base64') });
+  await expect(page.locator('#imei').last()).toHaveValue(imei, { timeout: 60000 });
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 });

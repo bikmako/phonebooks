@@ -24,6 +24,9 @@ async function seed(page, fixture) {
     for (const entry of fixture.localStorage) localStorage.setItem(entry.key, entry.value);
   }, fixture);
   await page.reload(); await ready(page);
+  // The store can be ready before Settings applies its state-to-input effect.
+  // Wait for the seeded value so that effect cannot overwrite the next fill.
+  await expect(page.getByLabel('Название бизнеса')).toHaveValue(fixture.indexedDB.state[0].value.settings.businessName);
 }
 test.beforeEach(async ({ page }) => { await page.goto('./#/settings'); await ready(page); });
 

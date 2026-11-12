@@ -43,3 +43,28 @@ export function imeisFromOcr(data) {
   }
   return [...found];
 }
+
+export function ocrLines(data) {
+  return (data.blocks ?? []).flatMap(block => (block.paragraphs ?? []).flatMap(paragraph => paragraph.lines ?? []));
+}
+
+export function ocrReadings(data) {
+  return ocrLines(data).flatMap(line => {
+    const words = line.words ?? [];
+    const text = words.map(word => word.text).join(' ');
+    const numeric = words.filter(word => /\d{3}/.test(word.text) || /^[\d\s-]+$/.test(word.text));
+    const confidence = numeric.length ? Math.min(...numeric.map(word => Number.isFinite(word.confidence) ? word.confidence : 0)) : 0;
+    return extractImeis(text).map(imei => ({ imei, confidence }));
+  });
+}
+
+export function reliableOcr(readings) {
+  const observations = new Map();
+  for (const { pass, imei, confidence } of readings) {
+    if (!isValidImei(imei) || confidence < 45) continue;
+    const entry = observations.get(imei) ?? { passes: new Set(), best: 0 };
+    entry.passes.add(pass); entry.best = Math.max(entry.best, confidence);
+    observations.set(imei, entry);
+  }
+  return [...observations].filter(([, value]) => value.best >= 82 || value.passes.size >= 2 && value.best >= 60).map(([imei]) => imei);
+}

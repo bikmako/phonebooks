@@ -15,13 +15,13 @@
   },
   "dependencies": {
     "@tesseract.js-data/eng": "1.0.0",
-    "@zxing/library": "0.21.3",
     "lucide-react": "0.454.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "recharts": "2.15.4",
     "tesseract.js": "6.0.1",
-    "tesseract.js-core": "6.1.2"
+    "tesseract.js-core": "6.1.2",
+    "zxing-wasm": "3.1.6"
   },
   "devDependencies": {
     "@playwright/test": "1.65.0",
