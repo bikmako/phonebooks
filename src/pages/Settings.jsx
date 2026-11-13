@@ -101,6 +101,7 @@ export function SettingsPage() {
             onChange={(W) => w(W.target.value)}
             placeholder="Название бизнеса"
             aria-label="Название бизнеса"
+            data-update-dirty={p !== s.settings.businessName}
           />
           <Button
             onClick={N}

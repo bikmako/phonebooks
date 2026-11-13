@@ -19,6 +19,7 @@ import {
   emptyPurchaseForm,
   readDraft,
   saveDraft,
+  registerUpdateDraft,
 } from "../../utils/drafts.js";
 import {
   formatAmount,
@@ -74,6 +75,9 @@ export function PurchaseForm({ phone: s, onDone: t, onCancel: n }) {
     }),
     [A, L] = React.useState(!1),
     [O, m] = React.useState(!1);
+  React.useEffect(() => {
+    if (!s) return registerUpdateDraft(PURCHASE_DRAFT_KEY, l);
+  }, [l, s]);
   (React.useEffect(() => {
     if (s || !!!(l.model || l.imei || l.purchasePrice || l.supplierName))
       return;
@@ -134,7 +138,7 @@ export function PurchaseForm({ phone: s, onDone: t, onCancel: n }) {
             }));
     };
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-update-dirty="true">
       {g && (
         <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-[12.5px] text-amber-800">
           <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />

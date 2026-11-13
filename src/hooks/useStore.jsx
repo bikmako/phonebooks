@@ -191,8 +191,10 @@ export function StoreProvider({ children: s }) {
     ),
     R = React.useCallback(
       async (Q = "manual") => {
+        if (transferBusy.current) return;
         try {
-          (await createBackup(C.current, Q), await y());
+          // Updates must await manual backup transactions as well as state saves.
+          (await (writeQueue.current = writeQueue.current.catch(() => {}).then(() => createBackup(C.current, Q))), await y());
         } catch (error) { b({ title: "Копия не создана", description: error.message, tone: "error" }); }
       },
       [y, b],
@@ -251,6 +253,20 @@ export function StoreProvider({ children: s }) {
     if (g.current) throw new Error("Сначала сохраните текущие изменения");
     return exportFullBackup();
   }, [j]);
+  const prepareForUpdate = React.useCallback(async () => {
+    if (transferBusy.current) throw new Error("Дождитесь завершения операции или закройте просмотр импорта.");
+    transferBusy.current = true;
+    try {
+      if (S.current) clearTimeout(S.current);
+      await j();
+      await writeQueue.current;
+      if (g.current) throw new Error("Изменения не сохранены. Обновление остановлено.");
+      return () => { transferBusy.current = false; };
+    } catch (error) {
+      transferBusy.current = false;
+      throw error;
+    }
+  }, [j]);
   React.useEffect(() => {
     const Q = (V) => {
       if (V.key === "phonebooks.ping") b({ title: "Данные изменены другой вкладкой", description: "Перезагрузите приложение перед редактированием", tone: "info" });
@@ -277,7 +293,7 @@ export function StoreProvider({ children: s }) {
         mutate: E,
         mutatePersisted,
         startupError,
-        beginImport, cancelImport, finishImport, exportBackup,
+        beginImport, cancelImport, finishImport, exportBackup, prepareForUpdate,
         resetData: G,
         makeBackup: R,
 
@@ -285,7 +301,7 @@ export function StoreProvider({ children: s }) {
         storage: w,
         issues: W,
       }),
-      [t, a, r, o, d, v, L, m, b, B, E, G, R, y, w, W, startupError, beginImport, cancelImport, finishImport, exportBackup, mutatePersisted],
+      [t, a, r, o, d, v, L, m, b, B, E, G, R, y, w, W, startupError, beginImport, cancelImport, finishImport, exportBackup, mutatePersisted, prepareForUpdate],
     );
   if (startupError) return <div className="card card-pad" role="alert">
     <h1>Не удалось открыть данные</h1><p>{startupError}</p>

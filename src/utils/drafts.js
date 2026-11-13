@@ -6,6 +6,16 @@
  */
 import { today } from "./format.js";
 export const DRAFT_PREFIX = "phonebooks.draft.";
+const updateDrafts = new Map();
+// Mounted new-purchase/new-sale forms supply their latest React state. Unlike
+// the ordinary debounced save, update-time writes must report storage errors.
+export function registerUpdateDraft(key, value) {
+  updateDrafts.set(key, value);
+  return () => updateDrafts.delete(key);
+}
+export function flushUpdateDrafts() {
+  for (const [key, value] of updateDrafts) localStorage.setItem(DRAFT_PREFIX + key, JSON.stringify(value));
+}
 export function saveDraft(s, t) {
   try {
     t === null
