@@ -1,3 +1,5 @@
+import { IS_DEMO } from "../config.js";
+import { DemoBanner } from "./DemoBanner.jsx";
 /**
  * Каркас приложения: сайдбар, шапка, нижняя навигация.
  *
@@ -78,7 +80,7 @@ export function AppLayout({
     i = React.useMemo(() => getTotalMoney(c), [c]),
     o = NAV_ITEMS.find((l) => l.id === s);
   return (
-    <div className="min-h-dvh bg-canvas lg:flex">
+    <div className={cx("min-h-dvh bg-canvas lg:flex", IS_DEMO && "phonebooks-demo")}>
       <aside className="sticky top-0 hidden h-dvh w-[248px] shrink-0 flex-col border-r border-slate-200/70 bg-white lg:flex">
         <div className="flex items-center gap-2.5 px-5 py-5">
           <Logo />
@@ -214,7 +216,7 @@ export function AppLayout({
               <div className="mr-0.5 rounded-full bg-white px-3 py-1.5 text-[12px] font-semibold tabular-nums text-ink-700 shadow-sm ring-1 ring-slate-200/70">
                 {formatMoney(i)}
               </div>
-              <ThemeToggle />
+              <ThemeToggle key={IS_DEMO ? c.audit.at(-1)?.id : undefined} />
               <button
                 onClick={() => t("settings")}
                 aria-label="Настройки"
@@ -225,6 +227,7 @@ export function AppLayout({
             </div>
           </div>
         </header>
+        {IS_DEMO && <DemoBanner />}
         <main className="mx-auto w-full max-w-[1200px] flex-1 px-4 pb-28 pt-4 sm:px-6 lg:px-8 lg:pb-10 lg:pt-7">
           <div className="mb-5 hidden items-center justify-between lg:flex">
             <div>
@@ -234,7 +237,7 @@ export function AppLayout({
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <ThemeToggle className="h-9 w-9 rounded-lg" />
+              <ThemeToggle key={IS_DEMO ? c.audit.at(-1)?.id : undefined} className="h-9 w-9 rounded-lg" />
               {r === "error" && <Chip tone="danger">Не удалось сохранить</Chip>}
               <Chip tone="neutral" className="gap-1.5">
                 <Banknote className="h-3.5 w-3.5 text-emerald-500" />

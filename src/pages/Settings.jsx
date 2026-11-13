@@ -1,3 +1,4 @@
+import { IS_DEMO } from "../config.js";
 import { BackupPanel } from "../components/settings/BackupPanel.jsx";
 /**
  * Настройки, бэкапы, проверка данных.
@@ -116,7 +117,7 @@ export function SettingsPage() {
           subtitle="Тема сохраняется на этом устройстве"
         />
         <div className="mt-3">
-          <ThemePicker />
+          <ThemePicker key={IS_DEMO ? s.audit.at(-1)?.id : "theme"} />
         </div>
       </Card>
       <Card className="card-pad">
@@ -162,11 +163,14 @@ export function SettingsPage() {
           {y ? ` · ${formatBytes(y.used)} занято` : ""}
         </p>
         <p className="mt-1.5 text-[11px] leading-relaxed text-ink-400">
-          База хранится локально в браузере, в облако ничего не отправляется.
-          Для защиты от очистки браузера, удаления PWA и смены адреса сохраняйте копии в файлы.
+          База хранится локально в браузере, в облако ничего не отправляется.{" "}
+          {IS_DEMO ? "Тестовые изменения можно удалить кнопкой «Сбросить демо»." : "Для защиты от очистки браузера, удаления PWA и смены адреса сохраняйте копии в файлы."}
         </p>
       </Card>
-      <BackupPanel />
+      {IS_DEMO ? <Card className="card-pad">
+        <CardHeader title="Демонстрационная версия" subtitle="Это не реальный учёт и не замена купленному приложению" />
+        <p className="mt-2 text-[12px] leading-relaxed text-ink-500">Можно добавлять телефоны, оформлять продажи, сканировать IMEI и работать с финансами. Все исходные данные вымышлены. Импорт, экспорт, резервные копии и перенос базы отключены. Демо работает локально и офлайн.</p>
+      </Card> : <BackupPanel />}
       <Card className="card-pad">
         <CardHeader
           title="Проверка данных"
@@ -243,10 +247,10 @@ export function SettingsPage() {
         </p>
         <button
           onClick={() => L(!0)}
-          className="mt-3 flex items-center gap-1.5 text-[12px] font-medium text-red-500 active:opacity-70"
+          className={cx("mt-3 flex items-center gap-1.5 text-[12px] font-medium text-red-500 active:opacity-70", IS_DEMO && "min-h-[44px]")}
         >
           <Trash2 className="h-3.5 w-3.5" />
-          {" Очистить все данные и начать с нуля"}
+          {IS_DEMO ? "Сбросить демо" : " Очистить все данные и начать с нуля"}
         </button>
       </Card>
       <p className="px-1 pb-2 text-center text-[11px] text-ink-400">
@@ -257,9 +261,9 @@ export function SettingsPage() {
         open={A}
         onClose={() => L(!1)}
         onConfirm={n}
-        title="Очистить все данные?"
-        description="Будут удалены все телефоны, продажи, расходы и операции. Останется одна пустая касса. Перед очисткой создаётся резервная копия — восстановить можно здесь же."
-        confirmLabel="Очистить всё"
+        title={IS_DEMO ? "Сбросить демо?" : "Очистить все данные?"}
+        description={IS_DEMO ? "Все ваши тестовые изменения, настройки и черновики будут удалены. Исходные демонстрационные телефоны, продажи, аксессуары и финансы будут восстановлены. Отменить сброс нельзя." : "Будут удалены все телефоны, продажи, расходы и операции. Останется одна пустая касса. Перед очисткой создаётся резервная копия — восстановить можно здесь же."}
+        confirmLabel={IS_DEMO ? "Восстановить тестовые данные" : "Очистить всё"}
       />
     </div>
   );

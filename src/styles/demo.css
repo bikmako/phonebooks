@@ -1,0 +1,11 @@
+.phonebooks-demo header .tabular-nums { white-space: nowrap; }
+.demo-banner { position: sticky; top: calc(var(--safe-top) + 56px); z-index: 35; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left)); border-bottom: 1px solid #c7d2fe; background: #eef2ff; color: #3730a3; }
+.demo-banner-copy { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 11px; line-height: 1.5; }
+.demo-badge { padding: 3px 8px; border-radius: 6px; background: #4338ca; color: white; font-size: 11px; letter-spacing: .06em; }
+.demo-buy { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 14px; border-radius: 10px; background: #4338ca; color: white; font-size: 12px; font-weight: 700; text-decoration: none; }
+.demo-buy:focus-visible { outline: 3px solid #818cf8; outline-offset: 3px; }
+.dark .demo-banner { background: #1e1b4b; border-color: #3730a3; color: #e0e7ff; }
+@media (min-width: 1024px) { .demo-banner { top: 0; } }
+@media (max-width: 420px) { .demo-banner { gap: 4px; } .demo-banner-copy { flex: 1 1 140px; } .demo-banner-copy span { max-width: 156px; } .demo-buy { flex: 0 1 146px; text-align: center; } }
+
+@media (max-width: 359px) { .demo-responsive-actions { flex-direction: column; } }

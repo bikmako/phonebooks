@@ -1,17 +1,18 @@
+import { IS_DEMO, STORAGE_PREFIX, requireDataTransfer } from "../config.js";
 import { parseImportFile, validateState } from "./backupFormat.js";
 /**
  * IndexedDB, резервные копии, экспорт/импорт и миграция localStorage.
  *
  * Совместимая схема v1; завершение записи подтверждается транзакцией IndexedDB.
  */
-export const DB_NAME = "phonebooks",
+export const DB_NAME = IS_DEMO ? "phonebooks-demo" : "phonebooks",
   DB_VERSION = 1,
   STORE_STATE = "state",
   STORE_BACKUPS = "backups",
   STORE_META = "meta",
   KEY_CURRENT = "current",
   MAX_BACKUPS = 10,
-  LEGACY_STORAGE_KEY = "phonebooks.data.v1";
+  LEGACY_STORAGE_KEY = STORAGE_PREFIX + "data.v1";
 export let dbPromise = null;
 export function openDatabase() {
   return (
@@ -46,6 +47,7 @@ export function openDatabase() {
   );
 }
 export function runStore(name, mode, operation) {
+  if (name === STORE_BACKUPS) requireDataTransfer();
   return openDatabase().then(db => new Promise((resolve, reject) => {
     const tx = db.transaction(name, mode);
     let request;
@@ -69,7 +71,7 @@ export function acceptPersistedState(state) { expectedState = JSON.stringify(sta
 export async function loadState() {
   const state = await runStore(STORE_STATE, "readonly", store => store.get(KEY_CURRENT));
   if (state === undefined) {
-    const backups = await runStore(STORE_BACKUPS, "readonly", store => store.count());
+    const backups = IS_DEMO ? 0 : await runStore(STORE_BACKUPS, "readonly", store => store.count());
     if (backups) throw new Error("Текущее состояние отсутствует, но есть резервные копии. Автоматическое создание пустой базы заблокировано");
     expectedState = undefined; return null;
   }
@@ -108,6 +110,7 @@ export async function getLastSaved() {
   }
 }
 export async function listBackups() {
+  requireDataTransfer();
   try {
     return (await runStore(STORE_BACKUPS, "readonly", (t) => t.getAll())).sort(
       (t, n) => n.at.localeCompare(t.at),
@@ -117,6 +120,7 @@ export async function listBackups() {
   }
 }
 export async function createBackup(s, t = "auto") {
+  requireDataTransfer();
   const n = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     at: new Date().toISOString(),
@@ -132,6 +136,7 @@ export async function createBackup(s, t = "auto") {
   return n;
 }
 export async function readBackup(s) {
+  requireDataTransfer();
   const t = await runStore(STORE_BACKUPS, "readonly", (n) => n.get(s));
   if (!t) return null;
   try {
@@ -142,6 +147,7 @@ export async function readBackup(s) {
   }
 }
 export async function migrateLegacyState() {
+  if (IS_DEMO) return null;
   const source = localStorage.getItem(LEGACY_STORAGE_KEY);
   if (!source) return null;
   const parsed = parseImportFile(source);
@@ -153,6 +159,7 @@ export async function migrateLegacyState() {
 }
 export { buildExportFile, parseImportFile } from "./backupFormat.js";
 export function downloadJson(s, t) {
+  requireDataTransfer();
   const n = JSON.stringify(t, null, 2),
     a = new Blob([n], {
       type: "application/json",

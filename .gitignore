@@ -153,3 +153,9 @@ test-results/
 playwright-report/
 public/scanner-assets/
 work/
+
+# Isolated sales demo build and local configuration
+dist-demo/
+.env.demo.local
+!.env.demo.example
+test-results-demo/

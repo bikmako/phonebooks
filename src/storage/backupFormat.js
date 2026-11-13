@@ -1,3 +1,4 @@
+import { requireDataTransfer } from "../config.js";
 /** Portable local backup format. Never coerce or discard unknown state fields. */
 export const FORMAT_VERSION = 2;
 export const MAX_FILE_BYTES = 32 * 1024 * 1024;
@@ -193,12 +194,14 @@ export function validateSnapshot(snapshot) {
   return snapshot;
 }
 export function buildExportFile(snapshot) {
+  requireDataTransfer();
   validateSnapshot(snapshot);
   const file = { app: 'PhoneBooks', formatVersion: FORMAT_VERSION, schemaVersion: 1, exportedAt: new Date().toISOString(), snapshot: structuredClone(snapshot) };
   if (new TextEncoder().encode(JSON.stringify(file, null, 2)).length > MAX_FILE_BYTES) fail('Полная копия больше 32 МБ: импорт такого файла невозможен');
   return file;
 }
 export function parseImportFile(source) {
+  requireDataTransfer();
   try {
     if (new TextEncoder().encode(source).length > MAX_FILE_BYTES) fail('Файл больше 32 МБ');
     const file = JSON.parse(source); safeJson(file);

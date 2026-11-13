@@ -100,3 +100,10 @@ backup/original-build/   эталонная копия готовой сборк
 React 18.3.1, lucide-react 0.454.0, recharts 2.15.4, Vite 5.4.21.
 Tailwind-конфиг не подключался: `src/styles/app.css` — дословно сохранённый
 скомпилированный CSS готовой сборки.
+
+## Демоверсия для покупателей
+
+Отдельная сборка `npm run build:demo` создаёт `dist-demo/`. Изоляция, контакт
+продавца, тесты и публикация на отдельном origin описаны в
+[docs/SALES_DEMO.md](docs/SALES_DEMO.md). Текущий workflow GitHub Pages для полной
+версии не меняется.

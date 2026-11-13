@@ -1,3 +1,4 @@
+import { requireDataTransfer } from "../config.js";
 import { openDatabase, DB_NAME, DB_VERSION } from './db.js';
 import { buildExportFile, validateSnapshot, validateLocal, isLocalKey, validateState } from './backupFormat.js';
 async function exclusive(operation) {
@@ -7,6 +8,7 @@ async function exclusive(operation) {
 const STORES = ['state', 'backups', 'meta'];
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 export function captureLocal(storage = localStorage) {
+  requireDataTransfer();
   return Object.keys(storage).filter(isLocalKey).sort().map(key => ({ key, value: storage.getItem(key) }));
 }
 function writeLocal(entries, storage = localStorage) {
@@ -33,6 +35,7 @@ function completion(tx) {
   return done;
 }
 export async function captureSnapshot(storage = localStorage) {
+  requireDataTransfer();
   const local = captureLocal(storage);
   const db = await openDatabase(), tx = db.transaction(STORES, 'readonly'), done = completion(tx);
   const stores = await readStores(tx); await done;
@@ -40,7 +43,8 @@ export async function captureSnapshot(storage = localStorage) {
   if (stores.meta.some(x => x.key === 'pendingImport')) throw new Error('Сначала завершите восстановление прерванного импорта');
   return { indexedDB: { name: DB_NAME, version: DB_VERSION, ...stores }, localStorage: local };
 }
-export async function exportFullBackup(storage = localStorage) { return buildExportFile(await captureSnapshot(storage)); }
+export async function exportFullBackup(storage = localStorage) {
+  requireDataTransfer(); return buildExportFile(await captureSnapshot(storage)); }
 
 // A durable journal bridges two APIs that cannot share a transaction. Startup rolls
 // back localStorage when the final IndexedDB transaction did not commit.
@@ -56,6 +60,7 @@ async function recoverJournal(storage = localStorage) {
   cleanup.objectStore('meta').delete('pendingImport'); await cleaned;
 }
 export async function recoverInterruptedImport(storage = localStorage) {
+  requireDataTransfer();
   if (!globalThis.navigator?.locks?.request) {
     const db = await openDatabase();
     const tx = db.transaction('meta', 'readonly'), done = completion(tx);
@@ -68,10 +73,12 @@ export async function recoverInterruptedImport(storage = localStorage) {
   return exclusive(() => recoverJournal(storage));
 }
 export async function listRecoveryCopies() {
+  requireDataTransfer();
   const snapshot = await captureSnapshot();
   return snapshot.indexedDB.meta.filter(x => x.key.startsWith('recovery:')).map(x => ({ id: x.key, at: x.key.slice(9, 33), snapshot: x.value }));
 }
 export async function prepareImport(parsed, storage = localStorage) {
+  requireDataTransfer();
   const before = await captureSnapshot(storage);
   // Recovery copies are retained separately, never recursively copied into backups.
   const snapshot = parsed.snapshot ? structuredClone(parsed.snapshot) : {
