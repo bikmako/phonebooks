@@ -43,6 +43,10 @@ http.createServer((req, res) => {
   }
   if (url.pathname === '/__test/requests') { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(requests)); return; }
   if (!url.pathname.startsWith('/phonebooks/')) { res.writeHead(404).end(); return; }
+  // Match Cloudflare Pages clean-URL behavior, absent from the old fixture.
+  if (url.pathname === '/phonebooks/index.html') {
+    res.writeHead(308, { Location: '/phonebooks/' }).end(); return;
+  }
   const relative = decodeURIComponent(url.pathname.slice('/phonebooks/'.length)) || 'index.html';
   const file = path.resolve(root, release, relative);
   if (!file.startsWith(path.join(root, release) + path.sep)) { res.writeHead(403).end(); return; }

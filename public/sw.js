@@ -29,8 +29,11 @@ self.addEventListener('install', event => {
       // Verify bytes as well as status: a non-atomic deployment must never mix
       // a new index.html with files from a different release. No HTTP cache.
       for (const path of BUILT) {
-        const response = await fetch(abs(path), { cache: 'reload' });
-        if (!response.ok || response.redirected) throw new Error('Incomplete release');
+        // Pages canonicalizes index.html to the scope directory (308). Fetch
+        // that URL directly, but retain index.html as the verified cache key.
+        const source = path === './index.html' ? SCOPE : abs(path);
+        const response = await fetch(source, { cache: 'reload' });
+        if (!response.ok || response.redirected) throw new Error(`Incomplete release: ${path} (${response.status}, redirected=${response.redirected})`);
         const bytes = await response.clone().arrayBuffer();
         const digest = await crypto.subtle.digest('SHA-256', bytes);
         const hash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
@@ -40,6 +43,7 @@ self.addEventListener('install', event => {
       // No skipWaiting here. An installed update waits for the user's consent.
     } catch (error) {
       await caches.delete(CACHE);
+      console.error('[PhoneBooks update] Installation failed', VERSION, error);
       throw error;
     }
   })());

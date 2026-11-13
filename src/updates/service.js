@@ -41,7 +41,7 @@ async function inspectWaiting() {
     if (deferredUntil > Date.now()) reminderTimer = setTimeout(() => {
       if (document.visibilityState === 'visible') void inspectWaiting();
     }, deferredUntil - Date.now());
-  } catch { /* Incomplete/redundant workers are never advertised as ready. */ }
+  } catch (error) { console.warn('[PhoneBooks update] Waiting inspection failed', error); }
 }
 export function deferUpdate() {
   deferredUntil = Date.now() + REMIND_AFTER;
@@ -79,7 +79,7 @@ export async function checkForUpdate(force = false) {
       watchRegistration(registration);
     } else await registration.update();
     await inspectWaiting();
-  } catch { /* Failed download/quota: keep the UI; retry on the next check. */ }
+  } catch (error) { console.warn('[PhoneBooks update] Check failed; will retry', error); }
   finally {
     checking = false;
     if (reconnectPending) { reconnectPending = false; void checkForUpdate(true); }
