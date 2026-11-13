@@ -1,0 +1,43 @@
+/* Keep fixed dialogs outside transformed page/card stacking contexts (body portal). */
+.modal-overlay {
+  position: fixed;
+  z-index: 60;
+  top: var(--modal-top, 0px);
+  left: var(--modal-left, 0px);
+  width: var(--modal-width, 100%);
+  height: var(--modal-height, 100vh);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: max(8px, env(safe-area-inset-top, 0px)) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
+  isolation: isolate;
+}
+@supports (height: 100dvh) {
+  .modal-overlay { height: var(--modal-height, 100dvh); }
+}
+.modal-panel {
+  min-width: 0;
+  max-height: 100%;
+}
+.modal-fixed { flex-shrink: 0; }
+.modal-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  overflow-wrap: anywhere;
+}
+/* The original stylesheet is precompiled; new layout rules live here explicitly. */
+.modal-panel .btn-primary, .modal-panel .btn-secondary {
+  white-space: normal;
+  height: auto;
+  min-height: 44px;
+}
+@media (min-width: 640px) {
+  .modal-overlay {
+    align-items: center;
+    padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  }
+}
