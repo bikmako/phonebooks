@@ -308,6 +308,7 @@ export function Modal({
           )}
         </div>
         <div className="modal-content px-5 pb-4">
+          <div data-update-notice-slot />
           {c}
         </div>
         {r && (

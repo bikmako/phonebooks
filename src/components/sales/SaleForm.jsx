@@ -13,7 +13,7 @@ import {
 import { updateSale } from "../../domain/sales.js";
 import { useStore } from "../../hooks/useStore.jsx";
 import { PAYMENT_METHODS } from "../../utils/constants.js";
-import { clearDraft, readDraft, saveDraft } from "../../utils/drafts.js";
+import { clearDraft, readDraft, saveDraft, registerUpdateDraft } from "../../utils/drafts.js";
 import {
   formatAmount,
   formatMoney,
@@ -74,6 +74,9 @@ export function SaleForm({
     [B, y] = React.useState(""),
     [j, u] = React.useState(""),
     [N, E] = React.useState("");
+  React.useEffect(() => {
+    if (!s) return registerUpdateDraft(SALE_DRAFT_KEY, { ...x, accLines: C, accDiscount: g });
+  }, [x, s, C, g]);
   (React.useEffect(() => {
     var P, H;
     if (
@@ -222,7 +225,7 @@ export function SaleForm({
             }));
     };
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-update-dirty="true">
       {!s && (
         <SegmentedTabs
           fullWidth={!0}

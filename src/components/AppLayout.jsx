@@ -9,6 +9,7 @@ import { ThemeToggle } from "../hooks/useTheme.jsx";
 import { getTotalMoney } from "../utils/calculations.js";
 import { formatMoney } from "../utils/format.js";
 import { Chip, cx } from "./ui.jsx";
+import { UpdateNotice } from "../updates/UpdateNotice.jsx";
 import {
   Banknote,
   ChartColumn,
@@ -226,6 +227,7 @@ export function AppLayout({
           </div>
         </header>
         <main className="mx-auto w-full max-w-[1200px] flex-1 px-4 pb-28 pt-4 sm:px-6 lg:px-8 lg:pb-10 lg:pt-7">
+          <UpdateNotice />
           <div className="mb-5 hidden items-center justify-between lg:flex">
             <div>
               <h1 className="page-title">{o == null ? void 0 : o.label}</h1>

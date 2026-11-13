@@ -1,0 +1,42 @@
+name: Test PhoneBooks
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # The complete first run took ~28 min including browser/OS dependencies.
+    # Keep the per-test limits, with room for runner setup and added lifecycle cases.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Includes the pinned pre-update release used by lifecycle tests.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npm test
+      - run: npm run test:updates
+      - name: Prepare iPhone device test packages
+        env:
+          PHONEBOOKS_TEST_COMMIT: ${{ github.event.pull_request.head.sha }}
+        run: node tools/prepare-device-test.js "$PHONEBOOKS_TEST_COMMIT"
+      - name: Upload iPhone device test packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: iphone-update-device-test
+          path: work/device-test-artifacts/
+          if-no-files-found: error
+          retention-days: 7
+      - run: npm run test:browser -- --trace retain-on-failure
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-test-failures
+          path: test-results/
+          retention-days: 7
