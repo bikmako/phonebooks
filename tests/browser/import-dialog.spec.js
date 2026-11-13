@@ -47,7 +47,7 @@ test('preview stays in viewport, body is locked, content scrolls and cancellatio
     await expect.poll(() => content.evaluate(node => node.scrollTop)).toBeGreaterThan(0);
     await visibleActions(page);
     expect((await dialog.locator('.modal-footer').boundingBox()).y).toBeCloseTo(footerBefore.y, 0);
-    expect(await page.evaluate(() => getComputedStyle(document.getElementById('root')).position)).toBe('fixed');
+    expect(await page.evaluate(() => getComputedStyle(document.body).position)).toBe('fixed');
     expect(await content.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
   }
   expect(await snapshot(page)).toEqual(before);
@@ -58,7 +58,7 @@ test('preview stays in viewport, body is locked, content scrolls and cancellatio
   expect(await snapshot(page)).toEqual(before);
   // WebKit rounds the document scroll limit by a CSS pixel after resize.
   expect(Math.abs(await page.evaluate(() => scrollY) - scrollBefore)).toBeLessThanOrEqual(1);
-  expect(await page.evaluate(() => document.getElementById('root').style.position)).toBe('');
+  expect(await page.evaluate(() => document.body.style.position)).toBe('');
 });
 
 test('download and both explicit confirmations are required; reopening resets consent', async ({ page }) => {

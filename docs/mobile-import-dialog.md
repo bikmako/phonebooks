@@ -10,7 +10,7 @@ inside that context cannot fix it.
 
 Modal now renders through a body portal. Its overlay follows the visual viewport
 (resize and scroll), with vh/dvh fallbacks and safe-area padding. The header and
-footer do not shrink; only the middle section scrolls. The application root position is locked
+footer do not shrink; only the middle section scrolls. Body position is locked
 while open and restored, including scroll position, on close. Long download
 button labels wrap on narrow screens. Storage and import handlers are unchanged.
 
