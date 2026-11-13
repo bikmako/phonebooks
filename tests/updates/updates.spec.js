@@ -340,3 +340,93 @@ test('first incomplete installation can recover online without document reload',
     await expect(fresh.getByLabel('Название бизнеса')).toBeVisible();
   } finally { await context.close(); }
 });
+
+test('clock rollback cannot delete the prepared waiting release during old UI boot', async ({ page, request }) => {
+  await seed(page); const before = await snapshot(page);
+  await ready(page, request);
+  const pendingCache = await page.evaluate(async () => {
+    const current = document.querySelector('meta[name="phonebooks-build"]').content;
+    const name = (await caches.keys()).find(key => key.endsWith(':/phonebooks/') && !key.startsWith(current + ':'));
+    // Simulate the device clock moving backwards before the new install. The
+    // cleanup must depend on cache lifecycle/order, never on wall-clock dates.
+    const cache = await caches.open(name), key = new URL('./__phonebooks_cache_metadata', location.href).href;
+    const response = await cache.match(key), meta = await response.json();
+    await cache.put(key, new Response(JSON.stringify({ ...meta, created: 1 })));
+    return name;
+  });
+  await page.reload(); await controlled(page);
+  await expect(notice(page)).toBeVisible();
+  expect(await page.evaluate(name => caches.has(name), pendingCache)).toBe(true);
+  expect(await snapshot(page)).toEqual(before);
+  await apply(page);
+  expect(await snapshot(page)).toEqual(before);
+});
+
+test('legacy open form survives discovery; first handoff preserves the saved draft and all stores', async ({ browser, request }) => {
+  const context = await browser.newContext({ ...test.info().project.use, baseURL: 'http://127.0.0.1:4175/phonebooks/' });
+  try {
+    await release(request, 'legacy');
+    const old = await context.newPage(); await old.goto('./#/settings'); await controlled(old);
+    await seed(old);
+    await old.goto('./#/purchase?action=purchase');
+    await old.locator('#model').fill('Первый переход — черновик');
+    await expect.poll(() => old.evaluate(() => JSON.parse(localStorage.getItem('phonebooks.draft.phone-new'))?.model)).toBe('Первый переход — черновик');
+    const before = await snapshot(old);
+    let reloads = 0; old.on('framenavigated', frame => { if (frame === old.mainFrame()) reloads++; });
+    await release(request, 'b');
+    await old.evaluate(async () => {
+      const registration = await navigator.serviceWorker.getRegistration(); await registration.update();
+      if (!registration.waiting) await new Promise(resolve => {
+        const worker = registration.installing;
+        if (!worker) throw new Error('No installing update');
+        worker.addEventListener('statechange', () => { if (worker.state === 'installed') resolve(); });
+      });
+    });
+    await expect(old.locator('#model')).toHaveValue('Первый переход — черновик');
+    expect(reloads).toBe(0); expect(await snapshot(old)).toEqual(before);
+    // The legacy document cannot display a prompt added in a future release.
+    // Only this explicit user-style navigation loads the new coordinator.
+    await old.reload(); await old.goto('./#/settings'); await expect(notice(old)).toBeVisible();
+    reloads = 0;
+    await apply(old); expect(reloads).toBe(1); expect(await snapshot(old)).toEqual(before);
+    await old.goto('./#/purchase?action=purchase');
+    await expect(old.locator('#model')).toHaveValue('Первый переход — черновик');
+    await context.setOffline(true); await old.reload();
+    expect(await snapshot(old)).toEqual(before);
+  } finally { await context.close(); }
+});
+
+test('legacy waiting worker activates with all app windows closed and reopens offline once', async ({ browser, request }) => {
+  const context = await browser.newContext({ ...test.info().project.use, baseURL: 'http://127.0.0.1:4175/phonebooks/' });
+  try {
+    await release(request, 'legacy');
+    const old = await context.newPage(); await old.goto('./#/settings'); await controlled(old); await seed(old);
+    const before = await snapshot(old);
+    await release(request, 'b');
+    await old.evaluate(async () => {
+      const registration = await navigator.serviceWorker.getRegistration(); await registration.update();
+      if (!registration.waiting) await new Promise(resolve => {
+        const worker = registration.installing;
+        if (!worker) throw new Error('No installing update');
+        worker.addEventListener('statechange', () => { if (worker.state === 'installed') resolve(); });
+      });
+    });
+    await old.close();
+    // A page on a different path keeps the context alive without keeping the
+    // PhoneBooks worker waiting. It represents no open application window.
+    const observer = await context.newPage(); await observer.goto('http://127.0.0.1:4175/__test/requests');
+    await expect.poll(() => observer.evaluate(async () => {
+      const registration = await navigator.serviceWorker.getRegistration('/phonebooks/');
+      return Boolean(registration?.active && !registration.waiting && registration.active.state === 'activated');
+    })).toBe(true);
+    await context.setOffline(true);
+    const reopened = await context.newPage(); let reloads = 0;
+    reopened.on('framenavigated', frame => { if (frame === reopened.mainFrame()) reloads++; });
+    await reopened.goto('./#/settings');
+    await expect(reopened.getByLabel('Название бизнеса')).toHaveValue('Учебная скупка — синтетические данные');
+    await expect(reopened.locator('[data-test-release="b"]')).toHaveCount(1);
+    expect(await snapshot(reopened)).toEqual(before); expect(reloads).toBe(1);
+    await reopened.getByLabel('Название бизнеса').focus();
+    await expect(notice(reopened)).toHaveCount(0); expect(reloads).toBe(1);
+  } finally { await context.close(); }
+});

@@ -12,8 +12,10 @@ const SHELL = BUILT.map(abs);
 const META = abs('./__phonebooks_cache_metadata');
 
 async function complete() {
+  if (!(await caches.has(CACHE))) return false;
   const cache = await caches.open(CACHE);
-  return (await Promise.all(SHELL.map(url => cache.match(url, { ignoreVary: true })))).every(Boolean);
+  const cached = new Set((await cache.keys()).map(request => request.url));
+  return SHELL.every(url => cached.has(url));
 }
 async function windows() {
   return (await self.clients.matchAll({ type: 'window', includeUncontrolled: true }))
@@ -23,7 +25,7 @@ self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
     try {
-      await cache.put(META, new Response(JSON.stringify({ created: Date.now() })));
+      await cache.put(META, new Response(JSON.stringify({ status: 'pending' })));
       // Verify bytes as well as status: a non-atomic deployment must never mix
       // a new index.html with files from a different release. No HTTP cache.
       for (const path of BUILT) {
@@ -44,7 +46,12 @@ self.addEventListener('install', event => {
 });
 self.addEventListener('activate', event => {
   // Retain the previous working cache until the new document has actually booted.
-  event.waitUntil(self.clients.claim());
+  event.waitUntil((async () => {
+    // This marker also protects a reused cache during a rollback installation.
+    // Losing a metadata write must not prevent an otherwise complete UI boot.
+    try { await (await caches.open(CACHE)).put(META, new Response(JSON.stringify({ status: 'active' }))); } catch {}
+    await self.clients.claim();
+  })());
 });
 self.addEventListener('message', event => {
   const reply = value => event.ports[0]?.postMessage(value);
@@ -63,15 +70,17 @@ self.addEventListener('message', event => {
       // Only the matching, successfully booted UI may remove old application
       // caches, and only when no other tab could still need their assets.
       if ((await windows()).some(client => client.id !== event.source.id)) return;
-      const currentMeta = await (await caches.open(CACHE)).match(META);
-      if (!currentMeta) return;
-      const created = (await currentMeta.json()).created;
-      for (const key of await caches.keys()) {
+      // CacheStorage.keys() is ordered by creation. Wall-clock dates can move
+      // backwards on a phone and must never decide which release is newer.
+      const keys = await caches.keys(), current = keys.indexOf(CACHE);
+      if (current < 0) return;
+      for (const key of keys.slice(0, current)) {
         if (key === CACHE || !key.startsWith('phonebooks-')) continue;
         if (key.endsWith(`:${BASE}`)) {
           const oldMeta = await (await caches.open(key)).match(META);
-          // A newer cache can belong to a worker currently installing/waiting.
-          if (oldMeta && (await oldMeta.json()).created < created) await caches.delete(key);
+          // Even an older name can be reused by an installing rollback worker.
+          if (oldMeta && (await oldMeta.json()).status === 'pending') continue;
+          await caches.delete(key);
         }
         else if (!key.includes(':')) {
           // Legacy caches have no scope in their name. Check every URL first.

@@ -7,7 +7,9 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The complete first run took ~28 min including browser/OS dependencies.
+    # Keep the per-test limits, with room for runner setup and added lifecycle cases.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
@@ -20,7 +22,7 @@ jobs:
       - run: npx playwright install --with-deps chromium firefox webkit
       - run: npm test
       - run: npm run test:updates
-      - run: npm run test:browser
+      - run: npm run test:browser -- --trace retain-on-failure
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
