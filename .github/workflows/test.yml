@@ -22,6 +22,17 @@ jobs:
       - run: npx playwright install --with-deps chromium firefox webkit
       - run: npm test
       - run: npm run test:updates
+      - name: Prepare iPhone device test packages
+        env:
+          PHONEBOOKS_TEST_COMMIT: ${{ github.event.pull_request.head.sha }}
+        run: node tools/prepare-device-test.js "$PHONEBOOKS_TEST_COMMIT"
+      - name: Upload iPhone device test packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: iphone-update-device-test
+          path: work/device-test-artifacts/
+          if-no-files-found: error
+          retention-days: 7
       - run: npm run test:browser -- --trace retain-on-failure
       - uses: actions/upload-artifact@v4
         if: failure()
