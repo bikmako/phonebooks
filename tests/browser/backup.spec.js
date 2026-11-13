@@ -137,6 +137,12 @@ test('corrupt current data blocks startup and remains intact', async ({ page }) 
 
 test('mobile preview allows cancellation without storage writes', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  // WebKit mobile emulation can keep a stale fixed-layer hit-test viewport
+  // after resizing the already loaded document (also reproducible on plain HTML).
+  // Load this static-size scenario at its target viewport; resizing an open
+  // dialog is exercised separately in import-dialog.spec.js.
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Скачать полную копию', exact: true })).toBeEnabled();
   const file = await exportFile(page), before = await snapshot(page);
   await upload(page, file);
   await expect(page.getByRole('dialog')).toBeVisible();

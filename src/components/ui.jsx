@@ -211,16 +211,19 @@ export function Modal({
     viewport?.addEventListener("resize", updateViewport);
     viewport?.addEventListener("scroll", updateViewport);
     // overflow:hidden alone does not lock the document on older iOS Safari.
-    const body = document.body;
-    const previous = { position: body.style.position, top: body.style.top, width: body.style.width };
+    // Keep the page lock separate from the viewport overlay and its portal.
+    const page = document.getElementById("root");
+    const previous = page && { position: page.style.position, top: page.style.top, width: page.style.width };
     const scrollX = window.scrollX, scrollY = window.scrollY;
-    body.style.position = "fixed";
-    body.style.top = `${-scrollY}px`;
-    body.style.width = "100%";
+    if (page) {
+      page.style.position = "fixed";
+      page.style.top = `${-scrollY}px`;
+      page.style.width = "100%";
+    }
     return () => {
       viewport?.removeEventListener("resize", updateViewport);
       viewport?.removeEventListener("scroll", updateViewport);
-      Object.assign(body.style, previous);
+      if (page) Object.assign(page.style, previous);
       window.scrollTo(scrollX, scrollY);
     };
   }, [s]);

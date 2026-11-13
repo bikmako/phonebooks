@@ -2,7 +2,8 @@ import { test, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import { exportFile, upload, snapshot, commitAndReload } from './helpers.js';
 
-test.use({ reducedMotion: 'reduce' });
+// Exercise the real opening animations as well as viewport resizing.
+test.use({ reducedMotion: 'no-preference' });
 
 async function visibleActions(page) {
   const dialog = page.getByRole('dialog');
@@ -14,6 +15,7 @@ async function visibleActions(page) {
     const top = viewport?.offsetTop || 0, left = viewport?.offsetLeft || 0;
     const bottom = top + (viewport?.height || innerHeight);
     const right = left + (viewport?.width || innerWidth);
+    if (node.getAnimations().some(animation => animation.playState === 'running')) return false;
     const overlay = node.parentElement.getBoundingClientRect();
     if (Math.abs(overlay.height - (bottom - top)) > 1 || Math.abs(overlay.width - (right - left)) > 1) return false;
     const buttons = [...node.querySelectorAll('button')].filter(button => ['Отмена без записи', 'Подтвердить импорт'].includes(button.textContent));
@@ -45,7 +47,7 @@ test('preview stays in viewport, body is locked, content scrolls and cancellatio
     await expect.poll(() => content.evaluate(node => node.scrollTop)).toBeGreaterThan(0);
     await visibleActions(page);
     expect((await dialog.locator('.modal-footer').boundingBox()).y).toBeCloseTo(footerBefore.y, 0);
-    expect(await page.evaluate(() => getComputedStyle(document.body).position)).toBe('fixed');
+    expect(await page.evaluate(() => getComputedStyle(document.getElementById('root')).position)).toBe('fixed');
     expect(await content.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
   }
   expect(await snapshot(page)).toEqual(before);
@@ -54,8 +56,9 @@ test('preview stays in viewport, body is locked, content scrolls and cancellatio
   await page.getByRole('button', { name: 'Отмена без записи' }).click();
   await expect(dialog).toHaveCount(0);
   expect(await snapshot(page)).toEqual(before);
-  expect(await page.evaluate(() => scrollY)).toBeCloseTo(scrollBefore, 0);
-  expect(await page.evaluate(() => document.body.style.position)).toBe('');
+  // WebKit rounds the document scroll limit by a CSS pixel after resize.
+  expect(Math.abs(await page.evaluate(() => scrollY) - scrollBefore)).toBeLessThanOrEqual(1);
+  expect(await page.evaluate(() => document.getElementById('root').style.position)).toBe('');
 });
 
 test('download and both explicit confirmations are required; reopening resets consent', async ({ page }) => {
