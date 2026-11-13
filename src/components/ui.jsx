@@ -6,6 +6,8 @@
  */
 import { ChevronDown, LoaderCircle, TriangleAlert, X } from "lucide-react";
 import React from "react";
+import { createPortal } from "react-dom";
+import "../styles/modal.css";
 import { jsx, jsxs } from "react/jsx-runtime";
 export function cx(...s) {
   return s.filter(Boolean).join(" ");
@@ -192,6 +194,36 @@ export function Modal({
 }) {
   const d = React.useRef(null),
     x = React.useId();
+  const overlay = React.useRef(null);
+  React.useLayoutEffect(() => {
+    if (!s) return;
+    // Safari's visual viewport also changes when browser chrome / keyboard moves.
+    const viewport = window.visualViewport;
+    const updateViewport = () => {
+      const node = overlay.current;
+      if (!node || !viewport) return;
+      node.style.setProperty("--modal-height", `${viewport.height}px`);
+      node.style.setProperty("--modal-top", `${viewport.offsetTop}px`);
+      node.style.setProperty("--modal-left", `${viewport.offsetLeft}px`);
+      node.style.setProperty("--modal-width", `${viewport.width}px`);
+    };
+    updateViewport();
+    viewport?.addEventListener("resize", updateViewport);
+    viewport?.addEventListener("scroll", updateViewport);
+    // overflow:hidden alone does not lock the document on older iOS Safari.
+    const body = document.body;
+    const previous = { position: body.style.position, top: body.style.top, width: body.style.width };
+    const scrollX = window.scrollX, scrollY = window.scrollY;
+    body.style.position = "fixed";
+    body.style.top = `${-scrollY}px`;
+    body.style.width = "100%";
+    return () => {
+      viewport?.removeEventListener("resize", updateViewport);
+      viewport?.removeEventListener("scroll", updateViewport);
+      Object.assign(body.style, previous);
+      window.scrollTo(scrollX, scrollY);
+    };
+  }, [s]);
   if (
     (React.useEffect(() => {
       if (!s) return;
@@ -228,8 +260,8 @@ export function Modal({
     return null;
   const v =
     i === "sm" ? "sm:max-w-md" : i === "lg" ? "sm:max-w-2xl" : "sm:max-w-lg";
-  return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center sm:p-4">
+  return createPortal(
+    <div ref={overlay} className="modal-overlay">
       <div
         className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] animate-fade-in"
         onClick={t}
@@ -243,17 +275,17 @@ export function Modal({
           "relative w-full bg-white shadow-float animate-slide-up sm:animate-pop",
           v,
           "sm:rounded-2xl",
-          o ? "rounded-t-3xl max-h-[92dvh]" : "rounded-t-2xl max-h-[92dvh]",
-          "flex flex-col overflow-hidden",
+          o ? "rounded-t-3xl" : "rounded-t-2xl",
+          "modal-panel flex flex-col overflow-hidden",
         )}
         style={{
           paddingBottom: "0px",
         }}
       >
         {o && (
-          <div className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-slate-200/80 sm:hidden" />
+          <div className="modal-fixed mx-auto mt-2.5 h-1 w-10 rounded-full bg-slate-200/80 sm:hidden" />
         )}
-        <div className="flex items-start justify-between gap-4 px-5 pb-3 pt-4 sm:pt-5">
+        <div className="modal-fixed flex items-start justify-between gap-4 px-5 pb-3 pt-4 sm:pt-5">
           <div className="min-w-0">
             <h2
               id={x}
@@ -275,12 +307,12 @@ export function Modal({
             </button>
           )}
         </div>
-        <div className="flex-1 overflow-y-auto overscroll-contain px-5 pb-4">
+        <div className="modal-content px-5 pb-4">
           {c}
         </div>
         {r && (
           <div
-            className="border-t border-slate-100 bg-white px-5 pt-3"
+            className="modal-fixed modal-footer border-t border-slate-100 bg-white px-5 pt-3"
             style={{
               paddingBottom: "max(16px, env(safe-area-inset-bottom))",
             }}
@@ -289,7 +321,8 @@ export function Modal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 export function ConfirmDialog({
