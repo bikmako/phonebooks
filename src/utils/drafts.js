@@ -1,3 +1,4 @@
+import { STORAGE_PREFIX } from "../config.js";
 /**
  * Черновики форм в localStorage.
  *
@@ -5,7 +6,7 @@
  * локальные имена переменных в теле функций оставлены как в бандле.
  */
 import { today } from "./format.js";
-export const DRAFT_PREFIX = "phonebooks.draft.";
+export const DRAFT_PREFIX = STORAGE_PREFIX + "draft.";
 export function saveDraft(s, t) {
   try {
     t === null

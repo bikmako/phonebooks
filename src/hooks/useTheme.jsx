@@ -1,3 +1,4 @@
+import { STORAGE_PREFIX } from "../config.js";
 /**
  * Тема оформления и переключатели темы.
  *
@@ -11,7 +12,7 @@ import { jsx, jsxs } from "react/jsx-runtime";
 export function PageTransition({ children: s, className: t }) {
   return <div className={cx("animate-fade-up", t)}>{s}</div>;
 }
-export const THEME_KEY = "phonebooks.theme";
+export const THEME_KEY = STORAGE_PREFIX + "theme";
 export function getTheme() {
   try {
     const s = localStorage.getItem(THEME_KEY);

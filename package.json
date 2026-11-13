@@ -11,7 +11,14 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test tests/*.test.js",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "predev:demo": "node tools/prepare-scanner-assets.js",
+    "dev:demo": "vite --mode demo",
+    "prebuild:demo": "node tools/prepare-scanner-assets.js",
+    "build:demo": "vite build --mode demo",
+    "preview:demo": "vite preview --mode demo",
+    "test:demo:browser": "playwright test --config playwright.demo.config.js",
+    "test:builds": "node --test tests/build/*.test.js"
   },
   "dependencies": {
     "@tesseract.js-data/eng": "1.0.0",

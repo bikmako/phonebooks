@@ -1,3 +1,4 @@
+import { IS_DEMO } from "../config.js";
 /**
  * Склад и продажи аксессуаров.
  *
@@ -107,7 +108,7 @@ export function AccessoriesPage() {
           title="Товары на складе"
           subtitle="Остатки, цены и быстрые действия"
         />
-        <div className="flex w-full gap-2 sm:w-auto">
+        <div className={cx("flex w-full gap-2 sm:w-auto", IS_DEMO && "demo-responsive-actions")}>
           <Button
             variant="secondary"
             className="flex-1 sm:flex-none"

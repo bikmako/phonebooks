@@ -1,3 +1,6 @@
+import { IS_DEMO, STORAGE_PREFIX, requireDataTransfer } from "../config.js";
+import { createDemoState } from "../demo/seed.js";
+import { resetDemoStorage } from "../demo/storage.js";
 /**
  * Контекст состояния приложения и хук useStore.
  *
@@ -77,26 +80,26 @@ export function StoreProvider({ children: s }) {
       f((V) => V.filter((_) => _.id !== Q));
     }, []),
     y = React.useCallback(async () => {
-      p(await listBackups());
+      p(IS_DEMO ? [] : await listBackups());
     }, []);
   React.useEffect(() => {
     let Q = !1;
     return (
       (async () => {
         try {
-        await recoverInterruptedImport();
+        if (!IS_DEMO) await recoverInterruptedImport();
         const _ = (await loadState()) ?? (await migrateLegacyState());
         if (!Q) {
           if (_) {
             const k = normalizeState(_);
             ((C.current = k), n(k));
           } else {
-            const k = createInitialState();
+            const k = IS_DEMO ? createDemoState() : createInitialState();
             ((C.current = k), n(k), await persistState(k));
           }
           (l(await getLastSaved()),
             A(await getStorageEstimate()),
-            p(await listBackups()),
+            p(IS_DEMO ? [] : await listBackups()),
             Q || c(!0));
         }
         } catch (error) { if (!Q) setStartupError(error.message); }
@@ -191,6 +194,7 @@ export function StoreProvider({ children: s }) {
     ),
     R = React.useCallback(
       async (Q = "manual") => {
+        requireDataTransfer();
         try {
           (await createBackup(C.current, Q), await y());
         } catch (error) { b({ title: "Копия не создана", description: error.message, tone: "error" }); }
@@ -201,14 +205,23 @@ export function StoreProvider({ children: s }) {
       if (transferBusy.current) return;
       transferBusy.current = true;
       try {
-        await j(); await writeQueue.current;
-        await createBackup(C.current, "manual");
-        const next = createInitialState(); await persistState(next);
+        if (IS_DEMO) {
+          // A confirmed reset discards edits, including failed/stale pending saves.
+          clearTimeout(S.current); g.current = null;
+          await writeQueue.current.catch(() => {}); g.current = null;
+        } else {
+          await j(); await writeQueue.current;
+          await createBackup(C.current, "manual");
+        }
+        const next = IS_DEMO ? createDemoState() : createInitialState();
+        if (IS_DEMO) await resetDemoStorage(next); else await persistState(next);
         C.current = next; n(next); await y();
+        if (IS_DEMO) { l(new Date().toISOString()); i("saved"); x(null); b({ title: "Демо восстановлено", tone: "success" }); }
       } catch (error) { b({ title: "Очистка остановлена", description: error.message, tone: "error" }); }
       finally { transferBusy.current = false; }
     }, [j, b, y]);
   const beginImport = React.useCallback(async parsed => {
+    requireDataTransfer();
     if (transferBusy.current) throw new Error("Другая операция уже выполняется");
     transferBusy.current = true;
     try {
@@ -240,6 +253,7 @@ export function StoreProvider({ children: s }) {
     } finally { transferBusy.current = false; }
   }, [j, b]);
   const finishImport = React.useCallback(async (plan, options) => {
+    requireDataTransfer();
     const next = await plan.commit(options);
     acceptPersistedState(next);
     C.current = next; n(next); l(new Date().toISOString()); i("saved");
@@ -247,13 +261,14 @@ export function StoreProvider({ children: s }) {
     transferBusy.current = false;
   }, [y]);
   const exportBackup = React.useCallback(async () => {
+    requireDataTransfer();
     await j(); await writeQueue.current;
     if (g.current) throw new Error("Сначала сохраните текущие изменения");
     return exportFullBackup();
   }, [j]);
   React.useEffect(() => {
     const Q = (V) => {
-      if (V.key === "phonebooks.ping") b({ title: "Данные изменены другой вкладкой", description: "Перезагрузите приложение перед редактированием", tone: "info" });
+      if (V.key === STORAGE_PREFIX + "ping") b({ title: "Данные изменены другой вкладкой", description: "Перезагрузите приложение перед редактированием", tone: "info" });
     };
     return (
       window.addEventListener("storage", Q),
@@ -291,10 +306,14 @@ export function StoreProvider({ children: s }) {
     <h1>Не удалось открыть данные</h1><p>{startupError}</p>
     <p>Запись заблокирована. Существующая база сохранена. Закройте другие вкладки и повторите запуск.</p>
     <button onClick={() => location.reload()}>Повторить запуск</button>
-    <button onClick={async () => {
+    {IS_DEMO ? <button onClick={async () => {
+      if (!window.confirm("Сбросить демо? Все тестовые изменения будут удалены и заменены исходными данными.")) return;
+      try { await resetDemoStorage(createDemoState(), { recover: true }); location.reload(); }
+      catch (error) { setStartupError(error.message); }
+    }}>Сбросить демо</button> : <button onClick={async () => {
       try { downloadJson("phonebooks-diagnostic-recovery.json", { app: "PhoneBooks", diagnostic: true, snapshot: await captureSnapshot() }); }
       catch (error) { setStartupError(error.message); }
-    }}>Скачать исходные данные для восстановления</button>
+    }}>Скачать исходные данные для восстановления</button>}
   </div>;
   return <StoreContext.Provider value={ie}>{s}</StoreContext.Provider>;
 }
