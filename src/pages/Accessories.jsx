@@ -1,9 +1,10 @@
 /**
  * Склад и продажи аксессуаров.
  *
- * Восстановлено из production-бандла PhoneBooks. Логика и разметка сохранены без изменений;
- * локальные имена переменных в теле функций оставлены как в бандле.
+ * Компактный интерфейс склада; расчёты и операции остаются в domain/accessories.
  */
+import { AccessoryPicker } from "../components/accessories/AccessoryPicker.jsx";
+import "../styles/accessories.css";
 import { AccessoryAdjustModal } from "../components/accessories/AccessoryAdjustModal.jsx";
 import { AccessoryItemModal } from "../components/accessories/AccessoryItemModal.jsx";
 import { AccessoryPurchaseModal } from "../components/accessories/AccessoryPurchaseModal.jsx";
@@ -11,11 +12,8 @@ import { AccessoryBatchHistoryModal } from "../components/accessories/BatchHisto
 import {
   Button,
   Card,
-  CardHeader,
-  Chip,
   EmptyState,
   SearchInput,
-  Select,
   cx,
 } from "../components/ui.jsx";
 import {
@@ -38,6 +36,8 @@ import {
 } from "../utils/format.js";
 import {
   ArrowDownLeft,
+  ArrowDownUp,
+  ChevronDown,
   History,
   Package,
   Pencil,
@@ -47,7 +47,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import React from "react";
-import { jsx, jsxs } from "react/jsx-runtime";
+
 export function AccessoriesPage() {
   const { data: s, period: t } = useStore(),
     [n, a] = React.useState(""),
@@ -100,133 +100,160 @@ export function AccessoriesPage() {
     j = (u) => {
       (L(u), w(!0));
     };
+  const [statsOpen, setStatsOpen] = React.useState(() =>
+    window.matchMedia("(min-width: 1024px)").matches,
+  );
+  const statsId = React.useId();
+  const periodLabel = getPeriod(t).label;
   return (
-    <PageTransition>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <CardHeader
-          title="Товары на складе"
-          subtitle="Остатки, цены и быстрые действия"
-        />
-        <div className="flex w-full gap-2 sm:w-auto">
-          <Button
-            variant="secondary"
-            className="flex-1 sm:flex-none"
-            icon={<ArrowDownLeft className="h-4 w-4" />}
-            onClick={() => j()}
-          >
-            Поступление
-          </Button>
-          <Button
-            className="flex-1 sm:flex-none"
-            icon={<Plus className="h-4 w-4" />}
-            onClick={() =>
-              v({
-                open: !0,
-                item: null,
-              })
-            }
-          >
-            Добавить товар
-          </Button>
-        </div>
-      </div>
-      <div className="stagger grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        <Card className="card-pad">
-          <p className="text-[11.5px] text-ink-500">Выручка</p>
-          <p className="mt-0.5 text-[18px] font-bold tabular-nums text-ink-900">
-            {formatMoney(S.revenue)}
-          </p>
-          <p className="text-[11px] text-ink-400">
-            {"прибыль "}
-            {formatMoney(S.profit)}
+    <PageTransition className="accessories-page">
+      <section className="accessories-summary" aria-label="Краткая статистика аксессуаров">
+        <Card className="accessories-stat">
+          <p className="accessories-caption">Остатки на складе</p>
+          <p className="accessories-stat-value">{formatMoney(S.stockValue)}</p>
+          <p className="accessories-note">
+            {S.stockQty} шт. · {S.itemsCount} {plural(S.itemsCount, "товар", "товара", "товаров")}
           </p>
         </Card>
-        <Card className="card-pad">
-          <p className="text-[11.5px] text-ink-500">Продано</p>
-          <p className="mt-0.5 text-[18px] font-bold tabular-nums text-ink-900">
-            {S.soldQty} {plural(S.soldQty, "штука", "штуки", "штук")}
-          </p>
-          <p className="text-[11px] text-ink-400">
-            {S.receipts} {plural(S.receipts, "чек", "чека", "чеков")}
-          </p>
+        <Card className="accessories-stat">
+          <p className="accessories-caption">Выручка</p>
+          <p className="accessories-stat-value">{formatMoney(S.revenue)}</p>
+          <p className="accessories-note">{periodLabel}</p>
         </Card>
-        <Card className="card-pad">
-          <p className="text-[11.5px] text-ink-500">Остатки на складе</p>
-          <p className="mt-0.5 text-[18px] font-bold tabular-nums text-ink-900">
-            {formatMoney(S.stockValue)}
-          </p>
-          <p className="text-[11px] text-ink-400">
-            {S.stockQty}
-            {" шт. · "}
-            {S.itemsCount} {plural(S.itemsCount, "товар", "товара", "товаров")}
-          </p>
-        </Card>
-        <Card className="card-pad">
-          <p className="text-[11.5px] text-ink-500">Заканчиваются</p>
-          <p
-            className={cx(
-              "mt-0.5 text-[18px] font-bold tabular-nums",
-              S.lowStockCount ? "text-amber-600" : "text-ink-900",
-            )}
-          >
-            {S.lowStockCount}
-          </p>
-          <p className="text-[11px] text-ink-400">ниже минимального остатка</p>
-        </Card>
-      </div>
-      {g.length > 0 && (
-        <Card className="card-pad">
-          <p className="text-[12px] font-semibold text-ink-500">
-            Топ аксессуаров за период
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {g.map((u) => (
-              <Chip tone={u.profit >= 0 ? "success" : "danger"} key={u.itemId}>
-                {u.name}
-                {" · "}
-                {u.qty}
-                {" шт. · +"}
-                {formatAmount(u.profit)}
-                {" ₽"}
-              </Chip>
-            ))}
+      </section>
+      <Card className="accessories-details">
+        <button
+          type="button"
+          id={`${statsId}-toggle`}
+          className="accessories-details-toggle"
+          aria-expanded={statsOpen}
+          aria-controls={statsId}
+          onClick={() => setStatsOpen((open) => !open)}
+        >
+          <span>Подробная статистика</span>
+          <ChevronDown aria-hidden="true" className={statsOpen ? "is-open" : ""} />
+        </button>
+        <div
+          id={statsId}
+          role="region"
+          aria-labelledby={`${statsId}-toggle`}
+          aria-hidden={!statsOpen}
+          {...(!statsOpen ? { inert: "" } : {})}
+          className="accessories-details-region"
+          data-open={statsOpen}
+        >
+          <div className="accessories-details-clip">
+            <div className="accessories-details-content">
+              <div className="accessories-detail-metrics">
+                <div>
+                  <p className="accessories-caption">Продано</p>
+                  <p className="accessories-detail-value">{S.soldQty} шт.</p>
+                  <p className="accessories-note">{S.receipts} {plural(S.receipts, "чек", "чека", "чеков")}</p>
+                </div>
+                <div>
+                  <p className="accessories-caption">Прибыль</p>
+                  <p className={cx("accessories-detail-value", S.profit < 0 ? "text-red-500" : "text-emerald-600")}>
+                    {formatMoney(S.profit)}
+                  </p>
+                  <p className="accessories-note">{periodLabel}</p>
+                </div>
+              </div>
+              <div className="accessories-detail-lists">
+                <div>
+                  <h3 className="accessories-caption">Заканчиваются · {S.lowStockCount}</h3>
+                  {S.lowStockCount > 0 ? (
+                    <ul className="accessories-ranking accessories-low-stock">
+                      {s.accessoryItems.filter((item) => b.has(item.id)).map((item) => (
+                        <li key={item.id}>
+                          <span>{item.name}</span>
+                          <b className="text-amber-600">{getAccessoryStock(s, item.id)} шт.</b>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : <p className="accessories-note">Все товары в достатке</p>}
+                </div>
+                <div>
+                  <h3 className="accessories-caption">Топ аксессуаров за период</h3>
+                  {g.length > 0 ? (
+                    <ol className="accessories-ranking">
+                      {g.map((item) => (
+                        <li key={item.itemId}>
+                          <span>{item.name}</span>
+                          <span className="accessories-ranking-totals">
+                            <b>{item.qty} шт.</b>
+                            <span className={item.profit < 0 ? "text-red-500" : "text-emerald-600"}>
+                              {item.profit > 0 ? "+" : ""}{formatAmount(item.profit)} ₽
+                            </span>
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : <p className="accessories-note">За этот период продаж пока нет</p>}
+                </div>
+              </div>
+              <p className="accessories-period-note">
+                <TrendingUp aria-hidden="true" /> Период продаж выбирается на Главной.
+              </p>
+            </div>
           </div>
-        </Card>
-      )}
-      <div className="space-y-2.5">
-        <SearchInput value={n} onChange={a} placeholder="Поиск по названию" />
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <Select value={c} onChange={(u) => r(u.target.value)}>
-            <option value="all">Все категории</option>
-            {Object.keys(ACCESSORY_CATEGORY_LABELS).map((u) => (
-              <option value={u} key={u}>
-                {ACCESSORY_CATEGORY_LABELS[u]}
-              </option>
-            ))}
-          </Select>
-          <Select
-            value={i}
-            onChange={(u) => o(u.target.value)}
-            disabled={B.length === 0}
-          >
-            <option value="all">Совместимость</option>
-            {B.map((u) => (
-              <option value={u} key={u}>
-                {u}
-              </option>
-            ))}
-          </Select>
-          <Select
-            value={l}
-            onChange={(u) => d(u.target.value)}
-            className="col-span-2 sm:col-span-1"
-          >
-            <option value="low">Заканчивающиеся сначала</option>
-            <option value="name">По названию</option>
-            <option value="stock">По остатку</option>
-            <option value="price">По цене</option>
-          </Select>
         </div>
+      </Card>
+      <div className="accessories-actions" role="group" aria-label="Управление товарами">
+        <Button
+          variant="secondary"
+          icon={<ArrowDownLeft aria-hidden="true" className="h-4 w-4" />}
+          onClick={() => j()}
+        >
+          Поступление
+        </Button>
+        <Button
+          icon={<Plus aria-hidden="true" className="h-4 w-4" />}
+          onClick={() => v({ open: !0, item: null })}
+        >
+          Добавить товар
+        </Button>
+      </div>
+      <section className="accessories-filters" aria-label="Поиск и фильтры аксессуаров">
+        <div className="accessories-search-row">
+          <SearchInput value={n} onChange={a} placeholder="Поиск по названию" />
+          <AccessoryPicker
+            title="Сортировка"
+            value={l}
+            onChange={d}
+            icon={<ArrowDownUp aria-hidden="true" />}
+            options={[
+              { value: "low", label: "Заканчивающиеся сначала" },
+              { value: "name", label: "По названию" },
+              { value: "stock", label: "По остатку" },
+              { value: "price", label: "По цене" },
+            ]}
+          />
+        </div>
+        <div className="accessories-filter-row">
+          <AccessoryPicker
+            title="Категория"
+            value={c}
+            onChange={r}
+            options={[
+              { value: "all", label: "Все категории" },
+              ...Object.entries(ACCESSORY_CATEGORY_LABELS).map(([value, label]) => ({ value, label })),
+            ]}
+          />
+          <AccessoryPicker
+            title="Совместимость"
+            value={i}
+            onChange={o}
+            disabled={B.length === 0}
+            options={[
+              { value: "all", label: "Совместимость" },
+              ...B.map((value) => ({ value, label: value })),
+            ]}
+          />
+        </div>
+      </section>
+      <div className="accessories-list-heading">
+        <h2>Товары на складе</h2>
+        <span aria-live="polite">{y.length} из {s.accessoryItems.length}</span>
       </div>
       {y.length === 0 ? (
         <EmptyState
@@ -260,112 +287,58 @@ export function AccessoriesPage() {
           }
         />
       ) : (
-        <div className="stagger space-y-2.5">
+        <div className="accessories-products">
           {y.map((u) => {
             const N = getAccessoryStock(s, u.id),
               E = ACCESSORY_CATEGORY_ICONS[u.category],
               R = b.has(u.id);
             return (
-              <Card className="card-pad" key={u.id}>
-                <div className="flex items-start gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
-                    <E className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <p className="truncate text-[14px] font-semibold text-ink-900">
-                        {u.name}
-                      </p>
-                      {R && (
-                        <Chip tone={N <= 0 ? "danger" : "warning"}>
-                          <TriangleAlert className="mr-0.5 h-3 w-3" />
-                          {N <= 0 ? "Закончились" : "Заканчивается"}
-                        </Chip>
-                      )}
-                    </div>
-                    <div className="mt-1 flex flex-wrap gap-1.5">
-                      <Chip tone="neutral">
-                        {ACCESSORY_CATEGORY_LABELS[u.category]}
-                      </Chip>
-                      {u.compatibility && (
-                        <Chip tone="info">{u.compatibility}</Chip>
-                      )}
-                      {u.color && <Chip tone="neutral">{u.color}</Chip>}
-                    </div>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] text-ink-500">
-                      <span>
-                        {"Остаток: "}
-                        <b
-                          className={cx(
-                            "tabular-nums",
-                            R
-                              ? N <= 0
-                                ? "text-red-500"
-                                : "text-amber-600"
-                              : "text-ink-900",
-                          )}
-                        >
-                          {N}
-                          {" шт."}
-                        </b>
-                      </span>
-                      <span>
-                        {"Цена: "}
-                        <b className="tabular-nums text-ink-900">
-                          {formatAmount(u.salePrice)}
-                          {" ₽"}
-                        </b>
-                      </span>
-                      {u.minStock > 0 && (
-                        <span className="text-ink-400">
-                          {"мин. "}
-                          {u.minStock}
-                          {" шт."}
-                        </span>
-                      )}
-                    </div>
+              <article className="accessories-product card" key={u.id} aria-label={u.name}>
+                <div className="accessories-product-info">
+                  <div className="accessories-product-icon"><E aria-hidden="true" /></div>
+                  <div className="accessories-product-description">
+                    <h3>{u.name}</h3>
+                    <p className="accessories-product-meta">
+                      <span>{ACCESSORY_CATEGORY_LABELS[u.category]}</span>
+                      {u.compatibility && <span>{u.compatibility}</span>}
+                      {u.color && <span>{u.color}</span>}
+                    </p>
                   </div>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-                  <Button
-                    size="sm"
-                    variant="success"
-                    icon={<Plus className="h-3.5 w-3.5" />}
-                    onClick={() => j(u.id)}
-                  >
+                <div className="accessories-product-numbers">
+                  <div>
+                    <p className="accessories-caption">Остаток</p>
+                    <p className={cx("accessories-stock", R && (N <= 0 ? "text-red-500" : "text-amber-600"))}>
+                      {N} <span>шт.</span>
+                      {u.minStock > 0 && <small> / мин. {u.minStock}</small>}
+                    </p>
+                  </div>
+                  <div className="accessories-product-price">
+                    <p className="accessories-caption">Цена</p>
+                    <p>{formatAmount(u.salePrice)} ₽</p>
+                  </div>
+                </div>
+                {R && (
+                  <p className={cx("accessories-stock-warning", N <= 0 ? "text-red-500" : "text-amber-600")}>
+                    <TriangleAlert aria-hidden="true" />
+                    {N <= 0 ? "Закончились" : "Заканчивается"}
+                  </p>
+                )}
+                <div className="accessories-product-actions" role="group" aria-label={`Действия: ${u.name}`}>
+                  <Button size="sm" variant="secondary" icon={<Plus aria-hidden="true" />} onClick={() => j(u.id)}>
                     Поступление
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    icon={<SlidersHorizontal className="h-3.5 w-3.5" />}
-                    onClick={() => m(u)}
-                  >
+                  <Button size="sm" variant="secondary" icon={<SlidersHorizontal aria-hidden="true" />} onClick={() => m(u)}>
                     Количество
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    icon={<History className="h-3.5 w-3.5" />}
-                    onClick={() => C(u)}
-                  >
-                    История
+                  <Button size="sm" variant="ghost" aria-label="История" title="История" icon={<History aria-hidden="true" />} onClick={() => C(u)}>
+                    <span className="accessories-action-label">История</span>
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    icon={<Pencil className="h-3.5 w-3.5" />}
-                    onClick={() =>
-                      v({
-                        open: !0,
-                        item: u,
-                      })
-                    }
-                  >
-                    Изменить
+                  <Button size="sm" variant="ghost" aria-label="Изменить" title="Изменить" icon={<Pencil aria-hidden="true" />} onClick={() => v({ open: !0, item: u })}>
+                    <span className="accessories-action-label">Изменить</span>
                   </Button>
                 </div>
-              </Card>
+              </article>
             );
           })}
         </div>
@@ -396,12 +369,6 @@ export function AccessoriesPage() {
       <AccessoryPurchaseModal open={p} presetItemId={A} onClose={() => w(!1)} />
       <AccessoryAdjustModal open={!!O} item={O} onClose={() => m(null)} />
       <AccessoryBatchHistoryModal open={!!f} item={f} onClose={() => C(null)} />
-      {g.length > 0 && (
-        <p className="flex items-center gap-1.5 pb-2 text-[11px] text-ink-400">
-          <TrendingUp className="h-3 w-3" />
-          {" Статистика за выбранный на Главной период."}
-        </p>
-      )}
     </PageTransition>
   );
 }
