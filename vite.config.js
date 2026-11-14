@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import fs from "node:fs";
 import path from "node:path";
-import crypto from "node:crypto";
+import { buildServiceWorker } from "./tools/build-service-worker.js";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
@@ -53,44 +53,14 @@ function entryPointPlugin() {
   };
 }
 
-/** Список файлов для офлайн-оболочки. В оригинале он был зашит под старые хэши. */
-function collectBuiltFiles(dir, base = dir, out = []) {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      collectBuiltFiles(full, base, out);
-      continue;
-    }
-    const rel = path.relative(base, full).split(path.sep).join("/");
-    if (rel === "sw.js" || rel === "404.html" || rel === ".nojekyll") continue;
-    out.push(`./${rel}`);
-  }
-  return out;
-}
-
 function serviceWorkerPlugin() {
   return {
     name: "phonebooks-service-worker",
     apply: "build",
     closeBundle() {
       const template = fs.readFileSync(swTemplatePath, "utf8");
-      const files = collectBuiltFiles(distDir).sort();
-      const built = [
-        "./",
-        "./index.html",
-        ...files.filter((f) => f !== "./index.html"),
-      ];
-      const hash = crypto
-        .createHash("sha256")
-        .update(built.join("|"))
-        .digest("hex")
-        .slice(0, 8);
-      const cacheName = `phonebooks-v9-${hash}`;
-      const sw = template
-        .replace(/const CACHE = '[^']*';/, `const CACHE = '${cacheName}';`)
-        .replace(/const BUILT = \[[^\]]*\];/, `const BUILT = ${JSON.stringify(built)};`);
-      fs.writeFileSync(path.join(distDir, "sw.js"), sw);
-      console.log(`[phonebooks] service worker: ${cacheName}, ${built.length} файлов в кеше`);
+      const result = buildServiceWorker(distDir, template);
+      console.log(`[phonebooks] service worker: ${result.version}, ${result.files} файлов в кеше`);
     },
   };
 }

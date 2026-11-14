@@ -5,6 +5,7 @@ import { App } from "./App.jsx";
 import { StoreProvider } from "./hooks/useStore.jsx";
 import { initTheme } from "./hooks/useTheme.jsx";
 import "./styles/app.css";
+import { startUpdates } from "./updates/service.js";
 
 // Убираем splash с первого экрана сразу после первого кадра (как в готовой сборке).
 requestAnimationFrame(() => {
@@ -27,6 +28,6 @@ createRoot(document.getElementById("root")).render(
 // мешал бы HMR. Пути относительные — работают и в корне, и в /phonebooks/.
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js", { scope: "./" }).catch(() => {});
+    void startUpdates();
   });
 }
