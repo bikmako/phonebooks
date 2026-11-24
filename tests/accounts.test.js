@@ -112,6 +112,8 @@ test("paid expiry notification uses the server's three-day and one-day threshold
   const notice = duration => accessLease({
     status: "active", serverNow: new Date(epoch).toISOString(), expiresAt: new Date(epoch + duration).toISOString(),
   }, clocks).state(true).reminder;
+  const stale = accessLease({ status: "active", serverNow: new Date(epoch).toISOString(), expiresAt: new Date(epoch + 100).toISOString() }, clocks, 120);
+  assert.equal(stale.state(true).write, false);
   assert.equal(notice(3 * DAY + 1), "");
   assert.match(notice(3 * DAY), /трёх дней/);
   assert.match(notice(DAY + 1), /трёх дней/);

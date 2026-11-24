@@ -59,6 +59,7 @@ export function Workspace() {
       if (accessChanged.current || request || !navigator.onLine) return;
       request = (async () => {
         try {
+          const verificationStarted = performance.now();
           const result = await fetchAccount();
           if (!live || accessChanged.current) return;
           if (!result || !canRead(result.status) || (lease.current && lease.current.account.id !== result.id)) {
@@ -74,7 +75,8 @@ export function Workspace() {
               return;
             }
           }
-          lease.current = accessLease(result);
+          // Count the full request time so a slow response cannot add paid time.
+          lease.current = accessLease(result, undefined, performance.now() - verificationStarted);
           connected.current = true;
           document.documentElement.classList.remove("pb-background");
           setAccount(result);
