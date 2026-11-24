@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { test, expect } from "@playwright/test";
 
 const pass = "Current-testing-123";
-const origin = "http://localhost:4390";
+const origin = "https://127.0.0.1:4390";
 const unique = prefix => prefix + "-" + crypto.randomUUID().slice(0, 10) + "@phonebooks.test";
 const post = (request, url, data = {}) => request.post(url, { data, headers: { Origin: origin } });
 
@@ -54,7 +54,7 @@ test("registration, confirmation, expired session, password recovery and sign-ou
   expect((await page.context().cookies()).filter(cookie => cookie.name.startsWith("__Host-pb")).every(cookie => cookie.secure && cookie.httpOnly)).toBe(true);
   expect(await page.evaluate(() => document.cookie)).not.toContain("pb-access");
 
-  const other = await browser.newContext({ baseURL: origin });
+  const other = await browser.newContext({ baseURL: origin, ignoreHTTPSErrors: true });
   try {
     expect((await post(other.request, "/api/auth/login", { email: address, password: pass })).ok()).toBeTruthy();
     await page.getByRole("button", { name: "Выйти на других устройствах" }).click();
@@ -88,7 +88,7 @@ test("anonymous assets and mutation RPC are closed, owner can record manual paym
   const id = await createAccount(page.request, address);
   expect((await post(page.request, "/api/admin/action", { p_target: id, p_action: "lifetime", p_request_id: crypto.randomUUID() })).status()).toBe(403);
   const userPage = page;
-  const staff = await browser.newContext({ baseURL: origin });
+  const staff = await browser.newContext({ baseURL: origin, ignoreHTTPSErrors: true });
   try {
     const admin = await staff.newPage();
     await login(admin, "owner@phonebooks.test", "Owner-testing-123");
@@ -142,10 +142,15 @@ test("same-browser separation, offline and expired read/export, v2 transfer and 
   await expect(stable).toBeEnabled();
   await context.setOffline(false);
   await expect(page.getByText("PhoneBooks Pro", { exact: true })).toBeVisible();
+  const otherTab = await context.newPage();
+  await openSettings(otherTab);
+  await page.bringToFront();
   await page.getByRole("link", { name: "Аккаунт" }).click();
   await page.getByRole("button", { name: "Выйти", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Вход в PhoneBooks" })).toBeVisible();
   expect((await page.request.get("/workspace/sw.js")).status()).toBe(401);
+  await expect(otherTab.getByRole("heading", { name: "Вход в PhoneBooks" })).toBeVisible();
+  await otherTab.close();
 
   await createAccount(page.request, second);
   await openSettings(page);
@@ -200,4 +205,30 @@ test("installed PWA checks online authorization on navigation and preserves save
     expect(error.message).toMatch(/OFFLINE|INTERNET_DISCONNECTED|network is offline/i);
   }
   await expect(page.getByRole("textbox", { name: "Название бизнеса" })).toHaveCount(0);
+});
+
+test("account PWA consents to a verified update without losing its local writes", async ({ page }) => {
+  await createAccount(page.request, unique("upgrade"));
+  await openSettings(page);
+  await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller)), { timeout: 15000 }).toBe(true);
+  const field = page.getByRole("textbox", { name: "Название бизнеса" });
+  await field.fill("База до обновления");
+  await page.getByRole("button", { name: "Сохранить", exact: true }).click();
+  await expect(page.getByText("Название сохранено")).toBeVisible();
+  expect((await page.request.post("/__test/upgrade")).ok()).toBeTruthy();
+  await page.evaluate(async () => {
+    const registration = await navigator.serviceWorker.getRegistration();
+    await registration.update();
+    await registration.update();
+  });
+  const notice = page.getByRole("region", { name: "Обновление PhoneBooks" });
+  await expect(notice).toBeVisible();
+  await expect(page.locator("body")).not.toHaveAttribute("data-test-release");
+  await Promise.all([
+    page.waitForEvent("framenavigated", { predicate: frame => frame === page.mainFrame() }),
+    notice.getByRole("button", { name: "Обновить", exact: true }).click(),
+  ]);
+  await expect(page.locator("body")).toHaveAttribute("data-test-release", "upgraded");
+  await expect(field).toHaveValue("База до обновления");
+  await expect(notice).toHaveCount(0);
 });

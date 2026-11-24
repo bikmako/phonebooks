@@ -1,8 +1,12 @@
 import { createServer } from "node:http";
+import { createServer as createHttpsServer } from "node:https";
+import { execFileSync } from "node:child_process";
 import { Readable } from "node:stream";
-import { readFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { extname, resolve, sep } from "node:path";
 import worker from "../../server/worker.js";
+import { buildServiceWorker } from "../../tools/build-service-worker.js";
 import { accountsDatabase, seedSession, seedUser, signedRpc } from "./accounts-database.js";
 
 const db = await accountsDatabase();
@@ -10,8 +14,16 @@ const users = new Map();
 const accessTokens = new Map();
 const refreshTokens = new Map();
 const mailbox = new Map();
+const upgraded = new Set();
 const providerPort = 4391;
-const origin = "http://localhost:4390";
+const origin = "https://127.0.0.1:4390";
+const root = await mkdtemp(resolve(tmpdir(), "phonebooks-accounts-stand-"));
+const key = resolve(root, "key.pem");
+const cert = resolve(root, "cert.pem");
+execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+  "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1",
+  "-keyout", key, "-out", cert], { stdio: "ignore" });
+const tls = { key: await readFile(key), cert: await readFile(cert) };
 const json = (data, status = 200) => Response.json(data, { status });
 const failure = (error_code, status = 400) => json({ error_code }, status);
 
@@ -99,22 +111,35 @@ async function providerHandler(request) {
 }
 
 const assetsRoot = resolve("dist-accounts");
+const alternateRelease = resolve(root, "workspace");
+await cp(resolve(assetsRoot, "workspace"), alternateRelease, { recursive: true });
+const alternateIndex = resolve(alternateRelease, "index.html");
+await writeFile(alternateIndex, (await readFile(alternateIndex, "utf8")).replace("<body>", '<body data-test-release="upgraded">'));
+const workerTemplate = (await readFile("public/sw.js", "utf8")).replace("const ACCOUNT_WORKSPACE = false;", "const ACCOUNT_WORKSPACE = true;");
+buildServiceWorker(alternateRelease, workerTemplate);
 const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".svg": "image/svg+xml", ".woff2": "font/woff2", ".wasm": "application/wasm", ".webmanifest": "application/manifest+json" };
 const environment = {
   SUPABASE_URL: "http://127.0.0.1:" + providerPort,
   SUPABASE_PUBLISHABLE_KEY: "test-provider-key",
   PAYMENT_CONTACT: "https://example.test/phonebooks",
-  ASSETS: { async fetch(request) {
-    const path = resolve(assetsRoot, "." + new URL(request.url).pathname);
-    if (!path.startsWith(assetsRoot + sep)) return new Response(null, { status: 404 });
+  ASSETS: assetBinding(),
+};
+
+function assetBinding(useUpgrade = false) {
+  return { async fetch(request) {
+    const uri = new URL(request.url).pathname;
+    const root = useUpgrade && uri.startsWith("/workspace/") ? alternateRelease : assetsRoot;
+    const relative = root === alternateRelease ? uri.slice("/workspace".length) : uri;
+    const path = resolve(root, "." + relative);
+    if (!path.startsWith(root + sep)) return new Response(null, { status: 404 });
     try {
       const content = await readFile(path);
       return new Response(request.method === "HEAD" ? null : content, { headers: {
         "Content-Type": types[extname(path)] || "application/octet-stream",
       } });
     } catch { return new Response(null, { status: 404 }); }
-  } },
-};
+  } };
+}
 
 async function standHandler(request) {
   const url = new URL(request.url);
@@ -133,14 +158,21 @@ async function standHandler(request) {
     }
     return json({ ok: true });
   }
-  return worker.fetch(request, environment);
+  const cookie = request.headers.get("Cookie")?.match(/(?:^|;\s*)__Host-pb-access=([^;]+)/)?.[1];
+  const userId = accessTokens.get(cookie)?.sub;
+  if (url.pathname === "/__test/upgrade" && request.method === "POST") {
+    if (!userId) return json({}, 401);
+    upgraded.add(userId);
+    return json({ ok: true });
+  }
+  return worker.fetch(request, upgraded.has(userId) ? { ...environment, ASSETS: assetBinding(true) } : environment);
 }
 
-function listen(port, handler) {
-  return createServer(async (incoming, outgoing) => {
+function listen(port, handler, https = false) {
+  const handle = async (incoming, outgoing) => {
     try {
       const methodsWithoutBody = ["GET", "HEAD"];
-      const request = new Request(new URL(incoming.url, incoming.headers.host === "localhost:" + port ? origin : "http://" + incoming.headers.host), {
+      const request = new Request(new URL(incoming.url, https ? origin : "http://" + incoming.headers.host), {
         method: incoming.method, headers: incoming.headers,
         ...(methodsWithoutBody.includes(incoming.method) ? {} : { body: Readable.toWeb(incoming), duplex: "half" }),
       });
@@ -156,8 +188,9 @@ function listen(port, handler) {
       outgoing.statusCode = 500;
       outgoing.end();
     }
-  }).listen(port);
+  };
+  return (https ? createHttpsServer(tls, handle) : createServer(handle)).listen(port, "127.0.0.1");
 }
 listen(providerPort, providerHandler);
-listen(4390, standHandler);
+listen(4390, standHandler, true);
 console.log("PhoneBooks accounts test stand at " + origin);

@@ -190,14 +190,20 @@ async function authRoute(path, body, env, request, cookies) {
   const token = readCookie(request, "access");
   if (path === "logout" || path === "logout-others") {
     const scope = path === "logout" ? "local" : "others";
+    if (scope === "others") {
+      const account = await rpc(env, token, "access");
+      if (!READ_STATES.has(account.status)) throw new HttpError(403, "Доступ запрещён.");
+    }
     const session = token || (scope === "local" ? await tokenForLogout(env, request) : "");
     if (session) {
-      const result = await auth(env, "logout?scope=" + scope, { token: session });
+      let result = await auth(env, "logout?scope=" + scope, { token: session });
+      if (scope === "local" && result.response.status === 401 && token && readCookie(request, "refresh")) {
+        const renewed = await tokenForLogout(env, request);
+        if (renewed) result = await auth(env, "logout?scope=local", { token: renewed });
+      }
       if (!result.response.ok && (scope === "others" || ![401, 403, 404].includes(result.response.status))) {
         throw authError(result, "Не удалось завершить сессию.");
       }
-    } else if (scope === "others") {
-      throw new HttpError(401, "Войдите в аккаунт снова.");
     }
     if (scope === "local") clearSession(cookies);
     return respond({ ok: true });
@@ -209,7 +215,9 @@ async function authRoute(path, body, env, request, cookies) {
     if (typeof hash !== "string" || !/^[\w-]{16,200}$/.test(hash) || !["email", "recovery"].includes(body.kind)) {
       throw new HttpError(400, "Ссылка недействительна.");
     }
-    const result = await auth(env, "verify", { body: { type: body.kind === "email" ? "signup" : "recovery", token_hash: hash } });
+    // The provider's generic "email" type also accepts recovery codes.
+    const type = body.kind === "email" ? "signup" : "recovery";
+    const result = await auth(env, "verify", { body: { type, token_hash: hash } });
     if (!result.response.ok) throw authError(result, "Ссылка недействительна или уже использована.");
     if (body.kind === "recovery") {
       if (!result.data.access_token) throw new HttpError(400, "Ссылка недействительна.");

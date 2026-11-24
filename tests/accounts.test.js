@@ -105,3 +105,15 @@ test("local clock changes and network loss cannot extend a write lease", () => {
   wall -= 2 * DAY;
   assert.equal(unlimited.state(true).write, false);
 });
+
+test("paid expiry notification uses the server's three-day and one-day thresholds", () => {
+  const epoch = Date.parse("2026-11-24T10:00:00Z");
+  const clocks = { wall: () => 0, monotonic: () => 0 };
+  const notice = duration => accessLease({
+    status: "active", serverNow: new Date(epoch).toISOString(), expiresAt: new Date(epoch + duration).toISOString(),
+  }, clocks).state(true).reminder;
+  assert.equal(notice(3 * DAY + 1), "");
+  assert.match(notice(3 * DAY), /трёх дней/);
+  assert.match(notice(DAY + 1), /трёх дней/);
+  assert.match(notice(DAY), /суток/);
+});
