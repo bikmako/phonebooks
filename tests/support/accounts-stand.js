@@ -2,10 +2,11 @@ import { createServer } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
 import { execFileSync } from "node:child_process";
 import { Readable } from "node:stream";
-import { cp, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, resolve, sep } from "node:path";
 import worker from "../../server/worker.js";
+import { OCR_PARTS_ROOT } from "../../server/ocr-assets.js";
 import { buildServiceWorker } from "../../tools/build-service-worker.js";
 import { accountsDatabase, seedSession, seedUser, signedRpc } from "./accounts-database.js";
 
@@ -116,7 +117,14 @@ await cp(resolve(assetsRoot, "workspace"), alternateRelease, { recursive: true }
 const alternateIndex = resolve(alternateRelease, "index.html");
 await writeFile(alternateIndex, (await readFile(alternateIndex, "utf8")).replace("<body>", '<body data-test-release="upgraded">'));
 const workerTemplate = (await readFile("public/sw.js", "utf8")).replace("const ACCOUNT_WORKSPACE = false;", "const ACCOUNT_WORKSPACE = true;");
+// Include the original logical model in the alternate release checksums.
+// Both local releases serve its bytes using the production Worker.
+const model = JSON.parse(await readFile(assetsRoot + OCR_PARTS_ROOT + "/model.json", "utf8"));
+const modelAsset = model.path.slice("/workspace/".length);
+const logicalModel = resolve(alternateRelease, modelAsset);
+await cp(resolve("public", modelAsset), logicalModel);
 buildServiceWorker(alternateRelease, workerTemplate);
+await rm(logicalModel);
 const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".svg": "image/svg+xml", ".woff2": "font/woff2", ".wasm": "application/wasm", ".webmanifest": "application/manifest+json" };
 const environment = {
   SUPABASE_URL: "http://127.0.0.1:" + providerPort,

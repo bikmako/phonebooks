@@ -82,6 +82,7 @@ test("registration, confirmation, expired session, password recovery and sign-ou
 test("anonymous assets and mutation RPC are closed, owner can record manual payment and lifetime access", async ({ page, browser }) => {
   expect((await page.request.get("/workspace/index.html", { maxRedirects: 0 })).status()).toBe(303);
   expect((await page.request.get("/workspace/sw.js")).status()).toBe(401);
+  expect((await page.request.get("/_sealed/ocr/0.part")).status()).toBe(404);
   expect((await page.request.get("/workspace/manifest.webmanifest")).status()).toBe(401);
   expect((await page.request.post("/api/auth/login", { data: { email: "nobody@test.com" }, headers: { Origin: "https://elsewhere.test" } })).status()).toBe(403);
   const address = unique("billing");

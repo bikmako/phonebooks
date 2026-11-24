@@ -1,3 +1,5 @@
+import { OCR_MODEL_PATH, ocrAsset } from "./ocr-assets.js";
+
 const WORKSPACE = "/workspace/";
 const WRITE_STATES = new Set(["trial", "active", "lifetime"]);
 const READ_STATES = new Set([...WRITE_STATES, "expired"]);
@@ -305,8 +307,8 @@ async function api(path, request, env, cookies, origin) {
   throw new HttpError(404, "Страница не найдена.");
 }
 
-function staticFile(request, env, path) {
-  return env.ASSETS.fetch(new Request(new URL(path, request.url), { method: request.method }));
+function staticFile(request, env, path, method = request.method) {
+  return env.ASSETS.fetch(new Request(new URL(path, request.url), { method }));
 }
 
 export default {
@@ -332,7 +334,11 @@ export default {
       } else if (path.startsWith(WORKSPACE)) {
         const account = await rpc(env, readCookie(request, "access"), "access");
         if (!READ_STATES.has(account.status)) throw new HttpError(403, "Рабочее пространство недоступно.");
-        response = await staticFile(request, env, path === WORKSPACE ? "/workspace/index.html" : path);
+        if (OCR_MODEL_PATH.test(path)) {
+          response = await ocrAsset(path, request.method, assetPath => staticFile(request, env, assetPath, "GET"));
+        } else {
+          response = await staticFile(request, env, path === WORKSPACE ? "/workspace/index.html" : path);
+        }
         if ([WORKSPACE, "/workspace/index.html"].includes(path)) {
           const headers = new Headers(response.headers);
           headers.set("Content-Security-Policy", "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self' blob:; worker-src 'self' blob:; manifest-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'");
