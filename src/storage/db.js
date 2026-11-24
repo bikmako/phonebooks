@@ -1,3 +1,4 @@
+import { accountDatabaseName, hasAccountStorage } from "../account/storageScope.js";
 import { parseImportFile, validateState } from "./backupFormat.js";
 /**
  * IndexedDB, резервные копии, экспорт/импорт и миграция localStorage.
@@ -21,7 +22,7 @@ export function openDatabase() {
         t(new Error("IndexedDB недоступен"));
         return;
       }
-      const n = indexedDB.open(DB_NAME, DB_VERSION);
+      const n = indexedDB.open(accountDatabaseName(DB_NAME), DB_VERSION);
       ((n.onupgradeneeded = () => {
         const a = n.result;
         (a.objectStoreNames.contains(STORE_STATE) ||
@@ -142,6 +143,7 @@ export async function readBackup(s) {
   }
 }
 export async function migrateLegacyState() {
+  if (hasAccountStorage()) return null;
   const source = localStorage.getItem(LEGACY_STORAGE_KEY);
   if (!source) return null;
   const parsed = parseImportFile(source);

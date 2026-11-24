@@ -1,3 +1,4 @@
+import { localKey } from "../account/storageScope.js";
 /**
  * Черновики форм в localStorage.
  *
@@ -14,18 +15,18 @@ export function registerUpdateDraft(key, value) {
   return () => updateDrafts.delete(key);
 }
 export function flushUpdateDrafts() {
-  for (const [key, value] of updateDrafts) localStorage.setItem(DRAFT_PREFIX + key, JSON.stringify(value));
+  for (const [key, value] of updateDrafts) localStorage.setItem(localKey(DRAFT_PREFIX + key), JSON.stringify(value));
 }
 export function saveDraft(s, t) {
   try {
     t === null
-      ? localStorage.removeItem(DRAFT_PREFIX + s)
-      : localStorage.setItem(DRAFT_PREFIX + s, JSON.stringify(t));
+      ? localStorage.removeItem(localKey(DRAFT_PREFIX + s))
+      : localStorage.setItem(localKey(DRAFT_PREFIX + s), JSON.stringify(t));
   } catch {}
 }
 export function readDraft(s) {
   try {
-    const t = localStorage.getItem(DRAFT_PREFIX + s);
+    const t = localStorage.getItem(localKey(DRAFT_PREFIX + s));
     return t ? JSON.parse(t) : null;
   } catch {
     return null;
@@ -33,7 +34,7 @@ export function readDraft(s) {
 }
 export function clearDraft(s) {
   try {
-    localStorage.removeItem(DRAFT_PREFIX + s);
+    localStorage.removeItem(localKey(DRAFT_PREFIX + s));
   } catch {}
 }
 export const emptyPurchaseForm = (s) => ({

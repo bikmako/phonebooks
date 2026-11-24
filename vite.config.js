@@ -6,7 +6,6 @@ import { buildServiceWorker } from "./tools/build-service-worker.js";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
-const distDir = path.resolve(projectRoot, "dist");
 const swTemplatePath = path.resolve(projectRoot, "public/sw.js");
 
 // Прозрачный Service Worker для dev: не кеширует, чистит унаследованные кеши
@@ -19,6 +18,7 @@ self.addEventListener('activate', (event) => {
       .then((keys) => Promise.all(keys.filter((k) => k.startsWith('phonebooks-')).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
+  };
 });
 `;
 
@@ -28,7 +28,7 @@ self.addEventListener('activate', (event) => {
  * ссылок на старые хэшированные ассеты). При сборке он переименовывается в
  * dist/index.html, а '/' в dev-сервере отдаёт app.html.
  */
-function entryPointPlugin() {
+function entryPointPlugin(distDir, accounts) {
   return {
     name: "phonebooks-entry-point",
     configureServer(server) {
@@ -45,6 +45,11 @@ function entryPointPlugin() {
         next();
       });
     },
+    transformIndexHtml(html) {
+      if (!accounts) return html;
+      return html.replaceAll('href="/', 'href="./')
+        .replace(/<script>[^]*?<\/script>/, "");
+    },
     closeBundle() {
       const built = path.join(distDir, "app.html");
       const target = path.join(distDir, "index.html");
@@ -53,24 +58,34 @@ function entryPointPlugin() {
   };
 }
 
-function serviceWorkerPlugin() {
+function serviceWorkerPlugin(distDir, accounts) {
   return {
     name: "phonebooks-service-worker",
     apply: "build",
     closeBundle() {
-      const template = fs.readFileSync(swTemplatePath, "utf8");
+      let template = fs.readFileSync(swTemplatePath, "utf8");
+      if (accounts) {
+        template = template.replace('const ACCOUNT_WORKSPACE = false;', 'const ACCOUNT_WORKSPACE = true;');
+        const manifestPath = path.join(distDir, "manifest.webmanifest");
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+        manifest.description = "Учёт закупок, продаж и кассы. Данные хранятся на устройстве.";
+        fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+      }
       const result = buildServiceWorker(distDir, template);
       console.log(`[phonebooks] service worker: ${result.version}, ${result.files} файлов в кеше`);
     },
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const accounts = mode === "accounts";
+  const distDir = path.resolve(projectRoot, accounts ? "dist-accounts/workspace" : "dist");
+  return {
   // Относительные пути: сборка работает и в корне домена, и в /phonebooks/ на GitHub Pages.
   base: "./",
-  plugins: [react(), entryPointPlugin(), serviceWorkerPlugin()],
+  plugins: [react(), entryPointPlugin(distDir, accounts), serviceWorkerPlugin(distDir, accounts)],
   build: {
-    outDir: "dist",
+    outDir: distDir,
     emptyOutDir: true,
     rollupOptions: {
       input: path.resolve(projectRoot, "app.html"),
@@ -87,4 +102,5 @@ export default defineConfig({
     port: 4173,
     allowedHosts: true,
   },
+  };
 });

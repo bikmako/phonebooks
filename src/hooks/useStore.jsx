@@ -43,7 +43,9 @@ export function normalizeState(s) {
     accessorySales: s.accessorySales ?? [],
   };
 }
-export function StoreProvider({ children: s }) {
+const unrestricted = () => true;
+const readOnlyError = () => new DomainError("Режим просмотра. Для изменений нужен интернет и действующий доступ.");
+export function StoreProvider({ children: s, readOnly = false, authorizeWrite = unrestricted }) {
   const [t, n] = React.useState(() => createInitialState()),
     [a, c] = React.useState(!1),
     [r, i] = React.useState("idle"),
@@ -79,6 +81,11 @@ export function StoreProvider({ children: s }) {
     y = React.useCallback(async () => {
       p(await listBackups());
     }, []);
+  const mayWrite = React.useCallback(() => {
+    if (authorizeWrite()) return true;
+    b({ title: "Запись недоступна", description: readOnlyError().message, tone: "info" });
+    return false;
+  }, [authorizeWrite, b]);
   React.useEffect(() => {
     let Q = !1;
     return (
@@ -151,7 +158,7 @@ export function StoreProvider({ children: s }) {
     ),
     E = React.useCallback(
       (Q) => {
-        if (transferBusy.current) return { ok: false };
+        if (transferBusy.current || !mayWrite()) return { ok: false };
         const V = C.current;
         try {
           const _ = Q(V);
@@ -187,20 +194,20 @@ export function StoreProvider({ children: s }) {
               });
         }
       },
-      [N, b],
+      [N, b, mayWrite],
     ),
     R = React.useCallback(
       async (Q = "manual") => {
-        if (transferBusy.current) return;
+        if (transferBusy.current || !mayWrite()) return;
         try {
           // Updates must await manual backup transactions as well as state saves.
           (await (writeQueue.current = writeQueue.current.catch(() => {}).then(() => createBackup(C.current, Q))), await y());
         } catch (error) { b({ title: "Копия не создана", description: error.message, tone: "error" }); }
       },
-      [y, b],
+      [y, b, mayWrite],
     ),
     G = React.useCallback(async () => {
-      if (transferBusy.current) return;
+      if (transferBusy.current || !mayWrite()) return;
       transferBusy.current = true;
       try {
         await j(); await writeQueue.current;
@@ -209,8 +216,9 @@ export function StoreProvider({ children: s }) {
         C.current = next; n(next); await y();
       } catch (error) { b({ title: "Очистка остановлена", description: error.message, tone: "error" }); }
       finally { transferBusy.current = false; }
-    }, [j, b, y]);
+    }, [j, b, y, mayWrite]);
   const beginImport = React.useCallback(async parsed => {
+    if (!authorizeWrite()) throw readOnlyError();
     if (transferBusy.current) throw new Error("Другая операция уже выполняется");
     transferBusy.current = true;
     try {
@@ -218,18 +226,20 @@ export function StoreProvider({ children: s }) {
       if (g.current) throw new Error("Сначала сохраните текущие изменения");
       return await prepareImport(parsed);
     } catch (error) { transferBusy.current = false; throw error; }
-  }, [j]);
+  }, [j, authorizeWrite]);
   const cancelImport = React.useCallback(plan => {
     plan?.cancel(); transferBusy.current = false;
   }, []);
   // Financial repair dialogs report success only after the whole state commits.
   // The existing database lease also rejects writes from stale browser tabs.
   const mutatePersisted = React.useCallback(async change => {
+    if (!mayWrite()) return { ok: false, error: readOnlyError() };
     if (transferBusy.current) return { ok: false, error: new DomainError("Другая операция ещё выполняется") };
     transferBusy.current = true;
     try {
       await j(); await writeQueue.current.catch(() => {});
       if (g.current) throw new Error("Сначала сохраните текущие изменения");
+      if (!authorizeWrite()) throw readOnlyError();
       const next = change(C.current);
       i("saving");
       await (writeQueue.current = writeQueue.current.catch(() => {}).then(() => persistState(next)));
@@ -240,14 +250,15 @@ export function StoreProvider({ children: s }) {
       b({ title: "Не удалось выполнить", description: error.message, tone: "error" });
       return { ok: false, error };
     } finally { transferBusy.current = false; }
-  }, [j, b]);
+  }, [j, b, mayWrite, authorizeWrite]);
   const finishImport = React.useCallback(async (plan, options) => {
-    const next = await plan.commit(options);
+    if (!authorizeWrite()) throw readOnlyError();
+    const next = await plan.commit({ ...options, authorize: authorizeWrite });
     acceptPersistedState(next);
     C.current = next; n(next); l(new Date().toISOString()); i("saved");
     await y();
     transferBusy.current = false;
-  }, [y]);
+  }, [y, authorizeWrite]);
   const exportBackup = React.useCallback(async () => {
     await j(); await writeQueue.current;
     if (g.current) throw new Error("Сначала сохраните текущие изменения");
@@ -280,6 +291,7 @@ export function StoreProvider({ children: s }) {
     ie = React.useMemo(
       () => ({
         data: t,
+        readOnly,
         ready: a,
         saveState: r,
         savedAt: o,
@@ -301,7 +313,7 @@ export function StoreProvider({ children: s }) {
         storage: w,
         issues: W,
       }),
-      [t, a, r, o, d, v, L, m, b, B, E, G, R, y, w, W, startupError, beginImport, cancelImport, finishImport, exportBackup, mutatePersisted, prepareForUpdate],
+      [t, readOnly, a, r, o, d, v, L, m, b, B, E, G, R, y, w, W, startupError, beginImport, cancelImport, finishImport, exportBackup, mutatePersisted, prepareForUpdate],
     );
   if (startupError) return <div className="card card-pad" role="alert">
     <h1>Не удалось открыть данные</h1><p>{startupError}</p>

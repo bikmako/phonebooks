@@ -75,7 +75,7 @@ export function AppLayout({
   children: n,
   onQuickAction: a,
 }) {
-  const { data: c, saveState: r } = useStore(),
+  const { data: c, saveState: r, readOnly } = useStore(),
     i = React.useMemo(() => getTotalMoney(c), [c]),
     o = NAV_ITEMS.find((l) => l.id === s);
   return (
@@ -152,6 +152,7 @@ export function AppLayout({
           </p>
           <button
             onClick={a}
+            disabled={readOnly}
             className="mt-3 flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-white/20 text-[12.5px] font-semibold transition-colors hover:bg-white/30"
           >
             <Plus className="h-4 w-4" />
@@ -264,6 +265,7 @@ export function AppLayout({
           <div className="flex items-center justify-center">
             <button
               onClick={a}
+            disabled={readOnly}
               aria-label="Создать операцию"
               className="fab-glow flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-500 to-indigo-600 text-white transition-transform active:scale-95"
             >

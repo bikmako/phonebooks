@@ -1,0 +1,7 @@
+.pb-account-bar,.pb-workspace-lock{background:#f8f6ef;color:#1a1915;border-bottom:1px solid #dcd7c9}
+.pb-account-bar{padding:8px max(16px,env(safe-area-inset-left));display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:.8rem;font-weight:650;flex-wrap:wrap}
+.pb-account-bar a,.pb-workspace-lock a{color:#30240b;text-decoration:underline;text-underline-offset:.2em}
+.pb-workspace-lock{margin:clamp(16px,7vw,72px) auto;padding:24px;width:min(480px,calc(100% - 32px));border:1px solid #dcd7c9}
+.pb-workspace-lock h1{font-size:1.5rem;font-weight:800;margin-bottom:12px}
+.pb-workspace-lock p{margin:12px 0}
+.pb-background #root{visibility:hidden}
