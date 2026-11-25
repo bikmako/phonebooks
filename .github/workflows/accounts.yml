@@ -30,7 +30,9 @@ jobs:
       - run: npm test
       - run: npx playwright install --with-deps chromium firefox webkit
       - run: npm run test:accounts
-      - run: npx wrangler deploy --dry-run --config wrangler.phonebooks.toml
+      - run: npm run deploy:staging -- --dry-run
+        env:
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_dry_run_fixture
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

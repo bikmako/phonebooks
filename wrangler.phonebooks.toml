@@ -1,7 +1,11 @@
 name = "phonebooks-accounts-staging"
 main = "server/worker.js"
 compatibility_date = "2026-11-24"
+workers_dev = true
 preview_urls = false
+
+[vars]
+SUPABASE_URL = "https://maenpxxckszeaircuqmr.supabase.co"
 
 [assets]
 directory = "./dist-accounts"

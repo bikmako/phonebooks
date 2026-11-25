@@ -42,13 +42,17 @@ npm run stand:accounts
 1. Создать отдельный проект Supabase. Выполнить SQL из `supabase/migrations/` от администратора базы. Не использовать проект с рабочими клиентскими аккаунтами для пробного запуска.
 2. В Supabase включить email/password и обязательное подтверждение адреса, отключить анонимный вход, настроить минимальный пароль 12 символов, ротацию refresh tokens, срок JWT 600 секунд и лимиты Auth. Настроить Cloudflare Turnstile для домена стенда. Turnstile secret хранится в настройках Supabase Auth, а site key передаётся Worker. Использование CAPTCHA только в клиенте недостаточно.
 3. В Supabase указать HTTPS Site URL самого Worker без завершающего слеша, загрузить шаблоны из `supabase/templates/` и подключить SMTP. Проверить первое письмо, повторную отправку и восстановление на внешнем тестовом адресе. Добавить подтверждённый UUID владельца в SQL Editor вручную после проверки аккаунта.
-4. Собрать `npm run build:accounts`. В выделенном Worker `phonebooks-accounts-staging` настроить `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `TURNSTILE_SITE_KEY` и при наличии `PAYMENT_CONTACT` как HTTPS или mailto. Service-role key не нужен. Проверить `npx wrangler deploy --dry-run --config wrangler.phonebooks.toml`, затем опубликовать только этот стенд той же командой без `--dry-run`. Не прикреплять production-домен к стенду.
+4. Для первого запуска в аккаунте Cloudflare с Workers Free опубликовать Worker `phonebooks-accounts-staging` на выделенном адресе `workers.dev`. Выполнить `npm ci`, `npm test` и `npm run build:accounts`. Задать в окружении `SUPABASE_PUBLISHABLE_KEY` из проекта `phonebooks-staging`, выполнить `npm run deploy:staging -- --dry-run` и затем `npm run deploy:staging`. Адрес Supabase и имя Worker заданы в `wrangler.phonebooks.toml`. `TURNSTILE_SITE_KEY` и при необходимости `PAYMENT_CONTACT` задаются в настройках отдельного Worker.
+5. В Workers Builds подключить репозиторий `bikmako/phonebooks` к отдельному Worker. В **Settings → Build → Branch control** выбрать `feat/accounts-and-subscriptions` как **Production branch этого тестового Worker** и отключить **Enable Preview Builds**. Указать корень репозитория, `NODE_VERSION=22`, команду сборки `npm ci && npm test && npm run build:accounts` и команду публикации `npm run deploy:staging`. Добавить в переменные сборки `SUPABASE_PUBLISHABLE_KEY` из тестового проекта. Деплой обновляет Worker и его ассеты. Конфигурация SMTP и данные остаются в Supabase.
 
 ```sql
 insert into phonebooks_private.owners (user_id)
-values ('<UUID подтверждённого аккаунта владельца>')
+select id from auth.users
+where id = '<UUID подтверждённого аккаунта владельца>' and email_confirmed_at is not null
 on conflict do nothing;
 ```
+
+Для приёмки на постоянном адресе использовать подтверждённый ящик с реальной доставкой. Проверить новое письмо регистрации и письмо сброса, вход с новым паролем и отказ со старым. Сверить начало и окончание 72 часов от подтверждения. Из отдельного аккаунта владельца на тестовой записи подтвердить 30 дней и выдать бессрочный доступ. Проверить отказ в доступе к админке обычному аккаунту, закрытые файлы без сессии и блокировку записи после истечения срока. Между двумя сборками того же Worker сохранить тестовую операцию, перезагрузить страницу и сверить её с экспортом и данными кассы.
 
 ## Перенос ранее купивших клиентов
 
@@ -89,11 +93,11 @@ on conflict do nothing;
 
 ### Внешний тестовый Worker
 
-Cloudflare ограничивает один файл временного аккаунта размером 5 МиБ. Сборка аккаунтов делит модель OCR на части по 4 МиБ. Worker возвращает исходные байты модели по прежнему защищённому адресу. Service Worker сверяет SHA-256 исходной модели. Части лежат во внутреннем пути и HTTP-маршрут для прямой выдачи отсутствует. Для временного развёртывания поддерживается `npx wrangler deploy --temporary --config wrangler.phonebooks.toml`. Адрес проекта Supabase и ключ publishable находятся в переменных Worker. Настройку выполняют в отдельных ресурсах стенда. Ссылка временного Worker действует около часа до закрепления аккаунта.
+На `workers.dev` тестовая база IndexedDB принадлежит адресу отдельного Worker. Повторные публикации в тот же Worker сохраняют адрес и браузерную базу. Сборка аккаунтов делит модель OCR на части по 4 МиБ. Worker возвращает исходные байты модели по защищённому адресу. Service Worker сверяет SHA-256 исходной модели. Внутренние части недоступны напрямую по HTTP.
 
 У новых Free-проектов стандартный SMTP Supabase ограничен адресами участников проекта, а собственные шаблоны писем требуют внешнего SMTP. Для стенда без отдельного домена можно проверить SMTP2GO Free с подтверждённым адресом отправителя. Лимит 1 000 писем в месяц и 25 в час без подтверждённого домена. С доменом подойдёт Brevo Free с лимитом до 300 писем в день. Учитывайте ограничения конкретного отправителя и проверяйте доставку на внешний тестовый ящик.
 
-- [Временные аккаунты Cloudflare](https://developers.cloudflare.com/workers/platform/claim-deployments/)
+- [Cloudflare Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/)
 - [Ограничения шаблонов Supabase Free](https://supabase.com/changelog/46599-changes-to-email-template-customisation-on-free-tier)
 - [SMTP2GO Free](https://www.smtp2go.com/faq/)
 - [Brevo Free](https://help.brevo.com/hc/en-us/articles/208580669-FAQs-What-are-the-limits-of-the-Free-plan)

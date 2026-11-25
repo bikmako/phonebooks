@@ -14,6 +14,7 @@
     "test:browser": "playwright test",
     "test:updates": "playwright test --config playwright.updates.config.js",
     "build:accounts": "node tools/prepare-scanner-assets.js && node tools/build-accounts.js",
+    "deploy:staging": "node tools/deploy-accounts-staging.js",
     "dev:accounts": "npm run build:accounts && wrangler dev --config wrangler.phonebooks.toml",
     "test:accounts": "playwright test --config playwright.accounts.config.js",
     "build:demo-registration": "node tools/build-demo-registration.js",
