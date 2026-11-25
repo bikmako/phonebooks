@@ -12,7 +12,10 @@ export function SoloTransfer({ scope, online, api, onImported }) {
   const [failure, setFailure] = useState('');
   const [active, setActive] = useState(null);
   const [progress, setProgress] = useState('');
+  const [cancelling, setCancelling] = useState(false);
   const stop = useRef(false);
+  const finalizing = useRef(false);
+  const completed = useRef(false);
   const mounted = useRef(true);
   useEffect(() => () => { mounted.current = false; }, []);
 
@@ -39,21 +42,27 @@ export function SoloTransfer({ scope, online, api, onImported }) {
   }
 
   function finish(reply) {
+    if (completed.current) return;
+    completed.current = true;
     setPreview(null);
+    setFailure('');
     setActive(null);
     setProgress('');
     setResult(reply.replayed ? 'Сервер подтвердил ранее завершённый перенос.' : 'Сервер подтвердил перенос и сверку данных.');
     void onImported();
   }
 
+  function cancelled() {
+    setFailure('');
+    setActive(null);
+    setProgress('');
+    setResult(stop.current ? 'Перенос отменён. Исходная копия сохранена.' : 'Загрузка истекла. Начните её заново.');
+  }
+
   async function cancel(id) {
     const response = await send('cancel', { id });
     if (response.state === 'complete') finish(response.reply);
-    else {
-      setActive(null);
-      setProgress('');
-      setResult('Перенос отменён. Исходная копия сохранена.');
-    }
+    else cancelled();
   }
 
   async function commit() {
@@ -62,6 +71,7 @@ export function SoloTransfer({ scope, online, api, onImported }) {
     setFailure('');
     setResult('');
     stop.current = false;
+    completed.current = false;
     try {
       const start = await send('start', { size: preview.bytes.length, digest: preview.digest });
       if (!mounted.current) return;
@@ -82,46 +92,48 @@ export function SoloTransfer({ scope, online, api, onImported }) {
         const bytes = preview.bytes.subarray(position * TRANSFER_CHUNK_BYTES, (position + 1) * TRANSFER_CHUNK_BYTES);
         const reply = await send('chunk', { id: start.id, position, data: base64Bytes(bytes), digest: await sha256Hex(bytes) });
         if (reply.state === 'complete') { finish(reply.reply); return; }
-        if (reply.state === 'cancelled') { setResult('Загрузка завершилась без переноса. Начните её заново.'); setActive(null); setProgress(''); return; }
+        if (reply.state === 'cancelled') { cancelled(); return; }
         received.add(position);
         setProgress('Проверено частей: ' + received.size + ' из ' + count + '.');
       }
       if (stop.current) { await cancel(start.id); return; }
       setProgress('Сервер сверяет копию и публикует результат одной транзакцией.');
+      finalizing.current = true;
       const reply = await send('commit', { id: start.id });
       if (reply.state === 'complete') finish(reply.reply);
-      else { setResult('Загрузка завершилась без переноса. Начните её заново.'); setActive(null); setProgress(''); }
+      else cancelled();
     } catch (error) {
-      setFailure(error.status === 409
+      if (!completed.current) setFailure(error.status === 409
         ? 'Перенос остановлен. Пространство должно быть пустым, а остатки и суммы должны совпасть.'
         : error.status && error.status < 500 ? error.message : 'Подтверждение не получено. Повторите перенос той же копии после восстановления связи.');
     } finally {
+      finalizing.current = false;
       setBusy(false);
     }
   }
 
   async function stopTransfer() {
     stop.current = true;
-    if (busy) return;
-    setBusy(true);
+    if (busy && !finalizing.current) return;
+    setCancelling(true);
     setFailure('');
     try { await cancel(active); }
     catch { setFailure('Отмена не подтверждена. Повторите её после восстановления связи.'); }
-    finally { setBusy(false); }
+    finally { setCancelling(false); }
   }
 
   return <details>
     <summary>Перенос из Solo</summary>
-    <p>Скачайте полную копию в Solo. При разрыве связи выберите тот же файл и продолжите перенос в пустое пространство. Части копии хранятся до 24 часов.</p>
-    <label>Резервная копия Solo<input type="file" accept=".json,application/json" disabled={busy} onChange={event => void inspect(event.target.files[0])} /></label>
+    <p>Скачайте полную копию в Solo. При разрыве связи выберите тот же файл и продолжите перенос в пустое пространство в течение 24 часов.</p>
+    <label>Резервная копия Solo<input type="file" accept=".json,application/json" disabled={busy || cancelling} onChange={event => void inspect(event.target.files[0])} /></label>
     {preview && <div>
       <p>Карточки: {preview.summary.products}. В наличии: {preview.summary.units}. Резерв: {preview.summary.reserved}.</p>
       <p>Операции: {preview.summary.operations}. Записи истории: {preview.summary.audit}. Счета: {preview.summary.accounts}.</p>
       <p>Остатки счетов {rubles(preview.summary.cashMinor)} · Товарные остатки {rubles(preview.summary.stockCostMinor)}</p>
       <p>Выручка {rubles(preview.summary.revenueMinor)} · Валовая прибыль {rubles(preview.summary.grossProfitMinor)} · Чистая прибыль {rubles(preview.summary.netProfitMinor)}</p>
-      <button disabled={!online || busy} onClick={commit}>Подтвердить перенос</button>
+      <button disabled={!online || busy || cancelling} onClick={commit}>Подтвердить перенос</button>
     </div>}
-    {active && <button type="button" className="secondary" disabled={!online} onClick={stopTransfer}>Отменить перенос</button>}
+    {active && <button type="button" className="secondary" disabled={!online || cancelling} onClick={stopTransfer}>Отменить перенос</button>}
     {progress && <p aria-live="polite">{progress}</p>}
     {result && <p aria-live="polite">{result}</p>}
     {failure && <p role="alert">{failure}</p>}

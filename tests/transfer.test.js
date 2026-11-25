@@ -52,6 +52,8 @@ test('resumable transfer verifies and publishes an original source larger than 4
     await transfer(context, 'chunk', await part(id, bytes.subarray(offset, offset + TRANSFER_CHUNK_BYTES), offset / TRANSFER_CHUNK_BYTES));
   }
   await assert.rejects(transfer(context, 'source', { id, key: 'untrusted-test-key' }), { code: 'PT403' });
+  await assert.rejects(transfer(context, 'finish', { id, key }), { code: 'PT409' });
+  await assert.rejects(asUser(db, context.claims, 'select data from phonebooks_team_private.transfer_chunks'), { code: '42501' });
   const verified = await transfer(context, 'source', { id, key });
   const material = prepareSoloTransfer(verified.source);
   const fingerprint = await sha256Hex(new TextEncoder().encode(JSON.stringify(material)));
@@ -59,6 +61,7 @@ test('resumable transfer verifies and publishes an original source larger than 4
   assert.equal(published.state, 'complete');
   assert.deepEqual(published.reply.summary, material.summary);
   assert.equal((await transfer(context, 'start', manifest)).reply.replayed, true);
+  assert.equal((await transfer(context, 'cancel', { id })).reply.replayed, true);
   assert.equal(Number((await db.query('select count(*) from phonebooks_team_private.transfer_chunks where transfer_id=$1',[id])).rows[0].count), 0);
   assert.deepEqual(transferSource(file), source);
 });
@@ -70,6 +73,9 @@ test('whole checksum and chunk size protect interrupted, cross-workspace, cancel
   const manifest = { size: bytes.length, digest: 'a'.repeat(64) };
   const { id } = await transfer(context, 'start', manifest);
   await assert.rejects(transfer(outsider, 'cancel', { id }), { code: 'PT404' });
+  await assert.rejects(transfer({ ...outsider, space: context.space }, 'cancel', { id }), { code: 'PT403' });
+  await assert.rejects(asUser(db, outsider.claims, 'select public.phonebooks_team_transfer($1,$2,$3,$4)',
+    [context.space, context.claims.sub, 'cancel', { id }]), { code: 'PT403' });
   await assert.rejects(transfer(context, 'chunk', await part(id, bytes.subarray(0, 1), 0)), { code: 'PT400' });
   await transfer(context, 'chunk', await part(id, bytes, 0));
   await assert.rejects(transfer(context, 'source', { id, key }), { code: 'PT409' });

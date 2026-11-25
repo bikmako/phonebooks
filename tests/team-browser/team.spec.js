@@ -282,6 +282,40 @@ test('large Solo backup resumes after a reload without reuploading an acknowledg
   await expect(stock.getByRole('listitem').filter({ hasText: 'Чехол' })).toHaveCount(1);
 });
 
+test('cancelling before server publication leaves Team empty and allows restarting', async ({ page }) => {
+  const buffer = Buffer.from(JSON.stringify(buildExportFile(realisticSnapshot())));
+  let release;
+  const waitForCancel = new Promise(resolve => { release = resolve; });
+  let allowCommit = false;
+  let commitRequested = false;
+  await page.route('**/api/cloud/transfer', async route => {
+    if (route.request().postDataJSON().action === 'commit' && !allowCommit) {
+      commitRequested = true;
+      await waitForCancel;
+    }
+    await route.continue();
+  });
+  await register(page, uniqueEmail());
+  await createWorkspace(page, 'Отмена переноса');
+  const stock = page.getByRole('region', { name: 'Облачный склад' });
+  await expect(stock.getByText('Подключено', { exact: true })).toBeVisible();
+  await stock.getByText('Перенос из Solo', { exact: true }).click();
+  await stock.getByLabel('Резервная копия Solo').setInputFiles({ name: 'solo.json', mimeType: 'application/json', buffer });
+  const confirm = stock.getByRole('button', { name: 'Подтвердить перенос' });
+  try {
+    await confirm.click();
+    await expect.poll(() => commitRequested).toBe(true);
+    await stock.getByRole('button', { name: 'Отменить перенос' }).click();
+    await expect(stock.getByText('Перенос отменён. Исходная копия сохранена.')).toBeVisible();
+  } finally {
+    allowCommit = true;
+    release();
+  }
+  await expect(stock.getByText('Склад пуст.')).toBeVisible();
+  await confirm.click();
+  await expect(stock.getByText('Сервер подтвердил перенос и сверку данных.')).toBeVisible();
+});
+
 test('owner creates and assigns a reusable role, denies sensitive access live and sees an audit entry', async ({ page, browser }) => {
   const staffEmail = uniqueEmail();
   const staffContext = await browser.newContext({ ignoreHTTPSErrors: true });

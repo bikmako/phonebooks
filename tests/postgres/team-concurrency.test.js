@@ -15,6 +15,15 @@ const purchaseId = '00000000-0000-4000-b000-000000000002';
 const firstSale = '00000000-0000-4000-b000-000000000003';
 const secondSale = '00000000-0000-4000-b000-000000000004';
 const quoted = value => "'" + String(value).replaceAll("'", "''") + "'";
+const authSchema = `
+create schema auth;
+create table auth.users (id uuid primary key, email text not null unique, email_confirmed_at timestamptz);
+create table auth.sessions (id uuid primary key, user_id uuid not null references auth.users, not_after timestamptz);
+create function auth.jwt() returns jsonb language sql stable as $$
+  select nullif(current_setting('request.jwt.claims', true), '')::jsonb
+$$;
+create function auth.uid() returns uuid language sql stable as $$ select (auth.jwt()->>'sub')::uuid $$;
+`;
 
 function inPostgres(args, sql, onOutput = () => {}) {
   return new Promise((resolve, reject) => {
@@ -52,13 +61,7 @@ before(async () => {
   const setup = await psql(`
 create role anon;
 create role authenticated;
-create schema auth;
-create table auth.users (id uuid primary key, email text not null unique, email_confirmed_at timestamptz);
-create table auth.sessions (id uuid primary key, user_id uuid not null references auth.users, not_after timestamptz);
-create function auth.jwt() returns jsonb language sql stable as $$
-  select nullif(current_setting('request.jwt.claims', true), '')::jsonb
-$$;
-create function auth.uid() returns uuid language sql stable as $$ select (auth.jwt()->>'sub')::uuid $$;
+${authSchema}
 ${migrations.join('\n')}
 insert into auth.users values ('${owner}','owner@phonebooks.test',now()), ('${employee}','employee@phonebooks.test',now());
 insert into auth.sessions values ('${ownerSession}','${owner}',null), ('${employeeSession}','${employee}',null);
@@ -251,11 +254,17 @@ select opening_balance_minor+delta_minor from phonebooks_team_private.inventory_
 
 test('native dump and restore preserve business records, roles, grants and workspace totals', { skip: !container, timeout: 60_000 }, async () => {
   const output = '/tmp/phonebooks-pilot-fixture.dump';
-  const dump = await inPostgres(['pg_dump','-Fc','-U','phonebooks_ci','-f',output,'phonebooks_ci'],'');
+  const identities = '/tmp/phonebooks-pilot-identities.csv';
+  const dump = await inPostgres(['pg_dump','-Fc','--schema=phonebooks_team_private','--schema=public','-U','phonebooks_ci','-f',output,'phonebooks_ci'],'');
   assert.equal(dump.code,0,dump.stderr);
+  const exportUsers = await psql(`\\copy (select id,email,email_confirmed_at from auth.users where id in (select user_id from phonebooks_team_private.memberships)) to '${identities}' with (format csv,header)`);
+  assert.equal(exportUsers.code,0,exportUsers.stderr);
   const create = await psql('create database phonebooks_pilot_restore;');
   assert.equal(create.code,0,create.stderr);
-  const restore = await inPostgres(['pg_restore','--exit-on-error','-U','phonebooks_ci','-d','phonebooks_pilot_restore',output],'');
+  const prep = await psql(authSchema+`\n\\copy auth.users from '${identities}' with (format csv,header)\n`+
+    `insert into auth.sessions values ('${employeeSession}','${employee}',null);`,undefined,'phonebooks_pilot_restore');
+  assert.equal(prep.code,0,prep.stderr);
+  const restore = await inPostgres(['pg_restore','--exit-on-error','--single-transaction','--no-owner','-U','phonebooks_ci','-d','phonebooks_pilot_restore',output],'');
   assert.equal(restore.code,0,restore.stderr);
   const verification = `
 select count(*) from phonebooks_team_private.inventory_products;
