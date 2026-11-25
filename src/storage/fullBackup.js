@@ -1,5 +1,6 @@
 import { openDatabase, DB_NAME, DB_VERSION } from './db.js';
 import { buildExportFile, validateSnapshot, validateLocal, isLocalKey, validateState } from './backupFormat.js';
+import { INVENTORY_KEY } from '../domain/inventory.js';
 async function exclusive(operation) {
   if (!globalThis.navigator?.locks?.request) throw new Error('Для безопасного импорта нужен браузер с Web Locks (HTTPS или localhost)');
   return navigator.locks.request('phonebooks-storage-import', operation);
@@ -75,7 +76,7 @@ export async function prepareImport(parsed, storage = localStorage) {
   const before = await captureSnapshot(storage);
   // Recovery copies are retained separately, never recursively copied into backups.
   const snapshot = parsed.snapshot ? structuredClone(parsed.snapshot) : {
-    indexedDB: { name: DB_NAME, version: DB_VERSION, state: [{ key: 'current', value: validateState(parsed.data, { legacy: true }) }], backups: before.indexedDB.backups, meta: before.indexedDB.meta.filter(x => !x.key.startsWith('recovery:')) },
+    indexedDB: { name: DB_NAME, version: DB_VERSION, state: [{ key: 'current', value: validateState(parsed.data, { legacy: true }) }], backups: before.indexedDB.backups, meta: before.indexedDB.meta.filter(x => x.key !== INVENTORY_KEY && !x.key.startsWith('recovery:')) },
     localStorage: before.localStorage.filter(x => x.key === 'phonebooks.theme'),
   };
   validateSnapshot(snapshot);

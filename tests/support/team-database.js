@@ -18,7 +18,11 @@ export async function teamDatabase() {
         select (auth.jwt()->>'sub')::uuid
       $$;
     `);
-    for (const file of ['202611250001_phonebooks_team_workspaces', '202611250002_phonebooks_team_invitations']) {
+    for (const file of [
+      '202611250001_phonebooks_team_workspaces',
+      '202611250002_phonebooks_team_invitations',
+      '202611250003_phonebooks_team_inventory',
+    ]) {
       await db.exec(await readFile(new URL('../../supabase/migrations/' + file + '.sql', import.meta.url), 'utf8'));
     }
     return db;

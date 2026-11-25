@@ -1,4 +1,6 @@
 /** Portable local backup format. Never coerce or discard unknown state fields. */
+import { INVENTORY_KEY, validateInventory } from '../domain/inventory.js';
+
 export const FORMAT_VERSION = 2;
 export const MAX_FILE_BYTES = 32 * 1024 * 1024;
 export const COLLECTIONS = ['accounts', 'phones', 'sales', 'expenses', 'transfers', 'cashOps', 'audit', 'accessoryItems', 'accessoryBatches', 'accessorySales'];
@@ -184,6 +186,7 @@ export function validateSnapshot(snapshot) {
       }
       if (name === 'meta' && entry.key === 'lastSaved') date(entry.value?.at, 'lastSaved.at');
       if (name === 'meta' && entry.key === 'pendingImport') fail('Незавершённый импорт в файле');
+      if (name === 'meta' && entry.key === INVENTORY_KEY) validateInventory(entry.value);
       if (name === 'meta' && entry.key.startsWith('recovery:')) validateSnapshot(entry.value);
     }
   }
