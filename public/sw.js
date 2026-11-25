@@ -3,6 +3,7 @@
 const VERSION = 'phonebooks-v9-template';
 const SCOPE = self.registration.scope;
 const BASE = new URL(SCOPE).pathname;
+const ACCOUNT_WORKSPACE = false;
 const CACHE = `${VERSION}:${BASE}`;
 const BUILT = [];
 const REVISIONS = {};
@@ -103,16 +104,33 @@ self.addEventListener('fetch', event => {
   // The index and all its files come from the SAME installed release, including
   // online navigation. Only sw.js is checked against the network for updates.
   if (request.mode === 'navigate') {
-    event.respondWith(caches.open(CACHE).then(cache => cache.match(INDEX, { ignoreVary: true }))
-      .then(response => response || Response.error()));
+    event.respondWith((async () => {
+      if (ACCOUNT_WORKSPACE) {
+        let check;
+        try { check = await fetch(new URL('/api/me', SCOPE), { cache: 'no-store', signal: AbortSignal.timeout(8000) }); }
+        catch {
+          return new Response('Для открытия PhoneBooks подключитесь к интернету.', {
+            status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+          });
+        }
+        if (check.status === 401) return Response.redirect(abs('/account?view=resume'), 303);
+        if (!check.ok) return check;
+        const account = await check.json();
+        if (!['trial', 'active', 'lifetime', 'expired'].includes(account.status)) return Response.redirect(abs('/account'), 303);
+      }
+      return await (await caches.open(CACHE)).match(INDEX, { ignoreVary: true }) || Response.error();
+    })());
   } else if (SHELL.includes(url.href)) {
-    event.respondWith(caches.open(CACHE).then(cache => cache.match(request, { ignoreVary: true }))
-      .then(response => response || Response.error()));
+    event.respondWith((async () => {
+      if (ACCOUNT_WORKSPACE && !(await self.clients.get(event.clientId))?.url.startsWith(SCOPE)) return fetch(request);
+      return await (await caches.open(CACHE)).match(request, { ignoreVary: true }) || Response.error();
+    })());
   } else if (url.pathname.startsWith(BASE + 'assets/') || url.pathname.startsWith(BASE + 'scanner-assets/')) {
     // A tab opened during activation, or an activation that finished after a
     // UI timeout, may still request an old content-addressed module. Its exact
     // URL can be served from the retained old release until the new UI boots.
     event.respondWith((async () => {
+      if (ACCOUNT_WORKSPACE && !(await self.clients.get(event.clientId))?.url.startsWith(SCOPE)) return fetch(request);
       for (const key of (await caches.keys()).reverse()) {
         if (!key.startsWith('phonebooks-') || (key.includes(':') && !key.endsWith(`:${BASE}`))) continue;
         const cached = await (await caches.open(key)).match(request, { ignoreVary: true });

@@ -50,6 +50,7 @@ export function formatSavedAt(s) {
 export function SettingsPage() {
   const {
       data: s,
+      readOnly,
       mutate: mutateState,
       resetData: n,
       notify: a,
@@ -105,7 +106,7 @@ export function SettingsPage() {
           />
           <Button
             onClick={N}
-            disabled={p.trim().length < 2 || p === s.settings.businessName}
+            disabled={readOnly || p.trim().length < 2 || p === s.settings.businessName}
           >
             Сохранить
           </Button>
@@ -233,7 +234,7 @@ export function SettingsPage() {
           <li>3. Выберите «На экран "Домой"»</li>
           <li>
             4. Открывайте с иконки — приложение запустится без адресной строки,
-            офлайн тоже работает
+            {import.meta.env.MODE === "accounts" ? "для открытия нужен интернет" : "офлайн тоже работает"}
           </li>
         </ol>
       </details>
@@ -243,6 +244,7 @@ export function SettingsPage() {
           отмены пересчитывают склад, кассу и прибыль.
         </p>
         <button
+          disabled={readOnly}
           onClick={() => L(!0)}
           className="mt-3 flex items-center gap-1.5 text-[12px] font-medium text-red-500 active:opacity-70"
         >
@@ -255,7 +257,7 @@ export function SettingsPage() {
       </p>
       <AuditLogModal open={S} onClose={() => g(!1)} />
       <ConfirmDialog
-        open={A}
+        open={A && !readOnly}
         onClose={() => L(!1)}
         onConfirm={n}
         title="Очистить все данные?"

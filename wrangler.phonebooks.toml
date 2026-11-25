@@ -1,0 +1,20 @@
+name = "phonebooks-accounts-staging"
+main = "server/worker.js"
+compatibility_date = "2026-11-24"
+workers_dev = true
+preview_urls = false
+
+[vars]
+SUPABASE_URL = "https://maenpxxckszeaircuqmr.supabase.co"
+
+[assets]
+directory = "./dist-accounts"
+binding = "ASSETS"
+run_worker_first = true
+html_handling = "none"
+not_found_handling = "none"
+
+[[ratelimits]]
+name = "AUTH_RATE"
+namespace_id = "1111"
+simple = { limit = 12, period = 60 }

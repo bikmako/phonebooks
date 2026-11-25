@@ -1,17 +1,18 @@
+import { accountDatabaseName, localKey, localKeys } from "../account/storageScope.js";
 import { openDatabase, DB_NAME, DB_VERSION } from './db.js';
 import { buildExportFile, validateSnapshot, validateLocal, isLocalKey, validateState } from './backupFormat.js';
 async function exclusive(operation) {
   if (!globalThis.navigator?.locks?.request) throw new Error('Для безопасного импорта нужен браузер с Web Locks (HTTPS или localhost)');
-  return navigator.locks.request('phonebooks-storage-import', operation);
+  return navigator.locks.request(accountDatabaseName('phonebooks-storage-import'), operation);
 }
 const STORES = ['state', 'backups', 'meta'];
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 export function captureLocal(storage = localStorage) {
-  return Object.keys(storage).filter(isLocalKey).sort().map(key => ({ key, value: storage.getItem(key) }));
+  return localKeys(storage).filter(isLocalKey).sort().map(key => ({ key, value: storage.getItem(localKey(key)) }));
 }
 function writeLocal(entries, storage = localStorage) {
-  for (const key of Object.keys(storage).filter(isLocalKey)) storage.removeItem(key);
-  for (const { key, value } of entries) storage.setItem(key, value);
+  for (const key of localKeys(storage).filter(isLocalKey)) storage.removeItem(localKey(key));
+  for (const { key, value } of entries) storage.setItem(localKey(key), value);
 }
 function readStores(tx) {
   return Promise.all(STORES.map(name => new Promise((resolve, reject) => {
@@ -85,7 +86,7 @@ export async function prepareImport(parsed, storage = localStorage) {
     legacy: !!parsed.legacy,
     cancel() { cancelled = true; },
     async commit(options = {}) { return exclusive(async () => {
-      const { confirmed = false, overwriteConfirmed = false, saveBackup } = options;
+      const { confirmed = false, overwriteConfirmed = false, saveBackup, authorize = () => true } = options;
       if (cancelled || used) throw new Error('Импорт отменён или уже выполнен');
       if (!confirmed || !overwriteConfirmed) throw new Error('Нужно отдельно подтвердить импорт и замену существующих данных');
       if (typeof saveBackup !== 'function') throw new Error('Нужно сохранить предварительную копию');
@@ -96,6 +97,7 @@ export async function prepareImport(parsed, storage = localStorage) {
       const backup = buildExportFile(before);
       await saveBackup(backup);
       if (cancelled) throw new Error('Импорт отменён');
+      if (!authorize()) throw new Error('Запись недоступна. Откройте импорт после восстановления доступа');
       validateLocal(snapshot.localStorage);
       const db = await openDatabase();
       const journalTx = db.transaction(STORES, 'readwrite'), journalDone = completion(journalTx);

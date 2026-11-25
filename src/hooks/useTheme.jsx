@@ -1,3 +1,4 @@
+import { localKey } from "../account/storageScope.js";
 /**
  * Тема оформления и переключатели темы.
  *
@@ -14,7 +15,7 @@ export function PageTransition({ children: s, className: t }) {
 export const THEME_KEY = "phonebooks.theme";
 export function getTheme() {
   try {
-    const s = localStorage.getItem(THEME_KEY);
+    const s = localStorage.getItem(localKey(THEME_KEY));
     return s === "light" || s === "dark" ? s : "system";
   } catch {
     return "system";
@@ -39,8 +40,8 @@ export function applyTheme(s) {
 export function setThemePreference(s) {
   try {
     s === "system"
-      ? localStorage.removeItem(THEME_KEY)
-      : localStorage.setItem(THEME_KEY, s);
+      ? localStorage.removeItem(localKey(THEME_KEY))
+      : localStorage.setItem(localKey(THEME_KEY), s);
   } catch {}
   applyTheme(s);
 }
