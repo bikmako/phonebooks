@@ -113,11 +113,11 @@ select delta_minor from phonebooks_team_private.inventory_account_movements wher
 const sampleSetup = `
 create schema pilot_fixture;
 grant usage on schema pilot_fixture to authenticated;
-create function pilot_fixture.page_sample(workspace uuid,actor uuid,position jsonb,category text) returns jsonb
+create function pilot_fixture.page_sample(workspace uuid,actor uuid,page_position jsonb,category text) returns jsonb
 language plpgsql as $$
 declare started timestamptz:=clock_timestamp(); result jsonb;
 begin
-  result:=public.phonebooks_team_cloud_page(workspace,actor,position);
+  result:=public.phonebooks_team_cloud_page(workspace,actor,page_position);
   return jsonb_build_object('category',category,'ms',extract(epoch from clock_timestamp()-started)*1000,
     'bytes',octet_length(result::text),'rows',jsonb_array_length(result->'products')+jsonb_array_length(result->'categories')
       +jsonb_array_length(result->'accounts')+jsonb_array_length(result->'operations'));
