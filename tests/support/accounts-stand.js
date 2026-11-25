@@ -1,11 +1,11 @@
 import { createServer } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
 import { execFileSync } from "node:child_process";
-import { Readable } from "node:stream";
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, resolve, sep } from "node:path";
 import worker from "../../server/worker.js";
+import { nodeHandler } from "../../server/node-http.js";
 import { OCR_PARTS_ROOT } from "../../server/ocr-assets.js";
 import { buildServiceWorker } from "../../tools/build-service-worker.js";
 import { accountsDatabase, seedSession, seedUser, signedRpc } from "./accounts-database.js";
@@ -177,26 +177,7 @@ async function standHandler(request) {
 }
 
 function listen(port, handler, https = false) {
-  const handle = async (incoming, outgoing) => {
-    try {
-      const methodsWithoutBody = ["GET", "HEAD"];
-      const request = new Request(new URL(incoming.url, https ? origin : "http://" + incoming.headers.host), {
-        method: incoming.method, headers: incoming.headers,
-        ...(methodsWithoutBody.includes(incoming.method) ? {} : { body: Readable.toWeb(incoming), duplex: "half" }),
-      });
-      const result = await handler(request);
-      outgoing.statusCode = result.status;
-      for (const [key, value] of result.headers) if (key !== "set-cookie") outgoing.setHeader(key, value);
-      const cookies = result.headers.getSetCookie();
-      if (cookies.length) outgoing.setHeader("Set-Cookie", cookies);
-      if (result.body && incoming.method !== "HEAD") Readable.fromWeb(result.body).pipe(outgoing);
-      else outgoing.end();
-    } catch (error) {
-      console.error(error);
-      outgoing.statusCode = 500;
-      outgoing.end();
-    }
-  };
+  const handle = nodeHandler(https ? origin : `http://127.0.0.1:${port}`, handler);
   return (https ? createHttpsServer(tls, handle) : createServer(handle)).listen(port, "127.0.0.1");
 }
 listen(providerPort, providerHandler);
