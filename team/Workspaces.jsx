@@ -6,6 +6,7 @@ const dateFormat = new Intl.DateTimeFormat('ru', { dateStyle: 'medium', timeStyl
 
 export function Workspaces({ data, busy, inviteLink, actions }) {
   const { workspaces, selected, incoming, outgoing } = data;
+  const invitationRoles = selected?.inviteRoles ?? [];
   const creationRequest = React.useRef(null);
 
   function formAction(event, action) {
@@ -42,25 +43,27 @@ export function Workspaces({ data, busy, inviteLink, actions }) {
       {incoming.length > 0 && <section aria-labelledby="incoming-title">
         <h2 id="incoming-title">Входящие приглашения</h2>
         <ul>{incoming.map(invite => <li key={invite.id}>
-          <div><strong>{invite.workspace_name}</strong><br />{roleLabel[invite.role]} · до {dateFormat.format(new Date(invite.expires_at))}</div>
+          <div><strong>{invite.workspace_name}</strong><br />{roleLabel[invite.role] ?? invite.role} · до {dateFormat.format(new Date(invite.expires_at))}</div>
           <button disabled={busy} onClick={() => actions.accept(invite.id)}>Принять приглашение</button>
         </li>)}</ul>
       </section>}
       {selected && <section aria-labelledby="selected-title">
         <h2 id="selected-title">{selected.name}</h2>
-        <p>Ваша роль — {roleLabel[selected.role]}.</p>
-        {selected.role === 'owner' && <>
+        <p>Ваша роль — {selected.roleName ?? roleLabel[selected.role]}.</p>
+        {selected.permissions?.includes('team.invite') && <>
           <h3>Приглашения сотрудников</h3>
           <form onSubmit={event => formAction(event, values => actions.invite(values.get('email'), values.get('role')))}>
             <label>Почта сотрудника<input name="email" type="email" maxLength={254} required /></label>
-            <label>Роль<select name="role"><option value="employee">Сотрудник</option><option value="manager">Управляющий</option></select></label>
-            <button disabled={busy}>Создать приглашение</button>
+            <label>Роль<select name="role" defaultValue="employee" required>
+              {invitationRoles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}
+            </select></label>
+            <button disabled={busy || invitationRoles.length === 0}>Создать приглашение</button>
           </form>
           {inviteLink && <label>Ссылка для сотрудника
             <input readOnly value={inviteLink} onFocus={event => event.target.select()} />
           </label>}
           <ul>{outgoing.map(invite => <li key={invite.id}>
-            <div><strong>{invite.email}</strong><br />{roleLabel[invite.role]} · {inviteStatus[invite.status]} · до {dateFormat.format(new Date(invite.expires_at))}</div>
+            <div><strong>{invite.email}</strong><br />{invitationRoles.find(role => role.id === invite.role)?.name ?? roleLabel[invite.role] ?? 'Архивная роль'} · {inviteStatus[invite.status]} · до {dateFormat.format(new Date(invite.expires_at))}</div>
             {invite.status === 'pending' && <button className="secondary" disabled={busy} onClick={() => actions.revoke(invite.id)}>Отозвать</button>}
           </li>)}</ul>
         </>}

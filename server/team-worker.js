@@ -306,6 +306,24 @@ function cloudRoute(path, body) {
   throw new HttpError(400, "Проверьте параметры операции.");
 }
 
+function teamRoute(path, body) {
+  const { p_workspace, p_actor, p_action, p_input, p_member, p_kind, p_from, p_to, p_offset } = body;
+  if (typeof p_workspace !== "string" || typeof p_actor !== "string") throw new HttpError(400, "Проверьте параметры пространства.");
+  const scope = { p_workspace, p_actor };
+  if (path === "/api/team/members") return ["members", scope];
+  if (path === "/api/team/manage" && typeof p_action === "string" && p_input && typeof p_input === "object" && !Array.isArray(p_input)) {
+    return ["manage", { ...scope, p_action, p_input }];
+  }
+  if ([p_member, p_from, p_to].every(value => value === null || typeof value === "string")) {
+    const range = { ...scope, p_member, p_from, p_to };
+    if (path === "/api/team/stats") return ["stats", range];
+    if (path === "/api/team/audit" && (p_kind === null || typeof p_kind === "string") && Number.isSafeInteger(p_offset)) {
+      return ["audit", { ...range, p_kind, p_offset }];
+    }
+  }
+  throw new HttpError(400, "Проверьте параметры команды.");
+}
+
 async function importSolo(env, token, body) {
   if (typeof body.p_workspace !== "string" || typeof body.p_actor !== "string") {
     throw new HttpError(400, "Проверьте параметры пространства.");
@@ -338,6 +356,10 @@ async function api(path, request, env, cookies, origin) {
     return respond(await withSession(env, request, cookies, token => rpc(env, token, "account")));
   }
   if (path.startsWith("/api/auth/")) return authRoute(path.slice(10), body, env, request, cookies);
+  if (path.startsWith("/api/team/")) {
+    const [operation, parameters] = teamRoute(path, body);
+    return respond(await withSession(env, request, cookies, token => rpc(env, token, operation, parameters)));
+  }
   if (path === "/api/cloud/import-solo") {
     return respond(await withSession(env, request, cookies, token => importSolo(env, token, body)));
   }

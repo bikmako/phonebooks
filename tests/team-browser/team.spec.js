@@ -237,3 +237,54 @@ test('owner reviews a local Solo backup before an atomic import and can replay t
   await expect(stock.getByText('Сервер подтвердил ранее завершённый перенос.')).toBeVisible();
   await expect(stock.getByRole('listitem').filter({ hasText: 'Чехол' })).toHaveCount(1);
 });
+
+test('owner creates and assigns a reusable role, denies sensitive access live and sees an audit entry', async ({ page, browser }) => {
+  const staffEmail = uniqueEmail();
+  const staffContext = await browser.newContext({ ignoreHTTPSErrors: true });
+  try {
+    await register(page, uniqueEmail());
+    await createWorkspace(page, 'Команда без управляющего');
+    const panel = page.getByRole('region', { name: 'Команда', exact: true });
+    const stock = page.getByRole('region', { name: 'Облачный склад' });
+    await stock.getByLabel('Тип операции').selectOption('deposit');
+    await stock.getByLabel('Сумма, ₽').fill('100');
+    await stock.getByRole('button', { name: 'Провести операцию' }).click();
+    await expect(stock.getByText(/Ревизия 1/)).toBeVisible();
+    await panel.getByText('Роли и права доступа', { exact: true }).click();
+    await panel.getByLabel('Название роли').fill('Продавец');
+    await panel.getByRole('checkbox', { name: 'Просмотр товаров', exact: true }).check();
+    await panel.getByRole('checkbox', { name: 'Оформление продаж', exact: true }).check();
+    await panel.getByRole('checkbox', { name: 'Просмотр кассы', exact: true }).check();
+    await panel.getByRole('checkbox', { name: 'Собственная статистика', exact: true }).check();
+    await panel.getByRole('button', { name: 'Создать роль', exact: true }).click();
+    await expect(panel.getByText('Настройки команды сохранены.')).toBeVisible();
+    const inviteForm = page.getByRole('heading', { name: 'Приглашения сотрудников' }).locator('..').locator('form');
+    await inviteForm.locator('select[name="role"]').selectOption({ label: 'Продавец' });
+    await invite(page, staffEmail);
+
+    const staff = await staffContext.newPage();
+    await register(staff, staffEmail);
+    await staff.getByRole('button', { name: 'Принять приглашение' }).click();
+    const staffStock = staff.getByRole('region', { name: 'Облачный склад' });
+    await expect(staff.getByText('Ваша роль — Продавец.')).toBeVisible();
+    await expect(staffStock.getByRole('heading', { name: 'Касса и итоги предприятия' })).toBeVisible();
+    await expect(staffStock.getByRole('button', { name: 'Провести операцию' })).toBeVisible();
+
+    await panel.getByText(staffEmail + ' · Продавец', { exact: true }).click();
+    await panel.getByText('Индивидуальные разрешения', { exact: true }).click();
+    await panel.getByRole('combobox', { name: 'Просмотр кассы', exact: true }).selectOption('false');
+    await panel.getByRole('combobox', { name: 'Оформление продаж', exact: true }).selectOption('false');
+    await panel.getByRole('button', { name: 'Сохранить доступ сотрудника', exact: true }).click();
+    await expect(staffStock.getByRole('heading', { name: 'Касса и итоги предприятия' })).toHaveCount(0, { timeout: 12_000 });
+    await expect(staffStock.getByRole('button', { name: 'Провести операцию' })).toHaveCount(0);
+    await panel.getByText('Журнал действий', { exact: true }).click();
+    await panel.getByLabel('Тип действия').selectOption('member.permission');
+    await panel.getByRole('button', { name: 'Показать журнал' }).click();
+    await expect(panel.locator('summary').filter({ hasText: /^Изменение индивидуального права/ })).toHaveCount(2);
+    await panel.getByText('Статистика сотрудников', { exact: true }).click();
+    await panel.getByRole('button', { name: 'Показать статистику' }).click();
+    await expect(panel.getByText('Текущая касса', { exact: true })).toBeVisible();
+  } finally {
+    await staffContext.close();
+  }
+});

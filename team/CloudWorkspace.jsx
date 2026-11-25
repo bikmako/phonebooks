@@ -8,6 +8,11 @@ const names = {
 const sections = ['categories', 'products', 'accounts', 'operations'];
 const requestPrefix = 'phonebooks.team.pending:';
 const CACHE_LIFETIME = 15 * 60 * 1000;
+const writePermissions = {
+  purchase: ['trade.purchase', 'stock.read'], sale: ['trade.sale', 'stock.read'],
+  repair: ['repair.finish', 'stock.read'], expense: ['finance.expense', 'finance.cash.read'],
+  stock_adjustment: ['stock.adjust', 'stock.read'], deposit: ['finance.deposit'],
+};
 const formatMoney = value => new Intl.NumberFormat('ru', { style: 'currency', currency: 'RUB' }).format(Number(value) / 100);
 
 function money(value) {
@@ -39,7 +44,7 @@ function mergeFeed(previous, delta) {
     for (const item of delta[section]) rows.set(item.id, item);
     merged[section] = [...rows.values()];
   }
-  return { ...merged, cursor: delta.cursor, role: delta.role, totals: delta.totals };
+  return { ...merged, cursor: delta.cursor, role: delta.role, permissions: delta.permissions, totals: delta.totals };
 }
 
 function readPending(key) {
@@ -63,7 +68,7 @@ export function CloudWorkspace({ workspace, actor, api }) {
   const [data, setData] = useState(null);
   const [online, setOnline] = useState(navigator.onLine);
   const [connection, setConnection] = useState('connecting');
-  const [type, setType] = useState(workspace.role === 'employee' ? 'sale' : 'purchase');
+  const [chosenType, setType] = useState('');
   const [selection, setSelection] = useState(null);
   const [pending, setPending] = useState(() => readPending(requestKey));
   const [sending, setSending] = useState(false);
@@ -88,9 +93,12 @@ export function CloudWorkspace({ workspace, actor, api }) {
         current = null;
         delta = await api('cloud/feed', { ...scope, p_cursor: null });
       }
-      if (current && delta.role !== current.role) {
+      if (current && (delta.role !== current.role || String(delta.permissions) !== String(current.permissions))) {
         cached.current = null;
-        if (mounted.current) setData(null);
+        if (mounted.current) {
+          setData(null);
+          setSelection(null);
+        }
         current = null;
         delta = await api('cloud/feed', { ...scope, p_cursor: null });
       }
@@ -185,13 +193,15 @@ export function CloudWorkspace({ workspace, actor, api }) {
     }
   }
 
-  const canManage = (data?.role ?? workspace.role) !== 'employee';
+  const permissions = data?.permissions ?? [];
+  const allowed = Object.keys(names).filter(kind => writePermissions[kind].every(permission => permissions.includes(permission)));
+  const type = allowed.includes(chosenType) ? chosenType : allowed[0];
   const available = online && connection === 'connected';
   const needsProduct = ['purchase', 'sale', 'repair', 'stock_adjustment'].includes(type);
   return <section aria-labelledby="cloud-title">
     <h2 id="cloud-title">Облачный склад</h2>
-    <p aria-live="polite">{!online ? 'Нет интернета. Показаны последние полученные данные.' : {
-      connected: 'Подключено', connecting: 'Подключение…', unavailable: 'Сервер недоступен. Показаны последние полученные данные.',
+    <p aria-live="polite">{!online ? (data ? 'Нет интернета. Показаны последние полученные данные.' : 'Нет интернета.') : {
+      connected: 'Подключено', connecting: 'Подключение…', unavailable: data ? 'Сервер недоступен. Показаны последние полученные данные.' : 'Сервер недоступен.',
       denied: 'Доступ к рабочим данным завершён.',
     }[connection]}</p>
     {message && <p className="notice" aria-live="polite">{message}</p>}
@@ -200,19 +210,25 @@ export function CloudWorkspace({ workspace, actor, api }) {
       <button disabled={!available || sending} onClick={() => send(pending)}>Проверить операцию</button>
     </p>}
     {data && <>
-      {data.totals && <div>
+      {(data.totals || permissions.includes('finance.cash.read')) && <div>
         <h3>Касса и итоги предприятия</h3>
-        {data.accounts.map(item => <p key={item.id}>{item.name} · {formatMoney(item.balanceMinor)}</p>)}
-        <p>Выручка {formatMoney(data.totals.revenue_minor)} · Валовая прибыль {formatMoney(data.totals.revenue_minor - data.totals.cost_minor)} · Продажи {data.totals.sales_count}</p>
+        {data.accounts.filter(item => Object.hasOwn(item,'balanceMinor')).map(item => <p key={item.id}>{item.name} · {formatMoney(item.balanceMinor)}</p>)}
+        {data.totals && <p>Выручка {formatMoney(data.totals.revenue_minor)} ·{' '}
+          {Object.hasOwn(data.totals,'cost_minor') && <>Валовая прибыль {formatMoney(data.totals.revenue_minor - data.totals.cost_minor)} · </>}
+          Продажи {data.totals.sales_count}</p>}
       </div>}
-      <h3>Товары и остатки</h3>
+      {permissions.includes('stock.read') && <><h3>Товары и остатки</h3>
       {data.products.length === 0 ? <p>Склад пуст.</p> : <ul>{data.products.filter(item => !item.archived).map(item =>
-        <li key={item.id}><span>{item.name}</span><span>Остаток {item.quantity} · резерв {item.reserved}{item.inRepair ? ' · ремонт' : ''}</span></li>)}</ul>}
-      <form onSubmit={submit}>
+        <li key={item.id}>
+          <span>{item.name}</span><span>Остаток {item.quantity} · резерв {item.reserved}{item.inRepair ? ' · ремонт' : ''}</span>
+          {item.lastPurchasePriceMinor != null && <span>Последняя закупка за единицу {formatMoney(item.lastPurchasePriceMinor)}</span>}
+          {item.stockCostMinor != null && <span>Себестоимость остатка {formatMoney(item.stockCostMinor)}</span>}
+        </li>)}</ul>}</>}
+      {type && <form onSubmit={submit}>
         <fieldset disabled={!available || !!pending || sending}>
           <legend>Новая операция</legend>
           <label>Тип операции<select value={type} onChange={event => { setType(event.target.value); setSelection(null); }}>
-            {Object.entries(names).filter(([id]) => canManage || id === 'sale').map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            {allowed.map(id => <option key={id} value={id}>{names[id]}</option>)}
           </select></label>
           {needsProduct && <label>Товар<select name="productId" aria-label="Товар" value={selection?.id ?? ''}
             onChange={event => setSelection(data.products.find(item => item.id === event.target.value) ?? null)} required={type !== 'purchase'}>
@@ -233,10 +249,10 @@ export function CloudWorkspace({ workspace, actor, api }) {
           </>}
           <button>Провести операцию</button>
         </fieldset>
-      </form>
+      </form>}
       {data.operations.length > 0 && <><h3>Последние операции</h3>
         <ul>{data.operations.slice(-10).reverse().map(item => <li key={item.id}>{item.date} · {names[item.type] ?? item.type}</li>)}</ul></>}
-      {data.role === 'owner' && <SoloTransfer scope={scope} online={available && !pending && !sending} api={api} onImported={refresh} />}
+      {permissions.includes('data.solo_transfer') && <SoloTransfer scope={scope} online={available && !pending && !sending} api={api} onImported={refresh} />}
     </>}
   </section>;
 }

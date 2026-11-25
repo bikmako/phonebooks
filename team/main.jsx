@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { AccountForm } from './AccountForm.jsx';
 import { Workspaces } from './Workspaces.jsx';
 import { clearCloudRequests, CloudWorkspace } from './CloudWorkspace.jsx';
+import { TeamPanel } from './TeamPanel.jsx';
 import './styles.css';
 
 const callbackUrl = new URL(location.href);
@@ -178,6 +179,8 @@ function TeamApp() {
         <Workspaces key={accountId} data={data} busy={busy} inviteLink={inviteLink} actions={actions} />
         {data.selected && <CloudWorkspace key={accountId + ':' + data.selected.id + ':' + data.selected.role}
           workspace={data.selected} actor={accountId} api={api} />}
+        {data.selected && <TeamPanel key={'team:' + accountId + ':' + data.selected.id}
+          workspace={data.selected} actor={accountId} api={api} onChanged={() => void loadWorkspaces().catch(() => {})} />}
       </> : <AccountForm key={view} view={view} siteKey={config.turnstileSiteKey} busy={busy} onSubmit={submitAuth} onView={changeView} />)}
     </main>
   );

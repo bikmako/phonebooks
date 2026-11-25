@@ -114,6 +114,10 @@ const rpcArgs = {
   phonebooks_team_cloud_command: ["p_workspace", "p_actor", "p_request", "p_command"],
   phonebooks_team_cloud_feed: ["p_workspace", "p_actor", "p_cursor"],
   phonebooks_team_solo_import: ["p_workspace", "p_actor", "p_key", "p_fingerprint", "p_material"],
+  phonebooks_team_members: ["p_workspace", "p_actor"],
+  phonebooks_team_manage: ["p_workspace", "p_actor", "p_action", "p_input"],
+  phonebooks_team_audit: ["p_workspace", "p_actor", "p_member", "p_kind", "p_from", "p_to", "p_offset"],
+  phonebooks_team_stats: ["p_workspace", "p_actor", "p_member", "p_from", "p_to"],
 };
 async function signedRpc(claims, operation, body) {
   if (!Object.hasOwn(rpcArgs, operation)) throw new Error("Unexpected RPC");
