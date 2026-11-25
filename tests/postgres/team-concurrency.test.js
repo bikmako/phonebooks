@@ -191,10 +191,10 @@ test('pilot load at 2, 5, 10 and 20 PostgreSQL sessions with bounded sync and mi
         [randomUUID(),{type:'sale',productId,expectedVersion:3,quantity:1,unitPriceMinor:300,accountId:account}],
         [randomUUID(),{type:'expense',amountMinor:15,accountId:account}],
       ];
-      const sample = (position,category) => timed(identity,`select 'PB '||pilot_fixture.page_sample('${workspace}','${identity.member}',${quoted(JSON.stringify(position))},'${category}');`);
+      const sample = (position,category) => timed(identity,`select 'PB '||pilot_fixture.page_sample('${workspace}','${identity.member}',${quoted(JSON.stringify(position))},'${category}')::text;`);
       return samples(await psql(
         sample({since:'1',upper:'1'},'idle')+sample({since:null},'page')+
-        commands.map(([id,input]) => timed(identity,`select 'PB '||pilot_fixture.command_sample('${workspace}','${identity.member}','${id}',${quoted(JSON.stringify(input))});`)).join('')+
+        commands.map(([id,input]) => timed(identity,`select 'PB '||pilot_fixture.command_sample('${workspace}','${identity.member}','${id}',${quoted(JSON.stringify(input))})::text;`)).join('')+
         sample({since:'1'},'delta')
       ));
     }));
@@ -217,7 +217,7 @@ select opening_balance_minor+delta_minor from phonebooks_team_private.inventory_
     console.log('PILOT_LOAD '+JSON.stringify({users:count,measurements}));
   }
   const {workspace,members:[identity]} = await loadFixture(1,12000);
-  const [scan] = samples(await psql(timed(identity,`select 'PB '||pilot_fixture.full_scan('${workspace}','${identity.member}');`)));
+  const [scan] = samples(await psql(timed(identity,`select 'PB '||pilot_fixture.full_scan('${workspace}','${identity.member}')::text;`)));
   assert.equal(scan.items,12000);
   assert.equal(scan.pages,121);
   console.log('PILOT_BOOTSTRAP '+JSON.stringify(scan));
