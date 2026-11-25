@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SoloTransfer } from './SoloTransfer.jsx';
+import { readCloudFeed } from './cloudFeed.js';
 
 const names = {
   purchase: 'Закупка', sale: 'Продажа', repair: 'Ремонт', expense: 'Расход',
   stock_adjustment: 'Корректировка остатка', deposit: 'Пополнение кассы',
 };
-const sections = ['categories', 'products', 'accounts', 'operations'];
 const requestPrefix = 'phonebooks.team.pending:';
 const CACHE_LIFETIME = 15 * 60 * 1000;
 const writePermissions = {
@@ -49,16 +49,6 @@ function commandFor(values, type, selection) {
   return command;
 }
 
-function mergeFeed(previous, delta) {
-  const merged = {};
-  for (const section of sections) {
-    const rows = new Map((previous?.[section] ?? []).map(item => [item.id, item]));
-    for (const item of delta[section]) rows.set(item.id, item);
-    merged[section] = [...rows.values()];
-  }
-  return { ...merged, cursor: delta.cursor, role: delta.role, permissions: delta.permissions, totals: delta.totals };
-}
-
 function readPending(key) {
   try {
     const pending = JSON.parse(sessionStorage.getItem(key));
@@ -97,16 +87,7 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged }) {
     if (sync.current || !navigator.onLine || !mounted.current) return;
     sync.current = true;
     try {
-      let current = cached.current;
-      let delta;
-      try {
-        delta = await api('cloud/feed', { ...scope, p_cursor: current?.cursor ?? null });
-      } catch (error) {
-        if (error.status !== 409) throw error;
-        current = null;
-        delta = await api('cloud/feed', { ...scope, p_cursor: null });
-      }
-      if (current && (delta.role !== current.role || String(delta.permissions) !== String(current.permissions))) {
+      const next = await readCloudFeed(api, scope, cached.current, () => {
         cached.current = null;
         if (mounted.current) {
           setData(null);
@@ -115,12 +96,10 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged }) {
           setFailure('');
           onAccessChanged();
         }
-        current = null;
-        delta = await api('cloud/feed', { ...scope, p_cursor: null });
-      }
+      });
       if (!mounted.current) return;
-      if (pendingRequest.current && !canRetry(pendingRequest.current.command, delta.permissions)) savePending(null);
-      cached.current = mergeFeed(current, delta);
+      if (pendingRequest.current && !canRetry(pendingRequest.current.command, next.permissions)) savePending(null);
+      cached.current = next;
       lastResponse.current = Date.now();
       setData(cached.current);
       setConnection('connected');

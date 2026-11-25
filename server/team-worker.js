@@ -1,5 +1,6 @@
 import { crossModeUrl } from '../src/utils/modeUrl.js';
 import { prepareSoloTransfer, TRANSFER_LIMIT } from '../src/domain/soloTransfer.js';
+import { sha256Hex, TRANSFER_CHUNK_REQUEST_BYTES } from '../src/domain/transferWire.js';
 
 const AUTH_LIMIT = 16384;
 const cookieNames = {
@@ -52,7 +53,7 @@ function clearSession(cookies) {
   setCookie(cookies, "recovery", "", 0);
 }
 
-async function provider(env, path, { method = "POST", body, token } = {}) {
+async function provider(env, path, { method = "POST", body, token, timeout = 7000 } = {}) {
   if (!env.SUPABASE_URL || !env.SUPABASE_PUBLISHABLE_KEY) {
     throw new HttpError(503, "Сервис аккаунтов пока не настроен.");
   }
@@ -63,7 +64,7 @@ async function provider(env, path, { method = "POST", body, token } = {}) {
   try {
     response = await fetch(url, {
       method, headers, body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(7000), redirect: "manual",
+      signal: AbortSignal.timeout(timeout), redirect: "manual",
     });
   } catch {
     throw new HttpError(503, "Сервис аккаунтов временно недоступен.");
@@ -92,14 +93,14 @@ function authError(result, fallback) {
   return new HttpError(400, fallback);
 }
 
-async function rpc(env, token, name, body = {}) {
+async function rpc(env, token, name, body = {}, options = {}) {
   if (!token) throw new HttpError(401, "Войдите в аккаунт.");
-  const { response, data } = await provider(env, "/rest/v1/rpc/phonebooks_team_" + name, { body, token });
+  const { response, data } = await provider(env, "/rest/v1/rpc/phonebooks_team_" + name, { body, token, ...options });
   if (response.ok) return data;
   const status = response.status;
   if (status === 401) throw new HttpError(401, "Сессия завершена. Войдите снова.");
   if (status === 403) throw new HttpError(403, "Доступ запрещён.");
-  if (status === 404 && data.code === "PT404") throw new HttpError(404, "Приглашение не найдено.");
+  if (status === 404 && data.code === "PT404") throw new HttpError(404, "Запись не найдена.");
   if (status === 409) throw new HttpError(409, "Действие недоступно в текущем состоянии аккаунта.");
   if (status === 400) throw new HttpError(400, "Проверьте параметры запроса.");
   throw new HttpError(503, "Не удалось проверить доступ.");
@@ -295,8 +296,11 @@ const workspaceRoutes = {
 };
 
 function cloudRoute(path, body) {
-  const { p_workspace, p_actor, p_cursor, p_request, p_command } = body;
+  const { p_workspace, p_actor, p_cursor, p_request, p_command, p_position } = body;
   if (typeof p_workspace !== "string" || typeof p_actor !== "string") throw new HttpError(400, "Проверьте параметры пространства.");
+  if (path === "/api/cloud/feed" && p_position && typeof p_position === "object" && !Array.isArray(p_position)) {
+    return ["cloud_page", { p_workspace, p_actor, p_position }];
+  }
   if (path === "/api/cloud/feed" && (p_cursor === null || (typeof p_cursor === "string" && /^\d{1,19}$/.test(p_cursor)))) {
     return ["cloud_feed", { p_workspace, p_actor, p_cursor }];
   }
@@ -324,25 +328,59 @@ function teamRoute(path, body) {
   throw new HttpError(400, "Проверьте параметры команды.");
 }
 
-async function importSolo(env, token, body) {
+function scopeFrom(body) {
   if (typeof body.p_workspace !== "string" || typeof body.p_actor !== "string") {
     throw new HttpError(400, "Проверьте параметры пространства.");
   }
+  return { p_workspace: body.p_workspace, p_actor: body.p_actor };
+}
+
+function transferKey(env) {
   if (!env.PHONEBOOKS_IMPORT_KEY || env.PHONEBOOKS_IMPORT_KEY.length < 32) {
     throw new HttpError(503, "Перенос ещё не настроен на этом стенде.");
   }
+  return env.PHONEBOOKS_IMPORT_KEY;
+}
+
+async function deriveTransfer(source) {
+  let material;
+  try { material = prepareSoloTransfer(source); }
+  catch (error) { throw new HttpError(400, error.message); }
+  const fingerprint = await sha256Hex(new TextEncoder().encode(JSON.stringify(material)));
+  return { material, fingerprint };
+}
+
+async function importSolo(env, token, body) {
+  const scope = scopeFrom(body);
+  const key = transferKey(env);
   const account = await rpc(env, token, "account");
   if (account.id !== body.p_actor) throw new HttpError(403, "Аккаунт изменился.");
-  let material;
-  try { material = prepareSoloTransfer(body.source); }
-  catch (error) { throw new HttpError(400, error.message); }
-  const bytes = new TextEncoder().encode(JSON.stringify(material));
-  const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
-  const fingerprint = Array.from(hash, byte => byte.toString(16).padStart(2, "0")).join("");
+  const { material, fingerprint } = await deriveTransfer(body.source);
   return rpc(env, token, "solo_import", {
-    p_workspace: body.p_workspace, p_actor: body.p_actor, p_key: env.PHONEBOOKS_IMPORT_KEY,
+    ...scope, p_key: key,
     p_fingerprint: fingerprint, p_material: material,
   });
+}
+
+async function resumableTransfer(env, token, body) {
+  const scope = scopeFrom(body);
+  const send = (action, input, timeout) => rpc(env, token, "transfer", {
+    ...scope, p_action: action, p_input: input,
+  }, { timeout });
+  const { action, id, size, digest, position, data } = body;
+  if (action === "start") {
+    transferKey(env);
+    return send(action, { size, digest });
+  }
+  if (typeof id !== "string") throw new HttpError(400, "Укажите идентификатор переноса.");
+  if (action === "chunk") return send(action, { id, position, digest, data });
+  if (action === "cancel") return send(action, { id });
+  if (action !== "commit") throw new HttpError(400, "Неизвестное действие переноса.");
+  const key = transferKey(env);
+  const staged = await send("source", { id, key }, 30000);
+  if (staged.state !== "open") return staged;
+  const { material, fingerprint } = await deriveTransfer(staged.source);
+  return send("finish", { id, key, fingerprint, material }, 30000);
 }
 
 async function api(path, request, env, cookies, origin) {
@@ -351,7 +389,9 @@ async function api(path, request, env, cookies, origin) {
   }
   if (request.method !== "POST") throw new HttpError(405, "Метод не поддерживается.");
   if (request.headers.get("Origin") !== origin) throw new HttpError(403, "Запрос с другого сайта отклонён.");
-  const body = await readBody(request, path === "/api/cloud/import-solo" ? TRANSFER_LIMIT : AUTH_LIMIT);
+  const limit = path === "/api/cloud/import-solo" ? TRANSFER_LIMIT
+    : path === "/api/cloud/transfer" ? TRANSFER_CHUNK_REQUEST_BYTES : AUTH_LIMIT;
+  const body = await readBody(request, limit);
   if (path === "/api/session") {
     return respond(await withSession(env, request, cookies, token => rpc(env, token, "account")));
   }
@@ -362,6 +402,9 @@ async function api(path, request, env, cookies, origin) {
   }
   if (path === "/api/cloud/import-solo") {
     return respond(await withSession(env, request, cookies, token => importSolo(env, token, body)));
+  }
+  if (path === "/api/cloud/transfer") {
+    return respond(await withSession(env, request, cookies, token => resumableTransfer(env, token, body)));
   }
   if (path === "/api/cloud/feed" || path === "/api/cloud/command") {
     const [operation, parameters] = cloudRoute(path, body);

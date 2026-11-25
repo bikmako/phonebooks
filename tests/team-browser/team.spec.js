@@ -238,6 +238,50 @@ test('owner reviews a local Solo backup before an atomic import and can replay t
   await expect(stock.getByRole('listitem').filter({ hasText: 'Чехол' })).toHaveCount(1);
 });
 
+test('large Solo backup resumes after a reload without reuploading an acknowledged chunk', async ({ page }) => {
+  const data = realisticSnapshot();
+  for (let index = 0; index < 75; index++) {
+    data.indexedDB.state[0].value.audit.push({
+      id: 'large-' + index, at: '2026-01-03T00:00:00Z', action: 'note',
+      entity: 'audit', entityId: 'fixture', summary: String(index) + 'a'.repeat(60000),
+    });
+  }
+  const buffer = Buffer.from(JSON.stringify(buildExportFile(data)));
+  expect(buffer.length).toBeGreaterThan(4 * 1024 * 1024);
+  const file = { name: 'solo-large.json', mimeType: 'application/json', buffer };
+  const positions = [];
+  let disconnected = false;
+  await page.route('**/api/cloud/transfer', route => {
+    const body = route.request().postDataJSON();
+    if (body.action === 'chunk') {
+      positions.push(body.position);
+      if (body.position === 1 && !disconnected) {
+        disconnected = true;
+        return route.abort('failed');
+      }
+    }
+    return route.continue();
+  });
+  await register(page, uniqueEmail());
+  await createWorkspace(page, 'Большой перенос');
+  const stock = page.getByRole('region', { name: 'Облачный склад' });
+  const open = async () => {
+    await expect(stock.getByText('Подключено', { exact: true })).toBeVisible();
+    await stock.getByText('Перенос из Solo', { exact: true }).click();
+    await stock.getByLabel('Резервная копия Solo').setInputFiles(file);
+    await stock.getByRole('button', { name: 'Подтвердить перенос' }).click();
+  };
+  await open();
+  await expect(stock.getByRole('alert')).toContainText('Повторите перенос той же копии');
+  await expect(stock.getByText('Склад пуст.')).toBeVisible();
+  await page.reload();
+  await open();
+  await expect(stock.getByText('Сервер подтвердил перенос и сверку данных.')).toBeVisible({ timeout: 30_000 });
+  expect(positions.filter(position => position === 0)).toHaveLength(1);
+  expect(positions.filter(position => position === 1)).toHaveLength(2);
+  await expect(stock.getByRole('listitem').filter({ hasText: 'Чехол' })).toHaveCount(1);
+});
+
 test('owner creates and assigns a reusable role, denies sensitive access live and sees an audit entry', async ({ page, browser }) => {
   const staffEmail = uniqueEmail();
   const staffContext = await browser.newContext({ ignoreHTTPSErrors: true });

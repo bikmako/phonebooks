@@ -27,6 +27,8 @@ export async function teamDatabase() {
       '202611250006_phonebooks_team_rbac',
       '202611250007_phonebooks_team_enforce_rbac',
       '202611250008_phonebooks_team_audit_stats',
+      '202611250009_phonebooks_resumable_transfer',
+      '202611250010_phonebooks_cloud_pagination',
     ]) {
       await db.exec(await readFile(new URL('../../supabase/migrations/' + file + '.sql', import.meta.url), 'utf8'));
     }
