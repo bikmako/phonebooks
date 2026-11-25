@@ -266,6 +266,8 @@ test('native dump and restore preserve business records, roles, grants and works
   assert.equal(prep.code,0,prep.stderr);
   const restore = await inPostgres(['pg_restore','--exit-on-error','--single-transaction','--no-owner','-U','phonebooks_ci','-d','phonebooks_pilot_restore',output],'');
   assert.equal(restore.code,0,restore.stderr);
+  const exposeRpc = await psql('grant usage on schema public to authenticated;',undefined,'phonebooks_pilot_restore');
+  assert.equal(exposeRpc.code,0,exposeRpc.stderr);
   const verification = `
 select count(*) from phonebooks_team_private.inventory_products;
 select count(*),sum(revenue_minor),sum(cost_minor),sum(expense_minor) from phonebooks_team_private.inventory_operations;

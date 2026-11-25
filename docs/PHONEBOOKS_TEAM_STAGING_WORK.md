@@ -102,6 +102,8 @@ psql 'service=phonebooks_restore' -X -v ON_ERROR_STOP=1 -c 'drop schema public;'
 pg_restore --exit-on-error --single-transaction --no-owner \
   --dbname='service=phonebooks_restore' \
   "$PHONEBOOKS_SECURE_BACKUP_DIR/team-staging.dump"
+psql 'service=phonebooks_restore' -X -v ON_ERROR_STOP=1 \
+  -c 'grant usage on schema public to authenticated;'
 ```
 
 4. Сверить количества товаров, партий, проводок, счётчиков и отзывов доступа, общую и индивидуальную статистику, кассу, выборку разрешённых полей и журналы. Провести денежную операцию и проверить повтор её квитанции. Повторить через настоящий Auth на staging с новыми сессиями. После успешной сверки обновить сессию и проверить права нескольких устройств.
