@@ -69,9 +69,12 @@ async function provider(env, path, { method = "POST", body, token } = {}) {
   try {
     response = await fetch(url, {
       method, headers, body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(7000), redirect: "error",
+      signal: AbortSignal.timeout(7000), redirect: "manual",
     });
   } catch {
+    throw new HttpError(503, "Сервис аккаунтов временно недоступен.");
+  }
+  if (response.status >= 300 && response.status < 400) {
     throw new HttpError(503, "Сервис аккаунтов временно недоступен.");
   }
   const data = await response.json().catch(() => ({}));
