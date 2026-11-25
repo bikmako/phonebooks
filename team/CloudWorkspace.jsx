@@ -13,6 +13,18 @@ const writePermissions = {
   repair: ['repair.finish', 'stock.read'], expense: ['finance.expense', 'finance.cash.read'],
   stock_adjustment: ['stock.adjust', 'stock.read'], deposit: ['finance.deposit'],
 };
+
+function canRetry(command, permissions) {
+  const required = [...(writePermissions[command.type] ?? [])];
+  if (!Object.hasOwn(writePermissions, command.type)) return false;
+  if (command.type === 'purchase') {
+    if (!command.productId) required.push('stock.create');
+    if (command.unitPriceMinor > 0) required.push('finance.cash.read');
+  }
+  if (command.type === 'repair' && command.amountMinor > 0) required.push('repair.expense', 'finance.cash.read');
+  if (command.type === 'stock_adjustment' && command.quantity < 0) required.push('stock.writeoff');
+  return required.every(permission => permissions.includes(permission));
+}
 const formatMoney = value => new Intl.NumberFormat('ru', { style: 'currency', currency: 'RUB' }).format(Number(value) / 100);
 
 function money(value) {
@@ -62,7 +74,7 @@ export function clearCloudRequests() {
   } catch { /* Some private sessions disable storage. */ }
 }
 
-export function CloudWorkspace({ workspace, actor, api }) {
+export function CloudWorkspace({ workspace, actor, api, onAccessChanged }) {
   const scope = { p_workspace: workspace.id, p_actor: actor };
   const requestKey = requestPrefix + actor + ':' + workspace.id;
   const [data, setData] = useState(null);
@@ -71,6 +83,7 @@ export function CloudWorkspace({ workspace, actor, api }) {
   const [chosenType, setType] = useState('');
   const [selection, setSelection] = useState(null);
   const [pending, setPending] = useState(() => readPending(requestKey));
+  const pendingRequest = useRef(pending);
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState('');
   const [failure, setFailure] = useState('');
@@ -98,11 +111,15 @@ export function CloudWorkspace({ workspace, actor, api }) {
         if (mounted.current) {
           setData(null);
           setSelection(null);
+          setMessage('');
+          setFailure('');
+          onAccessChanged();
         }
         current = null;
         delta = await api('cloud/feed', { ...scope, p_cursor: null });
       }
       if (!mounted.current) return;
+      if (pendingRequest.current && !canRetry(pendingRequest.current.command, delta.permissions)) savePending(null);
       cached.current = mergeFeed(current, delta);
       lastResponse.current = Date.now();
       setData(cached.current);
@@ -114,6 +131,7 @@ export function CloudWorkspace({ workspace, actor, api }) {
         setData(null);
         savePending(null);
         setConnection('denied');
+        onAccessChanged();
       } else setConnection('unavailable');
     } finally {
       sync.current = false;
@@ -148,6 +166,7 @@ export function CloudWorkspace({ workspace, actor, api }) {
   }, []);
 
   function savePending(next) {
+    pendingRequest.current = next;
     setPending(next);
     try {
       if (next) sessionStorage.setItem(requestKey, JSON.stringify(next));

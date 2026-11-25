@@ -250,6 +250,11 @@ test('owner creates and assigns a reusable role, denies sensitive access live an
     await stock.getByLabel('Сумма, ₽').fill('100');
     await stock.getByRole('button', { name: 'Провести операцию' }).click();
     await expect(stock.getByText(/Ревизия 1/)).toBeVisible();
+    await stock.getByLabel('Тип операции').selectOption('purchase');
+    await stock.getByLabel('Название товара').fill('Телефон для проверки прав');
+    await stock.getByLabel('Цена за единицу, ₽').fill('20');
+    await stock.getByRole('button', { name: 'Провести операцию' }).click();
+    await expect(stock.getByRole('listitem').filter({ hasText: 'Телефон для проверки прав' })).toBeVisible();
     await panel.getByText('Роли и права доступа', { exact: true }).click();
     await panel.getByLabel('Название роли').fill('Продавец');
     await panel.getByRole('checkbox', { name: 'Просмотр товаров', exact: true }).check();
@@ -269,6 +274,11 @@ test('owner creates and assigns a reusable role, denies sensitive access live an
     await expect(staff.getByText('Ваша роль — Продавец.')).toBeVisible();
     await expect(staffStock.getByRole('heading', { name: 'Касса и итоги предприятия' })).toBeVisible();
     await expect(staffStock.getByRole('button', { name: 'Провести операцию' })).toBeVisible();
+    await staff.route('**/api/cloud/command', route => route.abort('failed'), { times: 1 });
+    await staffStock.getByRole('combobox', { name: 'Товар', exact: true }).selectOption({ label: 'Телефон для проверки прав' });
+    await staffStock.getByLabel('Цена за единицу, ₽').fill('40');
+    await staffStock.getByRole('button', { name: 'Провести операцию' }).click();
+    await expect(staffStock.getByRole('button', { name: 'Проверить операцию' })).toBeVisible();
 
     await panel.getByText(staffEmail + ' · Продавец', { exact: true }).click();
     await panel.getByText('Индивидуальные разрешения', { exact: true }).click();
@@ -277,6 +287,8 @@ test('owner creates and assigns a reusable role, denies sensitive access live an
     await panel.getByRole('button', { name: 'Сохранить доступ сотрудника', exact: true }).click();
     await expect(staffStock.getByRole('heading', { name: 'Касса и итоги предприятия' })).toHaveCount(0, { timeout: 12_000 });
     await expect(staffStock.getByRole('button', { name: 'Провести операцию' })).toHaveCount(0);
+    await expect(staffStock.getByRole('button', { name: 'Проверить операцию' })).toHaveCount(0);
+    expect(await staff.evaluate(() => Object.keys(sessionStorage).filter(key => key.startsWith('phonebooks.team.pending:')))).toEqual([]);
     await panel.getByText('Журнал действий', { exact: true }).click();
     await panel.getByLabel('Тип действия').selectOption('member.permission');
     await panel.getByRole('button', { name: 'Показать журнал' }).click();

@@ -178,7 +178,8 @@ function TeamApp() {
         </section>
         <Workspaces key={accountId} data={data} busy={busy} inviteLink={inviteLink} actions={actions} />
         {data.selected && <CloudWorkspace key={accountId + ':' + data.selected.id + ':' + data.selected.role}
-          workspace={data.selected} actor={accountId} api={api} />}
+          workspace={data.selected} actor={accountId} api={api}
+          onAccessChanged={() => void run(loadWorkspaces, { refresh: true, quiet: true })} />}
         {data.selected && <TeamPanel key={'team:' + accountId + ':' + data.selected.id}
           workspace={data.selected} actor={accountId} api={api} onChanged={() => void loadWorkspaces().catch(() => {})} />}
       </> : <AccountForm key={view} view={view} siteKey={config.turnstileSiteKey} busy={busy} onSubmit={submitAuth} onView={changeView} />)}
