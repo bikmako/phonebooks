@@ -1,46 +1,21 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import { after, before, test } from 'node:test';
-import { PGlite } from '@electric-sql/pglite';
+import { asUser as runAsUser, seedSession, seedUser as insertUser, teamDatabase } from './support/team-database.js';
+import { crossModeUrl } from '../src/utils/modeUrl.js';
 
-const migration = new URL('../supabase/migrations/202611250001_phonebooks_team_workspaces.sql', import.meta.url);
 let db;
 
-before(async () => {
-  db = new PGlite();
-  await db.exec(`
-    create role anon;
-    create role authenticated;
-    create schema auth;
-    create table auth.users (id uuid primary key, email_confirmed_at timestamptz);
-    create table auth.sessions (id uuid primary key, user_id uuid not null references auth.users, not_after timestamptz);
-    create function auth.jwt() returns jsonb language sql stable as $$
-      select nullif(current_setting('request.jwt.claims', true), '')::jsonb
-    $$;
-    create function auth.uid() returns uuid language sql stable as $$
-      select (auth.jwt()->>'sub')::uuid
-    $$;
-  `);
-  await db.exec(await readFile(migration, 'utf8'));
-});
+before(async () => { db = await teamDatabase(); });
 
 after(() => db?.close());
 
-async function seedUser({ confirmed = true, expired = false } = {}) {
-  const userId = randomUUID();
-  const sessionId = randomUUID();
-  await db.query('insert into auth.users values ($1, case when $2 then now() end)', [userId, confirmed]);
-  await db.query('insert into auth.sessions values ($1, $2, case when $3 then now() - interval \'1 minute\' end)', [sessionId, userId, expired]);
-  return { sub: userId, session_id: sessionId };
+async function seedUser({ confirmed = true, expired = false, email = randomUUID() + '@phonebooks.test' } = {}) {
+  return seedSession(db, await insertUser(db, email, confirmed), expired);
 }
 
 function asUser(claims, statement, args = [], role = 'authenticated') {
-  return db.transaction(async tx => {
-    await tx.exec(role === 'anon' ? 'set local role anon' : 'set local role authenticated');
-    await tx.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify(claims)]);
-    return (await tx.query(statement, args)).rows;
-  });
+  return runAsUser(db, claims, statement, args, role);
 }
 
 const list = claims => asUser(claims, 'select * from public.phonebooks_team_workspaces()');
@@ -119,4 +94,74 @@ test('authenticated members cannot read or modify private tables through direct 
   await create(owner, 'Магазин');
   await assert.rejects(asUser(owner, 'select * from phonebooks_team_private.workspaces'), { code: '42501' });
   await assert.rejects(asUser(owner, "update phonebooks_team_private.memberships set role = 'owner'"), { code: '42501' });
+});
+
+async function invitationCommand(claims, name, args) {
+  const parameters = args.map((_, index) => '$' + (index + 1)).join(', ');
+  const [row] = await asUser(claims, 'select public.phonebooks_team_' + name + '(' + parameters + ') as result', args);
+  return row.result;
+}
+const invite = (claims, workspaceId, email, role = 'employee') =>
+  invitationCommand(claims, 'create_invitation', [workspaceId, email, role]);
+const accept = (claims, id) => invitationCommand(claims, 'accept_invitation', [id]);
+const revoke = (claims, workspaceId, id) => invitationCommand(claims, 'revoke_invitation', [workspaceId, id]);
+const overview = (claims, preferred = null) => invitationCommand(claims, 'overview', [preferred]);
+
+test('an invitation can only be seen and accepted by the confirmed email on it', async () => {
+  const owner = await seedUser();
+  const employee = await seedUser({ email: 'linked@phonebooks.test' });
+  const unrelated = await seedUser();
+  const pending = await seedUser({ email: 'pending@phonebooks.test', confirmed: false });
+  const workspace = await create(owner, 'Приглашения');
+  const invitation = await invite(owner, workspace.id, ' Linked@PhoneBooks.test ');
+
+  assert.equal(await invite(owner, workspace.id, 'linked@phonebooks.test'), invitation);
+  await assert.rejects(invite(owner, workspace.id, 'linked@phonebooks.test', 'manager'), { code: 'PT409' });
+  await assert.rejects(invite(owner, workspace.id, 'noaddress', 'manager'), { code: 'PT400' });
+  await assert.rejects(invite(owner, workspace.id, 'test@phonebooks.test', 'owner'), { code: 'PT400' });
+  await invite(owner, workspace.id, 'pending@phonebooks.test');
+  await assert.rejects(overview(pending), { code: 'PT403' });
+  assert.deepEqual((await overview(unrelated, workspace.id)).incoming, []);
+  assert.equal((await overview(unrelated, workspace.id)).selected, null);
+  await assert.rejects(accept(unrelated, invitation), { code: 'PT404' });
+  await assert.rejects(revoke(unrelated, workspace.id, invitation), { code: 'PT403' });
+  assert.equal((await overview(employee)).incoming[0].id, invitation);
+  await assert.rejects(asUser(employee, 'select * from phonebooks_team_private.invitations'), { code: '42501' });
+
+  assert.equal(await accept(employee, invitation), workspace.id);
+  assert.equal(await accept(employee, invitation), workspace.id);
+  const employeeView = await overview(employee, workspace.id);
+  assert.equal(employeeView.selected.role, 'employee');
+  assert.deepEqual(employeeView.incoming, []);
+  assert.deepEqual(employeeView.outgoing, []);
+  await assert.rejects(invite(employee, workspace.id, 'another@phonebooks.test'), { code: 'PT403' });
+  assert.equal((await overview(owner)).outgoing.find(item => item.id === invitation).status, 'accepted');
+});
+
+test('expired and revoked invitations cannot join a workspace', async () => {
+  const owner = await seedUser();
+  const employee = await seedUser({ email: 'expiry@phonebooks.test' });
+  const workspace = await create(owner, 'Ограничение срока');
+  const another = await create(owner, 'Другое рабочее пространство');
+  const expired = await invite(owner, workspace.id, 'expiry@phonebooks.test');
+  await db.query("update phonebooks_team_private.invitations set expires_at = now() - interval '1 second' where id = $1", [expired]);
+  const revoked = await invite(owner, workspace.id, 'expiry@phonebooks.test');
+  assert.notEqual(revoked, expired);
+  await assert.rejects(revoke(owner, another.id, revoked), { code: 'PT404' });
+  assert.equal(await revoke(owner, workspace.id, revoked), true);
+  assert.equal(await revoke(owner, workspace.id, revoked), true);
+  for (const id of [expired, revoked]) await assert.rejects(accept(employee, id), { code: 'PT409' });
+  assert.deepEqual((await overview(employee)).workspaces, []);
+  assert.deepEqual((await overview(employee)).incoming, []);
+  assert.deepEqual(new Set((await overview(owner, workspace.id)).outgoing.map(item => item.status)), new Set(['expired', 'revoked']));
+});
+
+test('mode links require a different hostname and only allow HTTP for local testing', () => {
+  const origin = 'https://team.phonebooks.test';
+  assert.equal(crossModeUrl('https://solo.phonebooks.test/#/settings', origin), 'https://solo.phonebooks.test/#/settings');
+  assert.equal(crossModeUrl('https://team.phonebooks.test:9443', origin), '');
+  assert.equal(crossModeUrl('http://solo.phonebooks.test', origin), '');
+  assert.equal(crossModeUrl('http://localhost:8080', origin), 'http://localhost:8080/');
+  assert.equal(crossModeUrl('javascript:alert(1)', origin), '');
+  assert.equal(crossModeUrl('https://user:pass@solo.phonebooks.test', origin), '');
 });

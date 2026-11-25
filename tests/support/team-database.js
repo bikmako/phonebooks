@@ -1,0 +1,49 @@
+import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { PGlite } from '@electric-sql/pglite';
+
+export async function teamDatabase() {
+  const db = new PGlite();
+  try {
+    await db.exec(`
+      create role anon;
+      create role authenticated;
+      create schema auth;
+      create table auth.users (id uuid primary key, email text not null unique, email_confirmed_at timestamptz);
+      create table auth.sessions (id uuid primary key, user_id uuid not null references auth.users, not_after timestamptz);
+      create function auth.jwt() returns jsonb language sql stable as $$
+        select nullif(current_setting('request.jwt.claims', true), '')::jsonb
+      $$;
+      create function auth.uid() returns uuid language sql stable as $$
+        select (auth.jwt()->>'sub')::uuid
+      $$;
+    `);
+    for (const file of ['202611250001_phonebooks_team_workspaces', '202611250002_phonebooks_team_invitations']) {
+      await db.exec(await readFile(new URL('../../supabase/migrations/' + file + '.sql', import.meta.url), 'utf8'));
+    }
+    return db;
+  } catch (error) {
+    await db.close();
+    throw error;
+  }
+}
+
+export async function seedUser(db, address, confirmed = true) {
+  const id = randomUUID();
+  await db.query('insert into auth.users values ($1, $2, case when $3 then now() end)', [id, address, confirmed]);
+  return id;
+}
+
+export async function seedSession(db, userId, expired = false) {
+  const sessionId = randomUUID();
+  await db.query("insert into auth.sessions values ($1, $2, case when $3 then now() - interval '1 minute' end)", [sessionId, userId, expired]);
+  return { sub: userId, session_id: sessionId };
+}
+
+export function asUser(db, claims, statement, args = [], role = 'authenticated') {
+  return db.transaction(async tx => {
+    await tx.exec(role === 'anon' ? 'set local role anon' : 'set local role authenticated');
+    await tx.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify(claims)]);
+    return (await tx.query(statement, args)).rows;
+  });
+}

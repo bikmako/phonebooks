@@ -19,6 +19,7 @@ import { useStore } from "../hooks/useStore.jsx";
 import { ThemePicker } from "../hooks/useTheme.jsx";
 import { getStorageEstimate } from "../storage/db.js";
 import { formatDateTime, plural } from "../utils/format.js";
+import { crossModeUrl } from "../utils/modeUrl.js";
 import {
   CircleCheck,
   HardDrive,
@@ -29,6 +30,9 @@ import {
 } from "lucide-react";
 import React from "react";
 import { jsx, jsxs } from "react/jsx-runtime";
+
+const teamUrl = crossModeUrl(import.meta.env.VITE_PHONEBOOKS_TEAM_URL, window.location.origin);
+
 export function formatBytes(s) {
   return s < 1024
     ? `${s} Б`
@@ -56,6 +60,7 @@ export function SettingsPage() {
       saveState: c,
       savedAt: r,
       saveError: i,
+      prepareForUpdate,
       storage: x,
       issues: v,
     } = useStore(),
@@ -88,8 +93,29 @@ export function SettingsPage() {
       sales: s.sales.length,
       operations: s.expenses.length + s.transfers.length + s.cashOps.length,
     };
+  async function openTeam(event) {
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    if (p.trim() !== s.settings.businessName) {
+      a({ title: "Сохраните название перед переходом в Team", tone: "info" });
+      return;
+    }
+    let release;
+    try {
+      release = await prepareForUpdate();
+      window.location.assign(teamUrl);
+    } catch (error) {
+      a({ title: "Не удалось перейти в Team", description: error.message, tone: "error" });
+    } finally {
+      release?.();
+    }
+  }
   return (
     <div className="space-y-4">
+      {teamUrl && <Card className="card-pad">
+        <CardHeader title="Режим работы" subtitle="Solo · данные на этом устройстве" />
+        <p className="mt-3"><a className="underline" href={teamUrl} rel="noreferrer" onClick={openTeam}>Открыть PhoneBooks Team</a></p>
+      </Card>}
       <Card className="card-pad">
         <CardHeader
           title="Бизнес"
