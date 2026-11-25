@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 
@@ -22,6 +22,8 @@ export async function teamDatabase() {
       '202611250001_phonebooks_team_workspaces',
       '202611250002_phonebooks_team_invitations',
       '202611250003_phonebooks_team_inventory',
+      '202611250004_phonebooks_team_cloud',
+      '202611250005_phonebooks_team_solo_import',
     ]) {
       await db.exec(await readFile(new URL('../../supabase/migrations/' + file + '.sql', import.meta.url), 'utf8'));
     }
@@ -36,6 +38,12 @@ export async function seedUser(db, address, confirmed = true) {
   const id = randomUUID();
   await db.query('insert into auth.users values ($1, $2, case when $3 then now() end)', [id, address, confirmed]);
   return id;
+}
+
+export async function testImportKey(db) {
+  const key = randomBytes(32).toString('hex');
+  await db.query("insert into phonebooks_team_private.solo_import_config (key_hash) values (sha256(convert_to($1,'UTF8')))", [key]);
+  return key;
 }
 
 export async function seedSession(db, userId, expired = false) {

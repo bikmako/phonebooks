@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AccountForm } from './AccountForm.jsx';
 import { Workspaces } from './Workspaces.jsx';
+import { clearCloudRequests, CloudWorkspace } from './CloudWorkspace.jsx';
 import './styles.css';
 
 const callbackUrl = new URL(location.href);
@@ -54,7 +55,8 @@ function TeamApp() {
       await action();
       return true;
     } catch (failure) {
-      if (refresh || failure.status === 401) {
+      if (failure.status === 401 || (refresh && failure.status && failure.status < 500)) {
+        clearCloudRequests();
         clearWorkspace();
         if (failure.status === 401) setView('login');
       }
@@ -167,12 +169,15 @@ function TeamApp() {
             })}>Завершить другие сессии</button>
             <button className="secondary" disabled={busy} onClick={() => run(async () => {
               await api('auth/logout', {});
+              clearCloudRequests();
               clearWorkspace();
               setView('login');
             })}>Выйти</button>
           </div>
         </section>
         <Workspaces key={accountId} data={data} busy={busy} inviteLink={inviteLink} actions={actions} />
+        {data.selected && <CloudWorkspace key={accountId + ':' + data.selected.id + ':' + data.selected.role}
+          workspace={data.selected} actor={accountId} api={api} />}
       </> : <AccountForm key={view} view={view} siteKey={config.turnstileSiteKey} busy={busy} onSubmit={submitAuth} onView={changeView} />)}
     </main>
   );

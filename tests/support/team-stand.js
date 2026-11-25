@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { extname, resolve, sep } from "node:path";
 import worker from "../../server/team-worker.js";
 import { nodeHandler } from "./node-http.js";
-import { asUser, seedSession, seedUser, teamDatabase } from "./team-database.js";
+import { asUser, seedSession, seedUser, teamDatabase, testImportKey } from "./team-database.js";
 
 const db = await teamDatabase();
 const users = new Map();
@@ -111,6 +111,9 @@ const rpcArgs = {
   phonebooks_team_create_invitation: ["p_workspace_id", "p_email", "p_role"],
   phonebooks_team_accept_invitation: ["p_invitation_id"],
   phonebooks_team_revoke_invitation: ["p_workspace_id", "p_invitation_id"],
+  phonebooks_team_cloud_command: ["p_workspace", "p_actor", "p_request", "p_command"],
+  phonebooks_team_cloud_feed: ["p_workspace", "p_actor", "p_cursor"],
+  phonebooks_team_solo_import: ["p_workspace", "p_actor", "p_key", "p_fingerprint", "p_material"],
 };
 async function signedRpc(claims, operation, body) {
   if (!Object.hasOwn(rpcArgs, operation)) throw new Error("Unexpected RPC");
@@ -127,6 +130,7 @@ const assetTypes = { ".html": "text/html", ".js": "text/javascript", ".css": "te
 const environment = {
   SUPABASE_URL: "http://127.0.0.1:" + providerPort,
   SUPABASE_PUBLISHABLE_KEY: "test-provider-key",
+  PHONEBOOKS_IMPORT_KEY: await testImportKey(db),
   PHONEBOOKS_SOLO_URL: "http://localhost:4397/#/settings",
   ASSETS: {
     async fetch(request) {

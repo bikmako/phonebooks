@@ -95,7 +95,7 @@ const record = (actor, workspaceId, requestId, document) => internal(actor,
   'select phonebooks_team_private.record_inventory_operation($1,$2,$3) as id', [workspaceId, requestId, document]);
 const document = (id, options) => makeInventoryOperation({ id, type: 'sale', date, ...options });
 const addAccount = (workspaceId, id) => db.query(
-  'insert into phonebooks_team_private.inventory_accounts (workspace_id,id,name) values ($1,$2,$2)', [workspaceId, id],
+  'insert into phonebooks_team_private.inventory_accounts (workspace_id,id,name) values ($1,$2,$2) on conflict do nothing', [workspaceId, id],
 );
 const addProduct = (workspaceId, id, category, tracking, attrs = {}) => db.query(
   'insert into ' + stockTable + ' (workspace_id,id,name,category_id,tracking,attributes) values ($1,$2,$2,$3,$4,$5)',

@@ -1,4 +1,5 @@
 import { crossModeUrl } from '../src/utils/modeUrl.js';
+import { prepareSoloTransfer, TRANSFER_LIMIT } from '../src/domain/soloTransfer.js';
 
 const AUTH_LIMIT = 16384;
 const cookieNames = {
@@ -132,11 +133,11 @@ async function withSession(env, request, cookies, operation) {
   return operation(await refreshSession(env, request, cookies));
 }
 
-async function readBody(request) {
+async function readBody(request, limit = AUTH_LIMIT) {
   if (!request.headers.get("Content-Type")?.toLowerCase().startsWith("application/json")) {
     throw new HttpError(415, "Необходим JSON.");
   }
-  if (!request.body || Number(request.headers.get("Content-Length")) > AUTH_LIMIT) {
+  if (!request.body || Number(request.headers.get("Content-Length")) > limit) {
     throw new HttpError(413, "Запрос слишком большой.");
   }
   const reader = request.body.getReader();
@@ -147,7 +148,7 @@ async function readBody(request) {
     const { value, done } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > AUTH_LIMIT) {
+    if (size > limit) {
       await reader.cancel();
       throw new HttpError(413, "Запрос слишком большой.");
     }
@@ -293,17 +294,57 @@ const workspaceRoutes = {
   "/api/invitations/revoke": ["revoke_invitation", ["p_workspace_id", "p_invitation_id"]],
 };
 
+function cloudRoute(path, body) {
+  const { p_workspace, p_actor, p_cursor, p_request, p_command } = body;
+  if (typeof p_workspace !== "string" || typeof p_actor !== "string") throw new HttpError(400, "Проверьте параметры пространства.");
+  if (path === "/api/cloud/feed" && (p_cursor === null || (typeof p_cursor === "string" && /^\d{1,19}$/.test(p_cursor)))) {
+    return ["cloud_feed", { p_workspace, p_actor, p_cursor }];
+  }
+  if (path === "/api/cloud/command" && typeof p_request === "string" && p_command && typeof p_command === "object" && !Array.isArray(p_command)) {
+    return ["cloud_command", { p_workspace, p_actor, p_request, p_command }];
+  }
+  throw new HttpError(400, "Проверьте параметры операции.");
+}
+
+async function importSolo(env, token, body) {
+  if (typeof body.p_workspace !== "string" || typeof body.p_actor !== "string") {
+    throw new HttpError(400, "Проверьте параметры пространства.");
+  }
+  if (!env.PHONEBOOKS_IMPORT_KEY || env.PHONEBOOKS_IMPORT_KEY.length < 32) {
+    throw new HttpError(503, "Перенос ещё не настроен на этом стенде.");
+  }
+  const account = await rpc(env, token, "account");
+  if (account.id !== body.p_actor) throw new HttpError(403, "Аккаунт изменился.");
+  let material;
+  try { material = prepareSoloTransfer(body.source); }
+  catch (error) { throw new HttpError(400, error.message); }
+  const bytes = new TextEncoder().encode(JSON.stringify(material));
+  const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  const fingerprint = Array.from(hash, byte => byte.toString(16).padStart(2, "0")).join("");
+  return rpc(env, token, "solo_import", {
+    p_workspace: body.p_workspace, p_actor: body.p_actor, p_key: env.PHONEBOOKS_IMPORT_KEY,
+    p_fingerprint: fingerprint, p_material: material,
+  });
+}
+
 async function api(path, request, env, cookies, origin) {
   if (path === "/api/config" && request.method === "GET") {
     return respond({ soloUrl: crossModeUrl(env.PHONEBOOKS_SOLO_URL, origin), turnstileSiteKey: env.TURNSTILE_SITE_KEY || "" });
   }
   if (request.method !== "POST") throw new HttpError(405, "Метод не поддерживается.");
   if (request.headers.get("Origin") !== origin) throw new HttpError(403, "Запрос с другого сайта отклонён.");
-  const body = await readBody(request);
+  const body = await readBody(request, path === "/api/cloud/import-solo" ? TRANSFER_LIMIT : AUTH_LIMIT);
   if (path === "/api/session") {
     return respond(await withSession(env, request, cookies, token => rpc(env, token, "account")));
   }
   if (path.startsWith("/api/auth/")) return authRoute(path.slice(10), body, env, request, cookies);
+  if (path === "/api/cloud/import-solo") {
+    return respond(await withSession(env, request, cookies, token => importSolo(env, token, body)));
+  }
+  if (path === "/api/cloud/feed" || path === "/api/cloud/command") {
+    const [operation, parameters] = cloudRoute(path, body);
+    return respond(await withSession(env, request, cookies, token => rpc(env, token, operation, parameters)));
+  }
   if (Object.hasOwn(workspaceRoutes, path)) {
     const [operation, fields] = workspaceRoutes[path];
     if (fields.some(field => typeof body[field] !== "string" && !(field === "p_preferred" && body[field] === null))) {

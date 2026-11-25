@@ -5,6 +5,29 @@ on:
 permissions:
   contents: read
 jobs:
+  team-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      database:
+        image: postgres:17
+        env:
+          POSTGRES_DB: phonebooks_ci
+          POSTGRES_USER: phonebooks_ci
+          POSTGRES_PASSWORD: phonebooks_ci_fixture
+        options: >-
+          --health-cmd "pg_isready -U phonebooks_ci -d phonebooks_ci"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node --test tests/postgres/team-concurrency.test.js
+        env:
+          PHONEBOOKS_TEST_POSTGRES_CONTAINER: ${{ job.services.database.id }}
   test:
     runs-on: ubuntu-latest
     # The complete first run took ~28 min including browser/OS dependencies.
