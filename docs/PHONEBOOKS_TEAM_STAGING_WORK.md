@@ -94,10 +94,11 @@ psql 'service=phonebooks_staging' -X -v ON_ERROR_STOP=1 -c \
   > "$PHONEBOOKS_SECURE_BACKUP_DIR/team-staging-identities.csv"
 ```
 
-3. Восстанавливать в пустую изолированную БД с PostgreSQL той же основной версии. Для локальной репетиции использовать Auth-схему и роли тестов в `tests/postgres/team-concurrency.test.js`, предзагрузить идентичности тестовых пользователей с исходными UUID. Проверить копию до применения и восстановить только в проверенный сервис `phonebooks_restore`. Для стенда Supabase способ восстановления Auth и обслуживаемых схем проверяется отдельно. Существующая клиентская среда остаётся вне этого процесса.
+3. Восстанавливать в новую изолированную БД с PostgreSQL той же основной версии. Убедиться, что `phonebooks_restore` указывает на одноразовую локальную базу. В пустой базе убрать стандартную схему `public` без `CASCADE`, поскольку архив создаст её. Для локальной репетиции в одноразовом кластере создать роли `anon` и `authenticated` и выполнить SQL из `authSchema` в `tests/postgres/team-concurrency.test.js`. Затем импортировать `team-staging-identities.csv` по команде `\copy auth.users (id,email,email_confirmed_at) from '<защищённый путь>/team-staging-identities.csv' with (format csv, header)` из локального psql. Для стенда Supabase способ восстановления Auth и обслуживаемых схем проверяется отдельно.
 
 ```sh
 (cd "$PHONEBOOKS_SECURE_BACKUP_DIR" && sha256sum -c team-staging.dump.sha256)
+psql 'service=phonebooks_restore' -X -v ON_ERROR_STOP=1 -c 'drop schema public;'
 pg_restore --exit-on-error --single-transaction --no-owner \
   --dbname='service=phonebooks_restore' \
   "$PHONEBOOKS_SECURE_BACKUP_DIR/team-staging.dump"

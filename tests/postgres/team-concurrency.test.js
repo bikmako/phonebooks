@@ -261,7 +261,7 @@ test('native dump and restore preserve business records, roles, grants and works
   assert.equal(exportUsers.code,0,exportUsers.stderr);
   const create = await psql('create database phonebooks_pilot_restore;');
   assert.equal(create.code,0,create.stderr);
-  const prep = await psql(authSchema+`\n\\copy auth.users from '${identities}' with (format csv,header)\n`+
+  const prep = await psql('drop schema public;\n'+authSchema+`\n\\copy auth.users from '${identities}' with (format csv,header)\n`+
     `insert into auth.sessions values ('${employeeSession}','${employee}',null);`,undefined,'phonebooks_pilot_restore');
   assert.equal(prep.code,0,prep.stderr);
   const restore = await inPostgres(['pg_restore','--exit-on-error','--single-transaction','--no-owner','-U','phonebooks_ci','-d','phonebooks_pilot_restore',output],'');
