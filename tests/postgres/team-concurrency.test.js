@@ -113,6 +113,41 @@ select delta_minor from phonebooks_team_private.inventory_account_movements wher
   assert.deepEqual(replay.stdout.trim().split(/\r?\n/).slice(-3), ['0', '1', '1200']);
 });
 
+test('native PostgreSQL releases a hold by server time before a waiting sale checks availability', { skip: !container, timeout: 30_000 }, async () => {
+  const purchaseRequest = randomUUID();
+  const reserveRequest = randomUUID();
+  const saleRequest = randomUUID();
+  const productId = 'product:' + purchaseRequest;
+  const seed = await psql(`begin;
+${authenticate(owner, ownerSession)}
+${command(owner, purchaseRequest, { type: 'purchase', name: 'Конкурентный резерв', categoryId: 'other',
+    tracking: 'quantity', quantity: 2, unitPriceMinor: 100, accountId: 'ac_default_cash' })}
+commit;`);
+  assert.equal(seed.code, 0, seed.stderr);
+  let notify;
+  const acquired = new Promise(resolve => { notify = resolve; });
+  const first = psql(`begin;
+${authenticate(owner, ownerSession)}
+select public.phonebooks_team_cloud_command('${space}','${owner}','${reserveRequest}',
+  ${quoted(JSON.stringify({ type: 'reserve', productId, expectedVersion: 2, quantity: 2, unitPriceMinor: 250, buyer: 'Тест' }))}::jsonb
+  || jsonb_build_object('expiresAt',clock_timestamp()+interval '2 seconds'));
+\\echo phonebooks-hold-locked
+select pg_sleep(3);
+commit;
+`, stdout => { if (stdout.includes('phonebooks-hold-locked')) notify(); });
+  await Promise.race([acquired, first.then(result => assert.fail(result.stderr || 'Reservation lock was not taken'))]);
+  const second = await psql(`begin;
+${authenticate(employee, employeeSession)}
+${command(employee, saleRequest, { type: 'sale', productId, expectedVersion: 3, quantity: 2, unitPriceMinor: 250, accountId: 'ac_default_cash' })}
+commit;
+select quantity from phonebooks_team_private.inventory_products where workspace_id='${space}' and id='${productId}';
+select phonebooks_team_private.held_units('${space}','${productId}',clock_timestamp());
+`);
+  assert.equal((await first).code, 0);
+  assert.equal(second.code, 0, second.stderr);
+  assert.deepEqual(second.stdout.trim().split(/\r?\n/).slice(-2), ['0', '0']);
+});
+
 const sampleSetup = `
 create schema pilot_fixture;
 grant usage on schema pilot_fixture to authenticated;

@@ -206,7 +206,7 @@ export function getAllOperations(state) {
   for (const operation of warehouseProjection(state).operations) {
     c.push({ id: operation.id, kind: 'warehouse', type: operation.type === 'repair' ? 'expense' : operation.type,
       date: operation.date, createdAt: operation.createdAt, title: warehouseLabels[operation.type] + ' · ' + operation.name,
-      subtitle: operation.units + ' шт.', amount: operation.cashMinor / 100, moneyEffect: operation.cashMinor / 100,
+      subtitle: [operation.units ? operation.units + ' шт.' : '', operation.reason].filter(Boolean).join(' · '), amount: operation.cashMinor / 100, moneyEffect: operation.cashMinor / 100,
       status: 'completed', accountId: operation.accountId, icon: operation.type === 'sale' ? 'sale' : 'package',
       meta: { account: n.get(operation.accountId)?.name ?? '—', productId: operation.productId,
         profit: operation.type === 'sale' ? (operation.revenueMinor - operation.costMinor) / 100 : undefined } });

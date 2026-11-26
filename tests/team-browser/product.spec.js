@@ -153,7 +153,7 @@ test('Team product navigation, repair, transaction history and period cash flow'
   await expect(page.getByRole('heading', { name: 'Операции с товаром' })).toBeVisible();
   await expect(page.getByText(/Продажа ·/)).toBeVisible();
   await page.getByRole('button', { name: 'К товарам' }).click();
-  await page.getByRole('button', { name: /Кабель/ }).click();
+  await page.getByRole('button', { name: /^Кабель Остаток/ }).click();
   await expect(page.getByRole('button', { name: 'Передать в ремонт' })).toHaveCount(0);
   await page.getByRole('button', { name: 'К товарам' }).click();
   const stockPhone = page.getByRole('button', { name: /iPhone (13|14).*На складе/ });

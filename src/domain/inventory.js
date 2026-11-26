@@ -123,8 +123,8 @@ export function projectInventory(state, catalog = state.catalog ?? emptyInventor
     version: catalog.version, revision: catalog.revision, revisionId: catalog.revisionId,
     categories: [...STANDARD_CATEGORIES, ...catalog.categories],
     products: [...phones, ...accessories, ...catalog.products.map(product => {
-      const { quantity, inRepair, stockCostMinor, purchased } = warehouseStock(state, product.id);
-      return { ...product, quantity, inRepair, stockCostMinor, purchased, reservedQuantity: 0,
+      const { quantity, inRepair, stockCostMinor, purchased, reservedQuantity } = warehouseStock(state, product.id);
+      return { ...product, quantity, inRepair, stockCostMinor, purchased, reservedQuantity,
         status: inRepair ? 'repair' : 'active' };
     })],
   };

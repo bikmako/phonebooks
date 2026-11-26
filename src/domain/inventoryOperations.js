@@ -1,3 +1,4 @@
+import { reservationTypes, returnTypes } from './warehouseTrade.js';
 import { warehouseProjection } from './warehouse.js';
 import { getAccessorySaleTotals } from './accessories.js';
 import { getPhoneTotalCost, getSaleRevenue } from '../utils/calculations.js';
@@ -105,9 +106,17 @@ export function projectInventoryOperations(state) {
       postings: posting(cash.accountId, money(cash.amount) * (cash.kind === 'deposit' ? 1 : -1)) });
   }
   for (const operation of warehouseProjection(state).operations) {
-    add({ id: operation.id, type: operation.type, date: operation.date,
-      lines: [line(operation.productId, operation.units, operation.stockDelta)],
-      postings: posting(operation.accountId, operation.cashMinor), revenueMinor: operation.revenueMinor, costMinor: operation.costMinor });
+    const correction = returnTypes.includes(operation.type);
+    const reservation = reservationTypes.includes(operation.type);
+    add({ id: operation.id,
+      type: reservation ? 'reservation' : ['compensation', 'void_sale'].includes(operation.type) ? 'customer_return' : operation.type,
+      date: operation.date, relatedId: correction ? operation.originalId : null,
+      lines: [line(operation.productId, Math.max(operation.units, 1), operation.stockDelta, operation.allocations)],
+      postings: posting(operation.accountId, operation.cashMinor), revenueMinor: operation.revenueMinor,
+      costMinor: operation.costMinor, expenseMinor: operation.expenseMinor });
+    if (correction || reservation) Object.assign(operations.at(-1), {
+      tradeMode: operation.type, returnMinor: correction ? operation.amountMinor : 0, reason: operation.reason ?? null,
+    });
   }
   return operations;
 }

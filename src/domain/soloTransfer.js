@@ -28,7 +28,10 @@ export function prepareSoloTransfer(source) {
   const savedCatalog = state.catalog ?? source.catalog;
   const catalog = savedCatalog == null ? undefined : validateInventory(safeCatalog(savedCatalog));
   const inventory = projectInventory(state, catalog);
-  const products = new Map(inventory.products.map(item => [item.id, item]));
+  const reservations = [...warehouseProjection(state).bookings.values()]
+    .filter(item => item.status === 'active' && Date.parse(item.expiresAt) > Date.now());
+  const products = new Map(inventory.products.map(item => [item.id,
+    item.id.startsWith('product:') ? { ...item, reservedQuantity: 0 } : item]));
   const operations = projectInventoryOperations(state);
   for (const operation of operations) {
     for (const line of operation.lines) {
@@ -83,7 +86,8 @@ export function prepareSoloTransfer(source) {
   });
   const summary = {
     products: products.size, units: [...stock.values()].reduce((sum, item) => sum + item, 0),
-    reserved: [...products.values()].reduce((sum, item) => sum + item.reservedQuantity, 0),
+    reserved: [...products.values()].reduce((sum, item) => sum + item.reservedQuantity, 0)
+      + reservations.reduce((sum, item) => sum + item.quantity, 0),
     operations: operations.length, audit: state.audit.length, accounts: accounts.length, stockCostMinor,
     cashMinor: accounts.reduce((sum, item) => sum + item.balanceMinor, 0),
     revenueMinor: totals.revenueMinor, costMinor: totals.costMinor, expenseMinor: totals.expenseMinor,
@@ -91,7 +95,7 @@ export function prepareSoloTransfer(source) {
   };
   if (!Number.isSafeInteger(summary.cashMinor)) throw new Error('Сумма остатков счетов вне поддерживаемого диапазона.');
   return {
-    summary, categories: catalog?.categories ?? [], products: [...products.values()], accounts, lots,
+    summary, categories: catalog?.categories ?? [], reservations, products: [...products.values()], accounts, lots,
     operations, audit: state.audit, settings: { businessName: state.settings.businessName, currency: state.settings.currency },
     historicalDetails: Object.fromEntries([
       'accounts', 'phones', 'sales', 'expenses', 'transfers', 'cashOps', 'accessoryItems', 'accessoryBatches', 'accessorySales',

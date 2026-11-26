@@ -17,7 +17,7 @@ const productStatus = product => product.inRepair ? 'repair' : product.quantity 
   : product.reserved === product.quantity ? 'reserved' : 'stock';
 const productIcon = product => product.categoryId === 'smartphones' ? Smartphone : Package;
 
-export function TeamStock({ products, categories, repairs, onOpen, onCreate, onCategories, onBulk }) {
+export function TeamStock({ products, categories, repairs, onOpen, onCreate, onCategories, onBulk, onReserve }) {
   const [category, setCategory] = useState('');
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
@@ -25,7 +25,7 @@ export function TeamStock({ products, categories, repairs, onOpen, onCreate, onC
   const [limit, setLimit] = useState(30);
   const active = products.filter(item => !item.archived && (!repairs || item.inRepair));
   const group = active.filter(item => !category || item.categoryId === category);
-  const matches = group.filter(item => (status === 'all' || productStatus(item) === status) &&
+  const matches = group.filter(item => (status === 'all' || (status === 'reserved' ? item.reserved > 0 : productStatus(item) === status)) &&
     [item.name, ...Object.values(item.attributes ?? {})].join(' ').toLocaleLowerCase('ru').includes(query.trim().toLocaleLowerCase('ru')));
   matches.sort((a, b) => sort === 'quantity' ? b.quantity - a.quantity || a.name.localeCompare(b.name, 'ru')
     : a.name.localeCompare(b.name, 'ru'));
@@ -58,12 +58,14 @@ export function TeamStock({ products, categories, repairs, onOpen, onCreate, onC
     {matches.length ? <ul className="pb-list pb-stock-rows">{matches.slice(0, limit).map(product => {
       const Icon = productIcon(product);
       const state = productStatus(product);
-      return <li key={product.id}><button className="pb-row" type="button" onClick={() => onOpen(product.id)}>
+      return <li key={product.id} className="pb-trade-stock-row"><button className="pb-row" type="button" onClick={() => onOpen(product.id)}>
         <span className="pb-row-icon"><Icon size={18} aria-hidden="true" /></span>
         <span><strong>{product.name}</strong><small>Остаток {product.quantity}{Boolean(product.reserved) && ' · резерв ' + product.reserved}</small></span>
         <span className="pb-row-end"><Status tone={state === 'stock' ? 'good' : state === 'repair' || state === 'reserved' ? 'warn' : 'neutral'}>{stockStatuses[state]}</Status>
           {product.lastPurchasePriceMinor != null && <strong>{formatMinor(product.lastPurchasePriceMinor)}</strong>}</span>
-      </button></li>;
+      </button>{onReserve && !product.inRepair && product.quantity > product.reserved && <button type="button"
+        className="secondary pb-stock-reserve" aria-label={'Забронировать ' + product.name}
+        onClick={() => onReserve(product.id)}>Забронировать</button>}</li>;
     })}</ul> : <p className="pb-empty">{!active.length ? (repairs ? 'В ремонте пока нет устройств.' : 'Склад пуст.') : 'Товары с такими параметрами не найдены.'}</p>}
     {matches.length > limit && <button className="secondary" onClick={() => setLimit(limit + 30)}>Показать ещё</button>}
     {(onCreate || onCategories || onBulk) && <div className="pb-actions pb-stock-actions pb-warehouse-actions">
@@ -74,7 +76,7 @@ export function TeamStock({ products, categories, repairs, onOpen, onCreate, onC
   </section>;
 }
 
-export function TeamProduct({ product, categories, onBack, onOperation, actions, history, onEdit }) {
+export function TeamProduct({ product, categories, onBack, onOperation, actions, history, onEdit, onTrade }) {
   const [tab, setTab] = useState('info');
   const status = productStatus(product);
   const category = categories.find(item => item.id === product.categoryId);
@@ -101,7 +103,8 @@ export function TeamProduct({ product, categories, onBack, onOperation, actions,
     {tab === 'info' && <dl className="metric-list">{values.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>}
     <div className="pb-actions pb-warehouse-actions">{actions.map(type => <button key={type} onClick={() => onOperation(type)}>
       {type === 'sale' ? 'Продать' : type === 'repair' ? 'Завершить ремонт' : type === 'repair_start' ? 'Передать в ремонт' : operationNames[type]}
-    </button>)}{onEdit && <button className="secondary" onClick={onEdit}>Изменить</button>}</div>
+    </button>)}{onEdit && <button className="secondary" onClick={onEdit}>Изменить</button>}
+      {onTrade && <button className="secondary" onClick={onTrade}>Возвраты и бронирования</button>}</div>
   </section>;
 }
 

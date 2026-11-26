@@ -80,9 +80,10 @@ export function CloudReports({ data, workspaceId, actor, api, route, online, nav
     ['revenueMinor', 'Выручка', Coins], ['netMinor', 'Чистая прибыль', ChartNoAxesCombined],
     ...(!Object.hasOwn(stats ?? {}, 'netMinor') ? [['grossMinor', 'Валовая прибыль', ChartNoAxesCombined]] : []),
     ...(chart ? [['expensesMinor', 'Операционные расходы', Wallet]] : []),
-    ...(route === 'sales' ? [['sales', 'Продажи', ChartNoAxesCombined]] : []),
+    ...(route === 'sales' ? [['sales', 'Продажи', ChartNoAxesCombined], ['returns', 'Возвраты и компенсации', ChartNoAxesCombined],
+      ['reservations', 'Бронирования', Smartphone]] : []),
   ].filter(([key]) => Object.hasOwn(stats ?? {}, key)).map(([key, label, Icon]) => ({
-    label, Icon, value: key === 'sales' ? stats[key] : formatMinor(stats[key]),
+    label, Icon, value: ['sales', 'returns', 'reservations'].includes(key) ? stats[key] : formatMinor(stats[key]),
   }));
   if (route === 'dashboard' && permissions.includes('stock.read')) metrics.push(
     { label: 'На складе', Icon: Smartphone, value: products.filter(item => !item.inRepair).reduce((sum, item) => sum + item.quantity, 0) + ' шт.', onClick: () => navigate('purchase') },

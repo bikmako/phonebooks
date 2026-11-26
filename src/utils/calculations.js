@@ -189,11 +189,11 @@ export function getStats(state, t) {
     ),
     warehouse = warehouseProjection(state).operations.filter(operation => inPeriod(operation.date, t)),
     warehouseSales = warehouse.filter(operation => operation.type === 'sale'),
-    A = roundMoney(i + d + warehouseSales.reduce((sum, operation) => sum + operation.revenueMinor / 100, 0)),
-    L = roundMoney(o + x + warehouseSales.reduce((sum, operation) => sum + operation.costMinor / 100, 0)),
+    A = roundMoney(i + d + warehouse.reduce((sum, operation) => sum + operation.revenueMinor, 0) / 100),
+    L = roundMoney(o + x + warehouse.reduce((sum, operation) => sum + operation.costMinor, 0) / 100),
     O = roundMoney(A - L),
     m = roundMoney(r.reduce((u, N) => u + N.amount, 0)),
-    f = roundMoney(O - m - p),
+    f = roundMoney(O - m - p - warehouse.reduce((sum, operation) => sum + operation.expenseMinor / 100, 0)),
     C = {};
   for (const u of r)
     C[u.category] = roundMoney((C[u.category] ?? 0) + u.amount);
@@ -241,7 +241,7 @@ export function getStats(state, t) {
     withdrawals: g,
     transfersIn: b,
     transfersOut: B,
-    cashFlow: roundMoney(A - y - w - m + warehouse.filter(operation => operation.type !== "sale").reduce((sum, operation) => sum + operation.cashMinor / 100, 0) - getRepairs(state).filter(repair => inPeriod(repair.date, t)).reduce((sum, repair) => sum + repair.amount, 0) + S - g),
+    cashFlow: roundMoney(A - y - w - m + warehouse.reduce((sum, operation) => sum + (operation.cashMinor - operation.revenueMinor) / 100, 0) - getRepairs(state).filter(repair => inPeriod(repair.date, t)).reduce((sum, repair) => sum + repair.amount, 0) + S - g),
     phoneRevenue: i,
     phoneCogs: o,
     accRevenue: d,

@@ -3,6 +3,7 @@ import { formatMinor as money } from './CloudReports.jsx';
 
 const groups = ['Склад', 'Торговые операции', 'Ремонт', 'Финансы', 'Аналитика', 'Данные', 'Управление командой'];
 const actions = {
+  reservation: 'Бронирование', customer_return: 'Возврат покупателя', supplier_return: 'Возврат поставщику',
   'workspace.rename': 'Изменение названия предприятия', 'category.save': 'Изменение категории', purchase: 'Закупка', sale: 'Продажа', repair: 'Завершение ремонта', repair_start: 'Передача в ремонт', expense: 'Расход', deposit: 'Пополнение кассы',
   stock_adjustment: 'Корректировка остатка', 'product.edit': 'Редактирование товара', 'role.create': 'Создание роли',
   'role.edit': 'Изменение роли', 'role.archive': 'Архивирование роли', 'member.role': 'Назначение роли',
@@ -11,7 +12,7 @@ const actions = {
   'invite.revoke': 'Отзыв приглашения', 'invite.accept': 'Принятие приглашения', 'solo.import': 'Перенос Solo',
 };
 const metrics = {
-  purchases: 'Закупки', purchaseMinor: 'Сумма закупок', sales: 'Продажи', revenueMinor: 'Выручка',
+  returns: 'Возвраты и компенсации', reservations: 'Созданные бронирования', purchases: 'Закупки', purchaseMinor: 'Сумма закупок', sales: 'Продажи', revenueMinor: 'Выручка',
   grossMinor: 'Валовая прибыль', netMinor: 'Чистая прибыль предприятия', expenses: 'Расходные операции',
   expensesMinor: 'Сумма расходов', repairs: 'Ремонты', cashMinor: 'Текущая касса', stockMinor: 'Текущая стоимость склада',
 };

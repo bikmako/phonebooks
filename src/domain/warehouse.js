@@ -1,8 +1,11 @@
 import { assert, makeAuditEntry, withAudit } from './shared.js';
+import { activeReservations, assertReturn, portion, reservationTypes, returnTypes } from './warehouseTrade.js';
 import { today } from '../utils/format.js';
 
 export const warehouseLabels = {
   purchase: 'Закупка товара', sale: 'Продажа товара', repair_start: 'Передача в ремонт', repair: 'Завершение ремонта',
+  customer_return: 'Возврат покупателя', supplier_return: 'Возврат поставщику', compensation: 'Денежная компенсация',
+  void_sale: 'Отмена продажи', reserve: 'Бронирование', extend_reserve: 'Продление бронирования', cancel_reserve: 'Отмена бронирования',
 };
 export function parseMinor(value) {
   const match = /^(\d{1,9})(?:[,.](\d{1,2}))?$/.exec(String(value).trim());
@@ -19,61 +22,171 @@ const empty = { lots: [], quantity: 0, inRepair: false, purchased: false, stockC
 const cache = new WeakMap();
 const noEntries = [];
 
-function apply(products, event, details) {
+function takeLots(item, count, eligible = () => true) {
+  let units = count;
+  const allocations = [];
+  for (const lot of item.lots) {
+    if (!eligible(lot) || units === 0) continue;
+    const quantity = Math.min(units, lot.quantity);
+    const costMinor = portion(lot.costMinor, quantity, lot.quantity);
+    allocations.push({ sourceId: lot.sourceId, quantity, costMinor });
+    lot.quantity -= quantity;
+    lot.costMinor -= costMinor;
+    units -= quantity;
+  }
+  assert(units === 0, 'В указанной партии недостаточно товара.');
+  item.lots = item.lots.filter(lot => lot.quantity > 0);
+  return allocations;
+}
+const totalCost = allocations => safe(allocations.reduce((sum, item) => sum + item.costMinor, 0));
+
+function addLot(item, event, quantity, costMinor, sourceId = event.id, index = 0) {
+  item.lots.push({ id: index ? event.id + ':' + index : event.id, sourceId, productId: event.productId,
+    quantity, costMinor, date: event.date, createdAt: event.createdAt });
+}
+
+function restoreLots(item, event, original, skipped) {
+  let remaining = event.units;
+  let index = 0;
+  const restored = [];
+  for (const allocation of original.allocations) {
+    const from = Math.min(skipped, allocation.quantity);
+    const count = Math.min(remaining, allocation.quantity - from);
+    skipped -= from;
+    if (!count) continue;
+    const costMinor = portion(allocation.costMinor, from + count, allocation.quantity) -
+      portion(allocation.costMinor, from, allocation.quantity);
+    addLot(item, event, count, costMinor, allocation.sourceId, ++index);
+    restored.push({ quantity: count, costMinor, sourceId: allocation.sourceId });
+    remaining -= count;
+  }
+  assert(remaining === 0, 'Себестоимость исходной продажи недоступна.');
+  return restored;
+}
+
+function apply(context, event) {
+  const { products, operations, byId, bookings, corrected } = context;
   const { productId, type, tracking, units, amountMinor } = event;
   const item = products.get(productId) ?? { ...empty, lots: [] };
   const unit = tracking === 'unit';
+  const at = Date.parse(event.createdAt);
+  const active = activeReservations(bookings, productId, at);
+  const reserved = active.reduce((sum, booking) => sum + booking.quantity, 0);
   let stockDelta = 0;
   let costMinor = 0;
+  let cashMinor = 0;
+  let revenueMinor = 0;
+  let expenseMinor = 0;
+  let allocations = [];
   if (type === 'purchase') {
     assert(!unit || (!item.purchased && units === 1), 'Для следующего поштучного товара создайте отдельную карточку.');
     stockDelta = units;
+    cashMinor = -amountMinor;
     item.purchased = true;
-    item.lots.push({ id: event.id, productId, quantity: units, costMinor: amountMinor, date: event.date, createdAt: event.createdAt });
-    item.stockCostMinor = safe(item.stockCostMinor + amountMinor);
+    addLot(item, event, units, amountMinor);
   } else if (type === 'sale') {
-    assert(!item.inRepair && item.quantity >= units, 'Недостаточный доступный остаток.');
-    let remaining = units;
-    while (remaining > 0) {
-      const lot = item.lots[0];
-      const take = Math.min(remaining, lot.quantity);
-      const cost = Number((BigInt(lot.costMinor) * BigInt(take)) / BigInt(lot.quantity));
-      costMinor = safe(costMinor + cost);
-      lot.costMinor -= cost;
-      lot.quantity -= take;
-      if (!lot.quantity) item.lots.shift();
-      remaining -= take;
+    const booking = active.find(entry => entry.id === event.reservationId);
+    if (event.reservationId) {
+      assert(booking && units <= booking.quantity && amountMinor === safe(booking.unitMinor * units),
+        'Бронирование истекло, изменилось или указана другая цена.');
     }
-    item.stockCostMinor -= costMinor;
+    assert(!item.inRepair && item.quantity - reserved + (booking?.quantity ?? 0) >= units, 'Недостаточный доступный остаток.');
+    allocations = takeLots(item, units);
+    costMinor = totalCost(allocations);
     stockDelta = -units;
+    cashMinor = revenueMinor = amountMinor;
+    if (booking) bookings.set(booking.id, { ...booking, quantity: booking.quantity - units,
+      status: booking.quantity === units ? 'sold' : 'active' });
   } else if (type === 'repair_start') {
-    assert(unit && units === 1 && item.quantity === 1 && !item.inRepair, 'В ремонт можно передать доступный поштучный товар.');
+    assert(unit && units === 1 && item.quantity === 1 && !item.inRepair && !reserved, 'В ремонт можно передать доступный поштучный товар.');
     item.inRepair = true;
-  } else {
+  } else if (type === 'repair') {
     assert(unit && units === 1 && item.quantity === 1 && item.inRepair, 'У товара нет открытого ремонта.');
     item.lots[0].costMinor = safe(item.lots[0].costMinor + amountMinor);
-    item.stockCostMinor = safe(item.stockCostMinor + amountMinor);
     item.inRepair = false;
+    cashMinor = -amountMinor;
+  } else if (type === 'reserve') {
+    assert(!item.inRepair && item.quantity - reserved >= units, 'Недостаточный доступный остаток.');
+    assert(Date.parse(event.expiresAt) > at, 'Срок бронирования должен быть в будущем.');
+    bookings.set(event.id, { id: event.id, productId, status: 'active', quantity: units, expiresAt: event.expiresAt,
+      buyer: event.buyer, contact: event.contact, note: event.note, unitMinor: event.agreedMinor });
+  } else if (reservationTypes.includes(type)) {
+    const booking = active.find(entry => entry.id === event.reservationId);
+    assert(booking, 'Активное бронирование не найдено.');
+    if (type === 'extend_reserve') {
+      assert(Date.parse(event.expiresAt) > Date.parse(booking.expiresAt), 'Новый срок должен быть позже текущего.');
+      bookings.set(booking.id, { ...booking, expiresAt: event.expiresAt });
+    } else bookings.set(booking.id, { ...booking, status: 'cancelled' });
+  } else {
+    const original = byId.get(event.originalId);
+    const supplier = type === 'supplier_return';
+    assert(original && original.type === (supplier ? 'purchase' : 'sale') && original.productId === productId,
+      'Исходная операция не найдена.');
+    const earlier = corrected.get(original.id) ?? [];
+    assertReturn(original, earlier, event);
+    if (supplier) {
+      assert(!item.inRepair && item.quantity - reserved >= units, 'В партии недостаточно свободного остатка.');
+      allocations = takeLots(item, units, lot => lot.sourceId === original.id);
+      stockDelta = -units;
+      cashMinor = amountMinor;
+      expenseMinor = safe(totalCost(allocations) - amountMinor);
+    } else {
+      if (units) {
+        assert(!unit || !item.quantity, 'Поштучный товар уже есть на складе.');
+        allocations = restoreLots(item, event, original, earlier.reduce((sum, row) => sum + row.units, 0));
+        costMinor = -totalCost(allocations);
+        stockDelta = units;
+        if (event.toRepair) {
+          assert(unit, 'В ремонт можно вернуть только поштучный товар.');
+          item.inRepair = true;
+        }
+      }
+      cashMinor = revenueMinor = -amountMinor;
+    }
+    corrected.set(original.id, [...earlier, event]);
   }
   item.quantity = safe(item.quantity + stockDelta);
+  item.stockCostMinor = totalCost(item.lots);
   assert(item.quantity <= 2147483647, 'Достигнут предел остатка.');
   products.set(productId, item);
-  const cashMinor = type === 'sale' ? amountMinor : -amountMinor;
-  details.push({ ...event, cashMinor, stockDelta, costMinor, revenueMinor: type === 'sale' ? amountMinor : 0 });
+  const detail = { ...event, cashMinor, stockDelta, costMinor, revenueMinor, expenseMinor, allocations };
+  operations.push(detail);
+  byId.set(event.id, detail);
 }
 
 export function warehouseProjection(state) {
   const entries = state.warehouse ?? noEntries;
   if (cache.has(entries)) return cache.get(entries);
-  const products = new Map();
-  const operations = [];
-  for (const event of entries) apply(products, event, operations);
-  const result = { products, operations };
+  const result = { products: new Map(), operations: [], bookings: new Map(), byId: new Map(), corrected: new Map() };
+  for (const event of entries) apply(result, event);
   cache.set(entries, result);
   return result;
 }
-export function warehouseStock(state, id) {
-  return warehouseProjection(state).products.get(id) ?? empty;
+export function warehouseStock(state, id, now) {
+  const { products, bookings } = warehouseProjection(state);
+  const reservations = activeReservations(bookings, id, now);
+  return { ...(products.get(id) ?? empty), reservations, reservedQuantity: reservations.reduce((sum, item) => sum + item.quantity, 0) };
+}
+function validateTradeEvent(event) {
+  const { type, units, amountMinor } = event;
+  assert(Number.isSafeInteger(units) && units >= 0 && units <= 100000 &&
+    (units > 0 || ['compensation', 'extend_reserve', 'cancel_reserve'].includes(type)) &&
+    (!['compensation', 'extend_reserve', 'cancel_reserve'].includes(type) || units === 0) &&
+    Number.isSafeInteger(amountMinor) && amountMinor >= 0 &&
+    (!['sale', 'compensation'].includes(type) || amountMinor > 0) &&
+    (!['repair_start', ...reservationTypes].includes(type) || amountMinor === 0), 'Неверная сумма или количество.');
+  if (returnTypes.includes(type)) {
+    assert(typeof event.originalId === 'string' && typeof event.reason === 'string' && event.reason.trim().length > 0 &&
+      event.reason.length <= 500 && typeof event.toRepair === 'boolean' &&
+      (!event.toRepair || ['customer_return', 'void_sale'].includes(type)), 'Выберите исходную операцию и укажите причину.');
+  }
+  if (type === 'reserve') {
+    assert(typeof event.buyer === 'string' && event.buyer.trim().length > 0 && event.buyer.length <= 100 &&
+      typeof event.contact === 'string' && event.contact.length <= 100 && typeof event.note === 'string' && event.note.length <= 500 &&
+      Number.isSafeInteger(event.agreedMinor) && event.agreedMinor > 0 && event.agreedMinor <= 10000000000,
+      'Укажите покупателя и согласованную цену.');
+  }
+  if (['reserve', 'extend_reserve'].includes(type)) assert(typeof event.expiresAt === 'string' && Number.isFinite(Date.parse(event.expiresAt)), 'Укажите срок бронирования.');
 }
 
 export function recordWarehouse(state, productId, type, input, balanceMinor) {
@@ -82,18 +195,21 @@ export function recordWarehouse(state, productId, type, input, balanceMinor) {
   assert(product.version === input.version, 'Карточка изменилась. Откройте её заново.');
   assert((state.warehouse?.length ?? 0) === input.position, 'Склад изменился. Повторите действие после обновления.');
   assert(Object.hasOwn(warehouseLabels, type), 'Неизвестная операция.');
-  const units = ['purchase', 'sale'].includes(type) ? input.units : 1;
-  assert(Number.isSafeInteger(units) && units >= 1 && units <= 100000, 'Укажите целое количество от 1 до 100 000.');
-  const amountMinor = type === 'repair_start' ? 0 : safe(input.unitMinor * units);
-  assert(amountMinor >= 0 && (type !== 'sale' || amountMinor > 0), 'Укажите допустимую сумму.');
+  const returns = returnTypes.includes(type);
+  const units = ['repair', 'repair_start'].includes(type) ? 1 : ['compensation', 'extend_reserve', 'cancel_reserve'].includes(type) ? 0 : input.units;
+  const amountMinor = reservationTypes.includes(type) || type === 'repair_start' ? 0 : returns ? input.amountMinor : safe(input.unitMinor * units);
   const accountId = amountMinor ? input.accountId : null;
+  const event = { id: 'warehouse:' + crypto.randomUUID(), productId, name: product.name, tracking: product.tracking,
+    type, units, amountMinor, accountId, date: today(), createdAt: new Date().toISOString() };
+  if (returns) Object.assign(event, { originalId: input.originalId, reason: input.reason?.trim(), toRepair: Boolean(input.toRepair) });
+  if (type === 'reserve') Object.assign(event, { agreedMinor: input.unitMinor, buyer: input.buyer?.trim(), contact: input.contact?.trim() ?? '', note: input.note?.trim() ?? '' });
+  if (['reserve', 'extend_reserve'].includes(type)) event.expiresAt = input.expiresAt;
+  if (input.reservationId) event.reservationId = input.reservationId;
+  validateTradeEvent(event);
   if (amountMinor) {
     assert(state.accounts.some(account => account.id === accountId && !account.archived), 'Выберите действующий счёт.');
-    assert(type === 'sale' || balanceMinor >= amountMinor, 'Недостаточно денег на счёте.');
+    assert(['sale', 'supplier_return'].includes(type) || balanceMinor >= amountMinor, 'Недостаточно денег на счёте.');
   }
-  const id = 'warehouse:' + crypto.randomUUID();
-  const event = { id, productId, name: product.name, tracking: product.tracking, type, units, amountMinor, accountId,
-    date: today(), createdAt: new Date().toISOString() };
   const next = { ...state, warehouse: [...(state.warehouse ?? noEntries), event] };
   warehouseProjection(next);
   return withAudit(next, makeAuditEntry(state, 'create', 'warehouse', productId, warehouseLabels[type] + ' · ' + product.name));
@@ -108,12 +224,9 @@ export function validateWarehouse(state) {
   for (const event of state.warehouse) {
     assert(event && typeof event.id === 'string' && /^warehouse:[a-f0-9-]{36}$/.test(event.id) && !ids.has(event.id) &&
       products.get(event.productId)?.tracking === event.tracking && typeof event.name === 'string' && event.name.length > 0 &&
-      Object.hasOwn(warehouseLabels, event.type) && Number.isSafeInteger(event.units) && event.units >= 1 && event.units <= 100000 &&
-      Number.isSafeInteger(event.amountMinor) && event.amountMinor >= 0 &&
-      (event.amountMinor ? accounts.has(event.accountId) : event.accountId === null) &&
-      (event.type !== 'sale' || event.amountMinor > 0) &&
-      (event.type !== 'repair_start' || event.amountMinor === 0) &&
+      Object.hasOwn(warehouseLabels, event.type) && (event.amountMinor ? accounts.has(event.accountId) : event.accountId === null) &&
       validDate(event.date) && typeof event.createdAt === 'string' && Number.isFinite(Date.parse(event.createdAt)), 'Неверная операция склада в копии.');
+    validateTradeEvent(event);
     ids.add(event.id);
   }
   warehouseProjection(state);

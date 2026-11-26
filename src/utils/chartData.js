@@ -111,7 +111,8 @@ export function getChartData(state, t, n = today()) {
       o(d.date, 0, d.qty * d.unitCost);
   for (const d of state.expenses) inPeriod(d.date, a) && o(d.date, 0, d.amount);
   for (const operation of warehouseProjection(state).operations)
-    if (operation.type === 'sale' && inPeriod(operation.date, a)) o(operation.date, operation.revenueMinor / 100, operation.costMinor / 100);
+    if (inPeriod(operation.date, a) && (operation.revenueMinor || operation.costMinor || operation.expenseMinor))
+      o(operation.date, operation.revenueMinor / 100, (operation.costMinor + operation.expenseMinor) / 100);
   const l = Array.from(r.values()).sort((d, x) => d.key.localeCompare(x.key));
   if (t === "all" && l.length > 12) {
     const d = new Map();

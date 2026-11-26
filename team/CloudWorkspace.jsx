@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Plus } from 'lucide-react';
 import { WarehouseSearch } from '../src/product/WarehouseSearch.jsx';
+import { TradePanel, tradeLabels } from '../src/product/TradePanel.jsx';
 import { PageTitle, PeriodSelect, routeName, Status } from '../src/product/ui.jsx';
 import { CloudReports } from './CloudReports.jsx';
 import { TeamProduct, TeamStock } from './CloudViews.jsx';
@@ -22,6 +23,10 @@ const writePermissions = {
   save_category: ['stock.categories.manage', 'stock.read'], edit_product: ['stock.edit', 'stock.read'],
   bulk_price: ['stock.bulk_edit', 'stock.planned_price.write', 'stock.read'],
   bulk_attributes: ['stock.bulk_edit', 'stock.edit', 'stock.read'],
+  reserve: ['trade.reserve', 'stock.read'], extend_reserve: ['trade.reserve', 'stock.read'],
+  cancel_reserve: ['trade.reserve_cancel', 'stock.read'],
+  customer_return: ['trade.customer_return', 'stock.read'], void_sale: ['trade.customer_return', 'stock.read'],
+  supplier_return: ['trade.supplier_return', 'stock.read'], compensation: ['trade.compensation', 'stock.read'],
 };
 
 function canRetry(command, permissions) {
@@ -35,6 +40,7 @@ function canRetry(command, permissions) {
   if (command.type === 'edit_product' && Object.hasOwn(command, 'plannedPriceMinor')) required.push('stock.planned_price.write');
   if (command.type === 'repair' && command.amountMinor > 0) required.push('repair.expense', 'finance.cash.read');
   if (command.type === 'stock_adjustment' && command.quantity < 0) required.push('stock.writeoff');
+  if (command.toRepair) required.push('repair.start');
   return required.every(permission => permissions.includes(permission));
 }
 
@@ -85,6 +91,11 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
   const [chosenType, setType] = useState('');
   const [selection, setSelection] = useState(null);
   const [productId, setProductId] = useState('');
+  const [tradeOpen, setTradeOpen] = useState('');
+  const [tradeData, setTradeData] = useState(null);
+  const [holdsData, setHoldsData] = useState(null);
+  const [tradeFailure, setTradeFailure] = useState('');
+  const [tick, setTick] = useState(() => performance.now());
   const [categoryId, setCategoryId] = useState('');
   const seenAdd = useRef(addRequest);
   const [pending, setPending] = useState(() => readPending(requestKey));
@@ -110,6 +121,9 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
           setType('');
           setEditor('');
           setProductId('');
+          setTradeOpen(false);
+          setTradeData(null);
+          setHoldsData(null);
           setMessage('');
           setFailure('');
           onAccessChanged();
@@ -126,6 +140,9 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
       if (error.status === 401 || error.status === 403) {
         cached.current = null;
         setData(null);
+        setTradeOpen('');
+        setTradeData(null);
+        setHoldsData(null);
         savePending(null);
         setConnection('denied');
         onAccessChanged();
@@ -150,6 +167,9 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
       if (cached.current && Date.now() - lastResponse.current > CACHE_LIFETIME) {
         cached.current = null;
         setData(null);
+        setTradeOpen('');
+        setTradeData(null);
+        setHoldsData(null);
       }
       if (document.visibilityState === 'visible') void refresh();
     }, 4000);
@@ -184,7 +204,7 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
       savePending(null);
       setSelection(null);
       setType('');
-      if (request.command.type !== 'edit_product') setProductId('');
+      if (request.command.type !== 'edit_product' && !tradeOpen) setProductId('');
       setMessage('Операция подтверждена сервером.');
       return true;
     } catch (error) {
@@ -223,9 +243,50 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
   const needsProduct = productCommands.includes(type);
   const mayReadStock = permissions.includes('stock.read');
   const mayReadHistory = permissions.includes('finance.history.read');
-  const currentProduct = data?.products.find(item => item.id === productId && !item.archived);
+  const permissionKey = permissions.join(',');
+  const serverNow = holdsData ? Date.parse(holdsData.now) + Math.max(0, tick - holdsData.measured) : 0;
+  const held = new Map();
+  for (const hold of holdsData?.holds ?? []) {
+    if (Date.parse(hold.expiresAt) > serverNow) held.set(hold.productId, (held.get(hold.productId) ?? 0) + hold.quantity);
+  }
+  const products = data?.products.map(item => ({ ...item, reserved: item.reserved + (held.get(item.id) ?? 0) })) ?? [];
+  const currentProduct = products.find(item => item.id === productId && !item.archived);
+  const selectedProduct = products.find(item => item.id === selection?.id);
+  const tradeAllowed = allowed.filter(kind => Object.hasOwn(tradeLabels, kind) || kind === 'repair_start');
+  const canTrade = tradeAllowed.some(kind => kind !== 'repair_start');
+  const tradeContext = tradeData?.productId === productId && tradeData.permissionKey === permissionKey ? tradeData : null;
+  useEffect(() => {
+    if (!available || !mayReadStock) return;
+    let active = true;
+    api('team/trade', { ...scope, p_product: null }).then(result => {
+      if (active) setHoldsData({ ...result, measured: performance.now() });
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [available, data?.cursor, permissionKey, workspace.id]);
+  useEffect(() => {
+    if (!available || !tradeOpen || !canTrade || !productId) return;
+    let active = true;
+    setTradeFailure('');
+    api('team/trade', { ...scope, p_product: productId }).then(result => {
+      if (active) setTradeData({ ...result, productId, permissionKey });
+    }).catch(() => { if (active) setTradeFailure('Не удалось загрузить возвраты и бронирования.'); });
+    return () => { active = false; };
+  }, [available, tradeOpen, productId, data?.cursor, permissionKey, workspace.id]);
+  useEffect(() => {
+    if (!holdsData?.holds.length) return;
+    const first = holdsData.holds.reduce((expiry, item) => {
+      const end = Date.parse(item.expiresAt);
+      return end > serverNow ? Math.min(expiry, end) : expiry;
+    }, Infinity);
+    if (!Number.isFinite(first)) return;
+    const elapsed = performance.now() - holdsData.measured;
+    const wait = first - Date.parse(holdsData.now) - elapsed;
+    const timer = window.setTimeout(() => setTick(performance.now()), Math.min(2147483647, Math.max(1, wait)));
+    return () => window.clearTimeout(timer);
+  }, [holdsData, serverNow]);
   const activeCategory = data?.categories.find(item => item.id === (categoryId || 'smartphones')) ?? data?.categories[0];
   function start(kind, product = null) {
+    setTradeOpen(false);
     setEditor('');
     setSelection(product);
     setType(kind);
@@ -247,6 +308,8 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
     previousRoute.current = route;
     setEditor('');
     setMessage('');
+    setTradeOpen(false);
+    setTradeData(null);
     if (!type) {
       setProductId('');
       setSelection(null);
@@ -272,6 +335,15 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
     && (editor !== 'product' || currentProduct);
   const saveCatalogue = command => send({ id: crypto.randomUUID(), command });
   const stockDetail = ['purchase', 'repairs', 'search'].includes(route) && mayReadStock && currentProduct && !type && !editing;
+  function clearNotice() {
+    setMessage('');
+    setFailure('');
+  }
+  function showTrade(mode) {
+    clearNotice();
+    setTradeOpen(mode);
+    window.scrollTo(0, 0);
+  }
   return <section className="pb-workspace" aria-label="Рабочие данные">
     {![ 'team', 'settings' ].includes(route) && !stockDetail && !editing && <PageTitle
       title={type ? contextTitle[type] : route === 'dashboard'
@@ -280,7 +352,8 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
       eyebrow={route === 'dashboard' ? 'Обзор' : undefined} description={route === 'dashboard' ? workspace.name : undefined}
       action={route === 'dashboard' && onAdd && <button className="pb-desktop-add" type="button" onClick={onAdd}><Plus size={17} />Добавить товар</button>}
     />}
-    <div className="pb-connection" aria-live="polite"><Status tone={available ? 'good' : 'warn'}>{connectionStatus}</Status></div>
+    {(!available || !stockDetail || !tradeOpen) &&
+      <div className="pb-connection" aria-live="polite"><Status tone={available ? 'good' : 'warn'}>{connectionStatus}</Status></div>}
     {message && <p className="notice" aria-live="polite">{message}</p>}
     {failure && <p role="alert" className="notice error">{failure}</p>}
     {pending && <p className="notice">Операция ожидает подтверждения.{' '}
@@ -289,13 +362,27 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
     {data && <>
       {!type && ['dashboard', 'sales', 'finance'].includes(route) && <CloudReports data={data}
         workspaceId={workspace.id} actor={actor} api={api} route={route} online={available} navigate={navigate} period={period} setPeriod={setPeriod} />}
-      {route === 'search' && !stockDetail && <WarehouseSearch products={data.products} maySearchStock={mayReadStock}
+      {route === 'search' && !stockDetail && <WarehouseSearch products={products} maySearchStock={mayReadStock}
         onProduct={item => setProductId(item.id)} history={mayReadHistory ? query => <TeamHistory key={query} {...historyProps}
           query={query} title="История операций" /> : undefined} />}
       {editing && <CatalogEditor key={editor + ':' + (currentProduct?.id ?? '')} mode={editor} product={currentProduct}
         categories={data.categories} products={data.products} canPrice={editor === 'bulk' ? allowed.includes('bulk_price') : canPrice} canEdit={allowed.includes('bulk_attributes')} disabled={!available || !!pending || sending}
         onClose={() => setEditor('')} onSave={saveCatalogue} />}
-      {stockDetail && <TeamProduct key={currentProduct.id} product={currentProduct} categories={data.categories} onBack={() => setProductId('')}
+      {stockDetail && tradeOpen && canTrade && <section>
+        <button type="button" className="secondary pb-warehouse-back" onClick={() => { setTradeOpen(false); setTradeData(null); }}>
+          <ArrowLeft size={16} />К карточке
+        </button>
+        {tradeFailure && <p role="alert" className="notice error">{tradeFailure}</p>}
+        {tradeContext ? <TradePanel key={currentProduct.id + permissionKey} product={currentProduct} originals={tradeContext.originals}
+          initialAction={tradeOpen === 'reserve' ? 'reserve' : undefined}
+          reservations={tradeContext.reservations.filter(item => Date.parse(item.expiresAt) > serverNow)}
+          accounts={tradeContext.accounts.length ? tradeContext.accounts : data.accounts.filter(item => !item.archived)}
+          allowed={tradeAllowed} disabled={!available || !!pending} busy={sending} onAction={clearNotice}
+          submit={command => canRetry(command, permissions) && saveCatalogue(command)} />
+          : !tradeFailure && <p className="pb-empty" role="status">Загружаем операции…</p>}
+      </section>}
+      {stockDetail && (!tradeOpen || !canTrade) && <TeamProduct key={currentProduct.id} product={currentProduct} categories={data.categories} onBack={() => setProductId('')}
+        onTrade={canTrade && available ? () => showTrade('overview') : undefined}
         onEdit={available && !pending && allowed.includes('edit_product') && route === 'purchase' ? () => setEditor('product') : undefined}
         history={mayReadHistory ? tab => <TeamHistory key={tab} {...historyProps} product={currentProduct.id}
           kind={tab === 'repairs' ? 'repair' : null} title={tab === 'repairs' ? 'История ремонта' : 'Операции с товаром'} /> : undefined}
@@ -305,7 +392,8 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
           ...(currentProduct.inRepair ? ['repair'] : ['stock_adjustment', ...(currentProduct.tracking === 'quantity' || !currentProduct.purchased && !currentProduct.quantity ? ['purchase'] : [])]),
         ].includes(kind))} onOperation={kind => start(kind, currentProduct)} />}
       {!type && !stockDetail && !editing && mayReadStock && ['purchase', 'repairs'].includes(route) && <TeamStock key={route}
-        products={data.products} categories={data.categories} repairs={route === 'repairs'} onOpen={setProductId}
+        products={products} categories={data.categories} repairs={route === 'repairs'} onOpen={setProductId}
+        onReserve={route === 'purchase' && available && allowed.includes('reserve') ? id => { setProductId(id); showTrade('reserve'); } : undefined}
         onCreate={route === 'purchase' && allowed.includes('purchase') ? () => start('purchase') : undefined}
         onCategories={route === 'purchase' && allowed.includes('save_category') ? () => setEditor('category') : undefined}
         onBulk={route === 'purchase' && canBulk && data.products.length ? () => setEditor('bulk') : undefined} />}
@@ -317,10 +405,10 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
         <button className="secondary" type="button" onClick={() => { setType(''); setSelection(null); }}><ArrowLeft size={16} />Вернуться</button>
         <fieldset disabled={!available || !!pending || sending} aria-label={contextTitle[type]}>
           {needsProduct && <label>Товар<select name="productId" aria-label="Товар" value={selection?.id ?? ''}
-            onChange={event => setSelection(data.products.find(item => item.id === event.target.value) ?? null)} required={type !== 'purchase'}>
+            onChange={event => setSelection(products.find(item => item.id === event.target.value) ?? null)} required={type !== 'purchase'}>
             {(type !== 'purchase' || permissions.includes('stock.create')) && <option value="">{type === 'purchase' ? 'Новая карточка' : 'Выберите товар'}</option>}
             {type === 'purchase' && !permissions.includes('stock.create') && <option value="">Выберите товар</option>}
-            {data.products.filter(item => !item.archived &&
+            {products.filter(item => !item.archived &&
               (type !== 'purchase' || (item.tracking === 'quantity' || !item.purchased && !item.quantity && !item.inRepair)) &&
               (type !== 'sale' || (!item.inRepair && item.quantity > item.reserved)) &&
               (type !== 'repair_start' || (item.tracking === 'unit' && item.quantity === 1 && !item.inRepair && !item.reserved)) &&
@@ -339,7 +427,9 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
             {canPrice && <label>Плановая цена продажи, ₽<input name="plannedPrice" inputMode="decimal" /></label>}
           </>}
           {['purchase', 'sale', 'stock_adjustment'].includes(type) && <label>{type === 'stock_adjustment' ? 'Изменение количества' : 'Количество'}
-            <input name="quantity" type="number" defaultValue="1" min={type === 'stock_adjustment' ? -100000 : 1} max="100000" step="1" required /></label>}
+            <input name="quantity" type="number" defaultValue="1" min={type === 'stock_adjustment' ? -100000 : 1}
+              max={type === 'sale' && selectedProduct ? selectedProduct.quantity - selectedProduct.reserved : 100000}
+              step="1" required /></label>}
           {accountCommands.includes(type) && <>
             <label>{['purchase', 'sale'].includes(type) ? 'Цена за единицу, ₽' : 'Сумма, ₽'}<input key={type === 'sale' ? selection?.id : type} name="amount" inputMode="decimal"
               defaultValue={type === 'sale' ? priceInput(selection?.plannedPriceMinor) : undefined} required /></label>

@@ -2,9 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft, ChevronRight, Package, Plus } from 'lucide-react';
 import { DomainError, makeAuditEntry, withAudit } from '../domain/shared.js';
 import { projectInventory, saveInventoryCategory, saveInventoryProduct } from '../domain/inventory.js';
-import { parseMinor, recordWarehouse, warehouseLabels, warehouseProjection } from '../domain/warehouse.js';
+import { parseMinor, recordWarehouse, warehouseLabels, warehouseProjection, warehouseStock } from '../domain/warehouse.js';
+import { remainingReturn } from '../domain/warehouseTrade.js';
 import { useStore } from '../hooks/useStore.jsx';
 import { BulkPrices } from '../product/BulkPrices.jsx';
+import { TradePanel, tradeLabels } from '../product/TradePanel.jsx';
 import { PageTitle, SectionTitle, Status } from '../product/ui.jsx';
 import { AttributeFields, CategoryFields, priceInput, readAttributes, readCategory, warehouseMoney } from '../product/WarehouseFields.jsx';
 import { readInventoryCatalog } from '../storage/inventoryStore.js';
@@ -25,6 +27,18 @@ export function CatalogPage({ initialProduct }) {
   const [sort, setSort] = useState('name');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [now, setNow] = useState(Date.now);
+  const projection = warehouseProjection(data);
+  useEffect(() => {
+    const current = Date.now();
+    const expiry = [...projection.bookings.values()].reduce((first, item) => {
+      const deadline = Date.parse(item.expiresAt);
+      return item.status === 'active' && deadline > now ? Math.min(first, deadline) : first;
+    }, Infinity);
+    if (!Number.isFinite(expiry)) return;
+    const timer = window.setTimeout(() => setNow(Date.now()), Math.min(2147483647, Math.max(0, expiry - current)));
+    return () => window.clearTimeout(timer);
+  }, [projection, now]);
   useEffect(() => {
     let active = true;
     readInventoryCatalog().then(value => { if (active) setLegacyCatalog(value); }).catch(() => {
@@ -92,13 +106,23 @@ export function CatalogPage({ initialProduct }) {
         Math.round(getAccountBalance(state, accountId) * 100)))) open('detail', product);
     } catch (failure) { setError(failure.message); }
   }
+  function trade(command) {
+    const input = { ...command, units: command.quantity, unitMinor: command.unitPriceMinor, version: command.expectedVersion,
+      position: data.warehouse?.length ?? 0 };
+    return commit((state, current) => recordWarehouse({ ...state, catalog: current }, product.id, command.type, input,
+      Math.round(getAccountBalance(state, command.accountId) * 100)));
+  }
   if (!catalog) return <p className="pb-empty" role={error ? 'alert' : 'status'}>{error || 'Загружаем каталог…'}</p>;
   const own = catalog.products.filter(item => item.id.startsWith('product:'));
   const visible = own.filter(item => (!filter || item.categoryId === filter) &&
-    (!status || status === (item.inRepair ? 'repair' : item.quantity > 0 ? 'stock' : 'empty')) &&
+    (!status || (status === 'reserved' ? item.reservedQuantity > 0 : status === (item.inRepair ? 'repair' : item.quantity > 0 ? 'stock' : 'empty'))) &&
     [item.name, ...Object.values(item.attributes)].join(' ').toLocaleLowerCase('ru').includes(query.trim().toLocaleLowerCase('ru')))
     .sort((a, b) => (sort === 'quantity' ? b.quantity - a.quantity : 0) || a.name.localeCompare(b.name, 'ru'));
-  const events = product ? warehouseProjection(data).operations.filter(event => event.productId === product.id).reverse() : [];
+  const events = product ? projection.operations.filter(event => event.productId === product.id).reverse() : [];
+  const originals = events.filter(item => ['purchase', 'sale'].includes(item.type)).map(item => {
+    const remaining = remainingReturn(item, projection.corrected.get(item.id) ?? []);
+    return { ...item, leftUnits: remaining.units, leftMinor: remaining.amountMinor };
+  });
 
   return <section className="pb-catalog" data-view={form || undefined}>
     {form && form !== 'bulk' && <button className="pb-action pb-action-secondary pb-back" onClick={() => open(product && form !== 'detail' ? 'detail' : '', product)}>
@@ -131,6 +155,7 @@ export function CatalogPage({ initialProduct }) {
       </Status>
       <dl className="pb-finance-flow">
         <div><dt>Остаток</dt><dd>{product.quantity} шт.</dd></div>
+        {product.reservedQuantity > 0 && <div><dt>В резерве</dt><dd>{product.reservedQuantity} шт.</dd></div>}
         <div><dt>Себестоимость остатка</dt><dd>{warehouseMoney(product.stockCostMinor)}</dd></div>
         <div><dt>Плановая цена продажи</dt><dd>{warehouseMoney(product.plannedPriceMinor)}</dd></div>
         {categories.find(item => item.id === product.categoryId)?.attributes.filter(field => Object.hasOwn(product.attributes, field.id))
@@ -138,21 +163,26 @@ export function CatalogPage({ initialProduct }) {
       </dl>
       <div className="pb-actions pb-warehouse-actions">
         {(!product.purchased || product.tracking === 'quantity') && <button className="pb-action" onClick={() => open('purchase', product)}>{details.purchase}</button>}
-        {product.quantity > 0 && !product.inRepair && <button className="pb-action" onClick={() => open('sale', product)}>{details.sale}</button>}
-        {product.tracking === 'unit' && product.quantity === 1 && <button className="pb-action pb-action-secondary"
+        {product.quantity > product.reservedQuantity && !product.inRepair && <button className="pb-action" onClick={() => open('sale', product)}>{details.sale}</button>}
+        {product.tracking === 'unit' && product.quantity === 1 && !product.reservedQuantity && <button className="pb-action pb-action-secondary"
           onClick={() => open(product.inRepair ? 'repair' : 'repair_start', product)}>{details[product.inRepair ? 'repair' : 'repair_start']}</button>}
         <button className="pb-action pb-action-secondary" onClick={() => open('product', product)}>Изменить</button>
+        <button className="pb-action pb-action-secondary" onClick={() => open('trade', product)}>Возвраты и бронирования</button>
       </div>
       <div className="pb-warehouse-history"><SectionTitle>История товара</SectionTitle>
         {events.length ? <ul className="pb-list">{events.map(item => <li key={item.id}><span>{warehouseLabels[item.type]}</span>
-          <span>{formatDate(item.date)} · {item.units} шт.</span>
+          <span>{formatDate(item.date)}{item.units > 0 ? ' · ' + item.units + ' шт.' : ''}{item.reason && ' · ' + item.reason}</span>
           {item.cashMinor !== 0 && <strong>{warehouseMoney(item.cashMinor)}</strong>}</li>)}</ul> : <p className="pb-empty">Операций пока нет.</p>}
       </div>
     </> : <p className="pb-empty">Карточка товара недоступна.</p>)}
+    {['trade', 'reserve'].includes(form) && product && <TradePanel product={product} originals={originals}
+      initialAction={form === 'reserve' ? 'reserve' : undefined}
+      reservations={warehouseStock(data, product.id, now).reservations} accounts={data.accounts.filter(account => !account.archived)}
+      allowed={[...Object.keys(tradeLabels), 'repair_start']} busy={busy} submit={trade} />}
     {product && Object.hasOwn(details, form) && <form className="pb-catalog-form" onSubmit={operate}>
       <PageTitle title={details[form]} description={product.name} />
       {['purchase', 'sale'].includes(form) && <label>Количество<input className="input" name="units" type="number" min="1"
-        max={form === 'sale' ? product.quantity : product.tracking === 'unit' ? 1 : 100000} defaultValue="1" required /></label>}
+        max={form === 'sale' ? product.quantity - product.reservedQuantity : product.tracking === 'unit' ? 1 : 100000} defaultValue="1" required /></label>}
       {form !== 'repair_start' && <>
         <label>{form === 'repair' ? 'Стоимость ремонта, ₽' : 'Цена за единицу, ₽'}<input className="input" name="amount" inputMode="decimal"
           defaultValue={form === 'sale' ? priceInput(product.plannedPriceMinor) : form === 'repair' ? '0' : ''} required /></label>
@@ -193,18 +223,21 @@ export function CatalogPage({ initialProduct }) {
         </select>
         <select className="input" aria-label="Статус товара" value={status} onChange={event => setStatus(event.target.value)}>
           <option value="">Все статусы</option><option value="stock">На складе</option>
-          <option value="repair">В ремонте</option><option value="empty">Нет в наличии</option>
+          <option value="repair">В ремонте</option><option value="reserved">В резерве</option><option value="empty">Нет в наличии</option>
         </select>
         <select className="input" aria-label="Сортировка" value={sort} onChange={event => setSort(event.target.value)}>
           <option value="name">По названию</option><option value="quantity">По остатку</option>
         </select>
       </div>
-      {visible.length ? <ul className="pb-list">{visible.map(item => <li key={item.id}>
+      {visible.length ? <ul className="pb-list">{visible.map(item => <li key={item.id} className="pb-trade-stock-row">
         <button className="pb-row" type="button" onClick={() => open('detail', item)}>
           <span className="pb-row-icon"><Package size={18} /></span>
-          <span><strong>{item.name}</strong><small>{item.inRepair ? 'В ремонте' : 'Остаток ' + item.quantity + ' шт.'}</small></span>
+          <span><strong>{item.name}</strong><small>{item.inRepair ? 'В ремонте' : 'Остаток ' + item.quantity + ' шт.'}
+            {item.reservedQuantity > 0 && ' · резерв ' + item.reservedQuantity}</small></span>
           <ChevronRight size={16} aria-hidden="true" />
         </button>
+        {item.quantity > item.reservedQuantity && !item.inRepair && <button type="button" className="pb-stock-reserve pb-action pb-action-secondary"
+          aria-label={'Забронировать ' + item.name} onClick={() => open('reserve', item)}>Забронировать</button>}
       </li>)}</ul> : <p className="pb-empty">Карточки товаров пока не найдены.</p>}
       <div className="pb-actions pb-warehouse-actions">
         <button className="pb-action" onClick={() => open('product')}><Plus size={16} />Добавить товар</button>

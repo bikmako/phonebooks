@@ -172,3 +172,123 @@ test('Team imports the new Solo warehouse with its repair history, price and rec
   assert.equal(current.accounts[0].balanceMinor, '38000');
   assert.ok(current.operations.some(item => item.type === 'repair_start'));
 });
+
+async function tradeContext(user, space, productId = null) {
+  const [row] = await asUser(db, user, 'select public.phonebooks_team_trade_context($1,$2,$3) as result', [space, user.sub, productId]);
+  return row.result;
+}
+async function tradeCommand(user, space, productId, type, attributes, request) {
+  const product = (await feed(user, space)).products.find(item => item.id === productId);
+  return command(user, space, { type, productId, expectedVersion: product.version, ...attributes }, request);
+}
+
+test('Team corrects source sales and purchases with exact FIFO, cash reconciliation and one receipt', async () => {
+  const [owner, staff] = await Promise.all([employee(), employee()]);
+  const space = await workspace(owner);
+  await db.query("insert into phonebooks_team_private.memberships(workspace_id,user_id,role) values($1,$2,'employee')", [space, staff.sub]);
+  await command(owner, space, funding(10000));
+  const first = await command(owner, space, purchase('quantity', 3, 100));
+  const [{ id }] = (await feed(owner, space)).products;
+  await tradeCommand(owner, space, id, 'purchase', { quantity: 2, unitPriceMinor: 210, accountId });
+  const sale = await tradeCommand(staff, space, id, 'sale', { quantity: 4, unitPriceMinor: 350, accountId });
+  const reason = 'Корректировка';
+  const correction = { type: 'customer_return', productId: id, originalId: sale.operationId, quantity: 2, amountMinor: 700,
+    reason, accountId, expectedVersion: (await feed(owner, space)).products[0].version };
+  const request = randomUUID();
+  await assert.rejects(command(staff, space, correction), { code: 'PT403' });
+  await db.query("insert into phonebooks_team_private.member_overrides(workspace_id,user_id,permission,allowed) values($1,$2,'trade.customer_return',true)", [space, staff.sub]);
+  const limitedSale = (await tradeContext(staff, space, id)).originals.find(item => item.id === sale.operationId);
+  assert.equal(limitedSale.amountMinor, null);
+  assert.equal(limitedSale.canVoid, true);
+  await db.query("update phonebooks_team_private.member_overrides set allowed=false where workspace_id=$1 and user_id=$2 and permission='trade.customer_return'", [space, staff.sub]);
+  assert.deepEqual((await tradeContext(staff, space, id)).originals, []);
+  await assert.rejects(command(staff, space, correction), { code: 'PT403' });
+  const receipt = await command(owner, space, correction, request);
+  assert.deepEqual(await command(owner, space, correction, request), receipt);
+  const logged = await db.query('select actor_id,current_values,amount_minor from phonebooks_team_private.team_audit where workspace_id=$1 and target_id=$2', [space, receipt.operationId]);
+  assert.equal(logged.rows.length, 1);
+  assert.equal(logged.rows[0].actor_id, owner.sub);
+  assert.equal(logged.rows[0].current_values.originalId, sale.operationId);
+  assert.equal(Number(logged.rows[0].amount_minor), 700);
+  assert.equal((await feed(owner, space)).products[0].stockCostMinor, '410');
+  assert.equal((await tradeContext(owner, space, id)).originals.find(item => item.id === sale.operationId).leftUnits, 2);
+  const compensate = { originalId: sale.operationId, quantity: 0, amountMinor: 30, reason, accountId };
+  await tradeCommand(owner, space, id, 'compensation', compensate);
+  await tradeCommand(owner, space, id, 'customer_return', { ...compensate, quantity: 2, amountMinor: 670 });
+  await assert.rejects(tradeCommand(owner, space, id, 'customer_return', { ...compensate, quantity: 1, amountMinor: 0 }), { code: 'PT409' });
+  await tradeCommand(owner, space, id, 'supplier_return', { ...compensate, originalId: first.operationId, quantity: 1, amountMinor: 80 });
+  let data = await feed(owner, space);
+  assert.equal(data.products[0].stockCostMinor, '620');
+  assert.equal(data.accounts[0].balanceMinor, '9360');
+  assert.deepEqual(data.totals, { revenue_minor: 0, cost_minor: 0, expense_minor: 20, sales_count: 1 });
+  const [individual] = await asUser(db, owner, 'select public.phonebooks_team_stats($1,$2,$3,null,null) as result', [space, owner.sub, staff.sub]);
+  assert.equal(individual.result.revenueMinor, '0');
+  assert.equal(individual.result.returns, 0);
+
+  await command(owner, space, purchase('unit', 1, 150));
+  data = await feed(owner, space);
+  const unit = data.products.find(item => item.tracking === 'unit');
+  const unitSale = await tradeCommand(staff, space, unit.id, 'sale', { quantity: 1, unitPriceMinor: 320, accountId });
+  await tradeCommand(owner, space, unit.id, 'void_sale', { quantity: 1, originalId: unitSale.operationId, reason, accountId, toRepair: true });
+  assert.equal((await feed(owner, space)).products.find(item => item.id === unit.id).inRepair, true);
+});
+
+test('Team expires holds on server time and serializes reservation, sale and permission changes', async () => {
+  const [owner, seller] = await Promise.all([employee(), employee()]);
+  const space = await workspace(owner);
+  await db.query("insert into phonebooks_team_private.memberships(workspace_id,user_id,role) values($1,$2,'employee')", [space, seller.sub]);
+  await command(owner, space, funding(10000));
+  await command(owner, space, purchase('quantity', 3, 100));
+  const [{ id, version }] = (await feed(owner, space)).products;
+  const reserve = { type: 'reserve', productId: id, expectedVersion: version, quantity: 2, unitPriceMinor: 350,
+    buyer: 'Учебный покупатель', contact: 'тест', expiresAt: new Date(Date.now() + 3600000).toISOString() };
+  const sell = { type: 'sale', productId: id, expectedVersion: version, quantity: 2, unitPriceMinor: 400, accountId };
+  await assert.rejects(command(seller, space, reserve), { code: 'PT403' });
+  const [held, competing] = await Promise.allSettled([command(owner, space, reserve), command(seller, space, sell)]);
+  assert.equal(held.status, 'fulfilled');
+  assert.equal(competing.reason.code, 'PT409');
+  const reservationId = held.value.operationId;
+  assert.equal((await tradeContext(seller, space)).holds[0].quantity, 2);
+  assert.equal((await tradeContext(seller, space, id)).reservations[0].contact, null);
+  assert.equal((await feed(owner, space)).accounts[0].balanceMinor, '9700');
+  await assert.rejects(tradeCommand(seller, space, id, 'sale', { ...sell, type: 'sale', expectedVersion: (await feed(owner, space)).products[0].version }), { code: 'PT409' });
+  await tradeCommand(seller, space, id, 'sale', { reservationId, quantity: 1, unitPriceMinor: 350, accountId });
+  assert.equal((await tradeContext(owner, space, id)).reservations[0].quantity, 1);
+  const expiry = new Date(Date.now() + 7200000).toISOString();
+  await tradeCommand(owner, space, id, 'extend_reserve', { reservationId, expiresAt: expiry });
+  assert.equal(Date.parse((await tradeContext(owner, space, id)).reservations[0].expiresAt), Date.parse(expiry));
+  await db.query("update phonebooks_team_private.stock_reservations set expires_at=clock_timestamp()-interval '1 second' where workspace_id=$1 and id=$2", [space, reservationId]);
+  assert.deepEqual((await tradeContext(owner, space)).holds, []);
+  await assert.rejects(tradeCommand(seller, space, id, 'sale', { reservationId, quantity: 1, unitPriceMinor: 350, accountId }), { code: 'PT409' });
+  await tradeCommand(seller, space, id, 'sale', { quantity: 2, unitPriceMinor: 450, accountId });
+  assert.equal((await feed(owner, space)).products[0].quantity, 0);
+});
+
+test('Solo transfers a live reservation and a corrected sale to the Team ledger once', async () => {
+  const owner = await employee();
+  const space = await workspace(owner);
+  const id = 'product:transfer-trade';
+  let state = createInitialState();
+  state.accounts[0].openingBalance = 100;
+  state.catalog = saveInventoryProduct(emptyInventory(), {
+    id, name: 'Комплектующие', categoryId: 'components', tracking: 'quantity', attributes: {},
+  });
+  function record(type, input) {
+    state = recordWarehouse(state, id, type, { accountId, position: state.warehouse?.length ?? 0, version: 1, ...input }, 10000);
+  }
+  record('purchase', { units: 3, unitMinor: 300 });
+  record('sale', { units: 2, unitMinor: 500 });
+  const sale = state.warehouse.at(-1).id;
+  record('customer_return', { units: 1, amountMinor: 500, originalId: sale, reason: 'Обмен' });
+  record('reserve', { units: 1, unitMinor: 700, buyer: 'Склад', expiresAt: new Date(Date.now() + 3600000).toISOString() });
+  const material = prepareSoloTransfer({ state });
+  const [imported] = await asUser(db, owner, 'select public.phonebooks_team_solo_import($1,$2,$3,$4,$5) as result',
+    [space, owner.sub, importKey, 'f'.repeat(64), material]);
+  assert.equal(imported.result.summary.reserved, 1);
+  const context = await tradeContext(owner, space, id);
+  assert.equal(context.reservations[0].quantity, 1);
+  assert.equal(context.originals.find(item => item.id === sale).leftUnits, 1);
+  await tradeCommand(owner, space, id, 'customer_return', { quantity: 1, amountMinor: 500, originalId: sale, reason: 'Возврат', accountId });
+  assert.equal((await feed(owner, space)).products[0].stockCostMinor, '900');
+  assert.equal((await feed(owner, space)).totals.revenue_minor, 0);
+});
