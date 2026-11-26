@@ -54,7 +54,10 @@ export function ocrReadings(data) {
     const text = words.map(word => word.text).join(' ');
     const numeric = words.filter(word => /\d{3}/.test(word.text) || /^[\d\s-]+$/.test(word.text));
     const confidence = numeric.length ? Math.min(...numeric.map(word => Number.isFinite(word.confidence) ? word.confidence : 0)) : 0;
-    return extractImeis(text).map(imei => ({ imei, confidence }));
+    return extractImeis(text).map(imei => {
+      const exact = numeric.find(word => word.text.trim() === imei && Number.isFinite(word.confidence));
+      return { imei, confidence: exact?.confidence ?? confidence };
+    });
   });
 }
 

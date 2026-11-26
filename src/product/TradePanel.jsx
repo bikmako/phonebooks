@@ -11,13 +11,14 @@ export const tradeLabels = {
   extend_reserve: 'Продлить', cancel_reserve: 'Отменить бронь',
 };
 const deadline = value => new Date(value).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
+const sourceKey = item => item.line == null ? item.id : `${item.id}:${item.line}`;
 
 function eligibleSource(item, kind) {
   if (kind === 'supplier_return') return item.type === 'purchase' && item.leftUnits > 0;
   if (item.type !== 'sale') return false;
   if (kind === 'compensation') return item.hasMoney ?? Number(item.leftMinor) > 0;
   if (kind === 'void_sale') return item.canVoid ?? (item.leftUnits === item.units && Number(item.leftMinor) === Number(item.amountMinor));
-  return item.leftUnits > 0;
+  return item.leftUnits > 0 && item.canReturn !== false;
 }
 
 export function TradePanel({ product, originals, reservations, accounts, allowed, busy, disabled, submit, initialAction, onAction }) {
@@ -30,7 +31,7 @@ export function TradePanel({ product, originals, reservations, accounts, allowed
   const available = Math.max(0, product.quantity - (product.reservedQuantity ?? product.reserved ?? 0));
   const sources = isReturn ? originals.filter(item => eligibleSource(item, kind)) : [];
   const returnActions = returnTypes.filter(key => allowed.includes(key));
-  const original = sources.find(item => item.id === originalId) ?? sources[0];
+  const original = sources.find(item => sourceKey(item) === originalId) ?? sources[0];
   const visible = kind === 'reserve' ? available > 0 && !product.inRepair : isReturn ? Boolean(original) : Boolean(booking);
 
   function start(next, reservationId) {
@@ -61,6 +62,7 @@ export function TradePanel({ product, originals, reservations, accounts, allowed
       if (kind === 'sale') Object.assign(command, { quantity: Number(values.get('quantity')), unitPriceMinor: Number(booking.unitMinor),
         accountId: values.get('accountId') });
       if (isReturn) Object.assign(command, { originalId: original.id,
+        ...(original.line == null ? {} : { originalLine: original.line }),
         quantity: kind === 'compensation' ? 0 : kind === 'void_sale' ? original.units : Number(values.get('quantity')),
         amountMinor: kind === 'void_sale'
           ? (original.amountMinor == null ? null : Number(original.amountMinor)) : parseMinor(values.get('amount')),
@@ -76,12 +78,12 @@ export function TradePanel({ product, originals, reservations, accounts, allowed
       {error && <p role="alert" className="pb-empty">{error}</p>}
       <fieldset disabled={disabled || busy}>
         {isReturn && <>
-          <label>Исходная операция<select className="input" value={original.id} onChange={event => setOriginalId(event.target.value)}>
-            {sources.map(item => <option value={item.id} key={item.id}>
-              {formatDate(item.date)} · {item.units} шт.{item.amountMinor != null && ' · ' + warehouseMoney(item.amountMinor)} · {item.id.slice(-8)}
+          <label>Исходная операция<select className="input" value={sourceKey(original)} onChange={event => setOriginalId(event.target.value)}>
+            {sources.map(item => <option value={sourceKey(item)} key={sourceKey(item)}>
+              {formatDate(item.date)} · {item.units} шт.{item.amountMinor != null && ' · ' + warehouseMoney(item.amountMinor)} · {item.id.slice(-8)}{item.line > 1 && ` · строка ${item.line}`}
             </option>)}
           </select></label>
-          <div className="pb-trade-fields" key={original.id}>
+          <div className="pb-trade-fields" key={sourceKey(original)}>
             {!['compensation', 'void_sale'].includes(kind) && <label>Количество<input className="input" name="quantity"
               type="number" min="1" max={kind === 'supplier_return' ? Math.min(original.leftUnits, available) : original.leftUnits} required defaultValue="1" /></label>}
             {(kind !== 'void_sale' || original.amountMinor != null) &&

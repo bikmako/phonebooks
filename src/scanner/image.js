@@ -75,6 +75,42 @@ export function cropCanvas(source, box, enhance = false) {
   return canvas;
 }
 
+export function alignText(source, angle = 0) {
+  const canvas = document.createElement('canvas');
+  canvas.width = source.width + 48;
+  canvas.height = source.height + 24;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  context.fillStyle = '#fff';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.translate(canvas.width / 2, canvas.height / 2);
+  context.rotate(angle);
+  context.drawImage(source, -source.width / 2, -source.height / 2);
+  return canvas;
+}
+
+export function crispText(canvas) {
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  const image = context.getImageData(0, 0, canvas.width, canvas.height);
+  const histogram = new Uint32Array(256);
+  for (let i = 0; i < image.data.length; i += 4) histogram[image.data[i]]++;
+  let count = 0, weight = 0, score = -1, threshold = 127;
+  const total = image.data.length / 4;
+  const sum = histogram.reduce((value, frequency, level) => value + frequency * level, 0);
+  for (let level = 0; level < 255; level++) {
+    count += histogram[level];
+    weight += histogram[level] * level;
+    if (!count || count === total) continue;
+    const variance = (weight / count - (sum - weight) / (total - count)) ** 2 * count * (total - count);
+    if (variance > score) { score = variance; threshold = level; }
+  }
+  for (let i = 0; i < image.data.length; i += 4) {
+    const value = image.data[i] <= threshold ? 0 : 255;
+    image.data[i] = image.data[i + 1] = image.data[i + 2] = value;
+  }
+  context.putImageData(image, 0, 0);
+  return canvas;
+}
+
 export function cameraFrame(video, { textOnly = false } = {}) {
   const full = imageCanvas(video, video.videoWidth, video.videoHeight);
   if (!textOnly) return full;

@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Pencil, Smartphone, Wrench } from 'lucide-react';
 import { setPhoneStatus } from '../../domain/phones.js';
+import { legacyHeld, phoneUnavailable } from '../../domain/legacyTradeState.js';
 import { useStore } from '../../hooks/useStore.jsx';
 import { PageTitle, SectionTitle, Status } from '../../product/ui.jsx';
+import { LegacyTradeDialog } from '../../product/LegacyTradeDialog.jsx';
 import { findCompletedSale, getPhoneRepairs, getPhoneTotalCost, getRepairTotal, getSaleProfit, getSaleRevenue } from '../../utils/calculations.js';
 import { PHONE_CONDITIONS, PHONE_STATUS_LABELS } from '../../utils/constants.js';
 import { formatDate, formatPreciseMoney } from '../../utils/format.js';
@@ -17,6 +19,8 @@ export function PhoneDetails({ phone: initialPhone, onClose, onEdit, onSell, onD
   const [tab, setTab] = useState('info');
   const [repairDialog, setRepairDialog] = useState(null);
   const [changing, setChanging] = useState(false);
+  const [trade, setTrade] = useState(false);
+  const held = legacyHeld(data, 'phone:' + phone.id);
   const sale = findCompletedSale(data, phone.id);
   const repairs = getPhoneRepairs(phone);
   const cost = getPhoneTotalCost(phone);
@@ -85,21 +89,23 @@ export function PhoneDetails({ phone: initialPhone, onClose, onEdit, onSell, onD
         <strong>{formatPreciseMoney(repair.amount)}</strong>
       </li>)}</ul> : <p className="pb-empty">Завершённых ремонтов пока нет.</p>}
     </section>}
-    {phone.status !== 'sold' && <>
+    {!phoneUnavailable(phone) && <>
       <div className="pb-actions pb-device-actions">
         {phone.status === 'repair' ? <button className="pb-action" onClick={() => setRepairDialog({})}><Wrench size={17} />Завершить ремонт</button>
           : <>
-            <button className="pb-action" onClick={() => onSell(phone.id)}>Продать</button>
-            <button className="pb-action pb-action-secondary" disabled={changing} onClick={() => changeStatus('repair')}><Wrench size={17} />Передать в ремонт</button>
+            <button className="pb-action" disabled={held > 0} onClick={() => onSell(phone.id)}>Продать</button>
+            <button className="pb-action pb-action-secondary" disabled={changing || held > 0} onClick={() => changeStatus('repair')}><Wrench size={17} />Передать в ремонт</button>
           </>}
         <button className="pb-action pb-action-secondary" onClick={() => onEdit(phone)}><Pencil size={17} />Изменить</button>
         <button className="pb-text-button pb-negative" onClick={() => onDelete(phone)}>Удалить</button>
       </div>
-      {phone.status !== 'repair' && <div className="pb-actions">
+      {phone.status !== 'repair' && !held && <div className="pb-actions">
         {['in_stock', 'reserved'].filter(status => status !== phone.status).map(status => <button className="pb-text-button" key={status}
           disabled={changing} onClick={() => changeStatus(status)}>{status === 'reserved' ? 'Перевести в резерв' : 'Вернуть на склад'}</button>)}
       </div>}
     </>}
+    <button type="button" className="pb-action pb-action-secondary" onClick={() => setTrade(true)}>Возвраты и бронирования</button>
+    {trade && <LegacyTradeDialog productId={'phone:' + phone.id} onClose={() => setTrade(false)} />}
     {repairDialog && <RepairModal phone={phone} {...repairDialog} onClose={() => setRepairDialog(null)} />}
   </section>;
 }

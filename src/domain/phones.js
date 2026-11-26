@@ -6,6 +6,7 @@
  */
 import { findCompletedSale } from "../utils/calculations.js";
 import { getRepairSessionId } from "./repairs.js";
+import { legacyCorrections, legacyHeld, phoneUnavailable } from './legacyTradeState.js';
 import { formatMoney, today } from "../utils/format.js";
 import {
   DomainError,
@@ -162,6 +163,7 @@ export function updatePhone(state, t) {
   assert(!a, "Телефон не найден");
   const c = state.phones.find((i) => i.id === t.id);
   assert(c, "Телефон не найден");
+  assert(!phoneUnavailable(c) && (!legacyHeld(state, 'phone:' + c.id) || n.status === c.status), 'Устройство недоступно для изменения статуса.');
   const r =
     c.purchasePrice !== n.purchasePrice ||
     c.purchaseAccountId !== n.purchaseAccountId;
@@ -188,7 +190,7 @@ export function setPhoneStatus(state, t, n) {
       "status",
     );
   assert(
-    a.status !== "sold",
+    !phoneUnavailable(a) && !legacyHeld(state, 'phone:' + a.id),
     "Проданный телефон нельзя вернуть в склад без отмены продажи",
     "status",
   );
@@ -225,6 +227,8 @@ export function setPhoneStatus(state, t, n) {
 export function deletePhone(state, t) {
   const n = state.phones.find((c) => c.id === t);
   assert(n, "Телефон не найден");
+  assert(!legacyHeld(state, 'phone:' + t) && !legacyCorrections(state, 'phone:' + t).length &&
+    !(state.legacyTrade ?? []).some(row => row.productId === 'phone:' + t), 'У устройства есть бронь или возврат.');
   const a = findCompletedSale(state, t);
   return (
     assert(

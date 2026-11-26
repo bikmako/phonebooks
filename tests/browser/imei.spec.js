@@ -54,6 +54,7 @@ async function choose(page, imei) {
 
 test('real OCR: dual-SIM screen, automatic filling, purchase persistence, editing and manual input', async ({ page, context }) => {
   await denyCamera(page); await ready(page);
+  const origin = new URL(page.url()).origin;
   const requests = [];
   context.on('request', request => requests.push({ url: request.url(), method: request.method() }));
   const before = await snapshot(page);
@@ -77,7 +78,7 @@ test('real OCR: dual-SIM screen, automatic filling, purchase persistence, editin
   await expect.poll(async () => (await snapshot(page)).state[0].phones[0]?.imei).toBe(second);
   expect((await snapshot(page)).state[0].phones[0].purchasePrice).toBe(1000);
   expect((await snapshot(page)).state[0].accounts).toEqual(before.state[0].accounts);
-  expect(requests.filter(r => /^https?:/.test(r.url) && (!r.url.startsWith('http://127.0.0.1:4173/') || r.method !== 'GET'))).toEqual([]);
+  expect(requests.filter(r => /^https?:/.test(r.url) && (new URL(r.url).origin !== origin || r.method !== 'GET'))).toEqual([]);
 });
 
 test('real OCR rejects incomplete, bad checksum, longer EID and ambiguous text; closing preserves manual entry', async ({ page }) => {

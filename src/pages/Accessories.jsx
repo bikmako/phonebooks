@@ -47,8 +47,10 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import React from "react";
+import { LegacyTradeDialog } from '../product/LegacyTradeDialog.jsx';
 
 export function AccessoriesPage({ initialProduct } = {}) {
+  const [trade, setTrade] = React.useState(null);
   const { data: s, period: t } = useStore(),
     [n, a] = React.useState(""),
     [c, r] = React.useState("all"),
@@ -338,6 +340,7 @@ export function AccessoriesPage({ initialProduct } = {}) {
                     <span className="accessories-action-label">Изменить</span>
                   </Button>
                 </div>
+                <Button size="sm" variant="ghost" onClick={() => setTrade(u.id)}>Возвраты и бронирования</Button>
               </article>
             );
           })}
@@ -369,6 +372,7 @@ export function AccessoriesPage({ initialProduct } = {}) {
       <AccessoryPurchaseModal open={p} presetItemId={A} onClose={() => w(!1)} />
       <AccessoryAdjustModal open={!!O} item={O} onClose={() => m(null)} />
       <AccessoryBatchHistoryModal open={!!f} item={f} onClose={() => C(null)} />
+      {trade && <LegacyTradeDialog productId={'accessory:' + trade} onClose={() => setTrade(null)} />}
     </PageTransition>
   );
 }

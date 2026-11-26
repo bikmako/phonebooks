@@ -21,6 +21,7 @@ import {
   Wrench,
 } from "lucide-react";
 export const PHONE_STATUS_LABELS = {
+  supplier_returned: 'Возвращён поставщику',
     in_stock: "На складе",
     reserved: "Резерв",
     repair: "Ремонт",

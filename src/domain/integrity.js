@@ -5,6 +5,7 @@
  * локальные имена переменных в теле функций оставлены как в бандле.
  */
 import { getAccountBalance } from "../utils/calculations.js";
+import { legacyCorrections } from './legacyTradeState.js';
 import { formatMoney } from "../utils/format.js";
 export function checkDataIntegrity(state) {
   const t = [],
@@ -19,7 +20,7 @@ export function checkDataIntegrity(state) {
       });
   const a = new Set();
   for (const i of state.sales) {
-    if (i.status !== "completed") continue;
+    if (i.status !== "completed" || legacyCorrections(state, 'sale:' + i.id).some(row => row.units)) continue;
     (a.has(i.phoneId) &&
       t.push({
         level: "error",

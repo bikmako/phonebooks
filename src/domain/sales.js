@@ -7,6 +7,7 @@
 import { findCompletedSale, getSaleRevenue, getPhoneTotalCost } from "../utils/calculations.js";
 import { formatMoney, today } from "../utils/format.js";
 import { normalizePhone } from "./phones.js";
+import { legacyCorrections, legacyHeld, phoneUnavailable } from './legacyTradeState.js';
 import {
   assert,
   assertNonNegative,
@@ -23,6 +24,7 @@ export function buildSale(state, t) {
   const n = state.phones.find((d) => d.id === t.phoneId);
   assert(n, "Выберите телефон со склада", "phoneId");
   const a = t.id ? state.sales.find((d) => d.id === t.id) : void 0;
+  assert(!a || !legacyCorrections(state, 'sale:' + a.id).length, 'Продажа связана с возвратом.');
   if (
     (t.id && assert(a, "Продажа не найдена"),
     !(
@@ -30,12 +32,13 @@ export function buildSale(state, t) {
       (a == null ? void 0 : a.status) === "completed"
     ))
   ) {
-    (assert(n.status !== "sold", "Этот телефон уже продан", "phoneId"),
+    (assert(!phoneUnavailable(n), "Этот телефон недоступен для продажи", "phoneId"),
       assert(
         n.status !== "repair",
         "Телефон в ремонте — продажа недоступна. Завершите ремонт.",
         "phoneId",
       ));
+    assert(!legacyHeld(state, 'phone:' + n.id, t.reservationId), 'Устройство забронировано. Продайте его из брони.', 'phoneId');
     const d = findCompletedSale(state, n.id);
     assert(
       !d || d.id === t.id,
@@ -157,6 +160,7 @@ export function updateSale(state, t) {
   );
 }
 export function cancelSale(state, t) {
+  assert(!legacyCorrections(state, 'sale:' + t).length, 'Продажа связана с возвратом.');
   const n = state.sales.find((r) => r.id === t);
   (assert(n, "Продажа не найдена"),
     assert(n.status === "completed", "Продажа уже отменена"));
@@ -199,6 +203,7 @@ export function restoreSale(state, t) {
   (assert(n, "Продажа не найдена"),
     assert(n.status === "cancelled", "Продажа не отменена"));
   const a = state.phones.find((i) => i.id === n.phoneId);
+  assert(a && !phoneUnavailable(a) && !legacyHeld(state, 'phone:' + a.id), 'Устройство недоступно для продажи.');
   assert(a, "Телефон не найден");
   assert(a.status !== "repair", "Телефон в ремонте — сначала завершите ремонт", "phoneId");
   const c = findCompletedSale(state, n.phoneId);

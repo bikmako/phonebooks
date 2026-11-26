@@ -1,6 +1,6 @@
 import { createWorker, PSM } from 'tesseract.js';
-import { ocrLines, ocrReadings, reliableOcr } from '../utils/imei.js';
-import { cropCanvas, rotateCanvas } from './image.js';
+import { extractImeis, ocrLines, ocrReadings, reliableOcr } from '../utils/imei.js';
+import { alignText, crispText, cropCanvas, rotateCanvas } from './image.js';
 import { ocrAssets, barcodeAssets } from './assets.js';
 
 export function createRecognizer(onProgress = () => {}) {
@@ -44,17 +44,16 @@ export function createRecognizer(onProgress = () => {}) {
     onProgress('Ищем IMEI…');
     const readings = [];
     let pass = 0;
-    async function read(image, psm, digits = false) {
+    async function read(image, psm, digits = false, corroborated) {
       check();
       await active.setParameters({ tessedit_pageseg_mode: psm, tessedit_char_whitelist: digits ? '0123456789 -' : '' });
       const { data } = await active.recognize(image, {}, { blocks: true, text: true });
       check();
-      readings.push(...ocrReadings(data).map(value => ({ ...value, pass })));
+      readings.push(...ocrReadings(data).filter(value => !corroborated || corroborated.includes(value.imei)).map(value => ({ ...value, pass })));
       pass++;
       return data;
     }
-    async function inspect(image) {
-      const data = await read(image, PSM.SPARSE_TEXT);
+    async function readRows(image, data, recover) {
       // Re-read actual text rows at a useful glyph height instead of dropping an
       // entire IMEI just because one small word received a low OCR confidence.
       const lines = ocrLines(data).filter(line => {
@@ -66,17 +65,34 @@ export function createRecognizer(onProgress = () => {}) {
         const words = line.words.filter(word => /\d{3}/.test(word.text) || /^[\d\s-]+$/.test(word.text));
         const boxes = words.map(word => word.bbox).filter(Boolean);
         if (!boxes.length) continue;
-        const box = { x0: Math.min(...boxes.map(b => b.x0)) - 12, y0: Math.min(...boxes.map(b => b.y0)) - 8,
-          x1: Math.max(...boxes.map(b => b.x1)) + 12, y1: Math.max(...boxes.map(b => b.y1)) + 8 };
+        const box = { x0: Math.min(...boxes.map(b => b.x0)) - 12, y0: Math.min(...boxes.map(b => b.y0)) - 12,
+          x1: Math.max(...boxes.map(b => b.x1)) + 12, y1: Math.max(...boxes.map(b => b.y1)) + 12 };
         await read(cropCanvas(image, box), PSM.SINGLE_LINE);
-        if (!reliableOcr(readings).length || !live) await read(cropCanvas(image, box, true), PSM.SINGLE_LINE, true);
-      }
-      if (!reliableOcr(readings).length || !live) {
-        const enhanced = cropCanvas(image, { x0: 0, y0: 0, x1: image.width, y1: image.height }, true);
-        await read(enhanced, PSM.AUTO);
+        if (!reliableOcr(readings).length || !live) {
+          const enhanced = cropCanvas(image, box, true);
+          await read(enhanced, PSM.SINGLE_LINE, true);
+          const corroborated = recover ? extractImeis(line.words.map(word => word.text).join(' ')) : [];
+          if (corroborated.length && !reliableOcr(readings).length) {
+            const sharp = crispText(cropCanvas(image, box, true));
+            for (const angle of [0, -.04, .04]) {
+              await read(alignText(enhanced, angle), PSM.SINGLE_LINE, true, corroborated);
+              if (reliableOcr(readings).length) break;
+              await read(alignText(sharp, angle), PSM.SINGLE_LINE, true, corroborated);
+              if (reliableOcr(readings).length) break;
+            }
+          }
+        }
       }
     }
-    await inspect(canvas);
+    async function inspect(image, recover = false) {
+      await readRows(image, await read(image, PSM.SPARSE_TEXT), recover);
+      if (!reliableOcr(readings).length || !live) {
+        const enhanced = cropCanvas(image, { x0: 0, y0: 0, x1: image.width, y1: image.height }, true);
+        const data = await read(enhanced, PSM.AUTO);
+        if (recover && !reliableOcr(readings).length && ocrReadings(data).length) await readRows(enhanced, data, true);
+      }
+    }
+    await inspect(canvas, !live);
     if (!live && !reliableOcr(readings).length) {
       let rotated = canvas;
       for (let i = 0; i < 3 && !reliableOcr(readings).length; i++) { rotated = rotateCanvas(rotated); await inspect(rotated); }

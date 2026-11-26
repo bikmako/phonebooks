@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 
 export async function teamDatabase() {
@@ -18,22 +18,9 @@ export async function teamDatabase() {
         select (auth.jwt()->>'sub')::uuid
       $$;
     `);
-    for (const file of [
-      '202611250001_phonebooks_team_workspaces',
-      '202611250002_phonebooks_team_invitations',
-      '202611250003_phonebooks_team_inventory',
-      '202611250004_phonebooks_team_cloud',
-      '202611250005_phonebooks_team_solo_import',
-      '202611250006_phonebooks_team_rbac',
-      '202611250007_phonebooks_team_enforce_rbac',
-      '202611250008_phonebooks_team_audit_stats',
-      '202611250009_phonebooks_resumable_transfer',
-      '202611250010_phonebooks_cloud_pagination',
-      '202611260011_phonebooks_product_operations',
-      '202611260012_phonebooks_warehouse',
-      '202611260013_phonebooks_returns_reservations',
-    ]) {
-      await db.exec(await readFile(new URL('../../supabase/migrations/' + file + '.sql', import.meta.url), 'utf8'));
+    const migrations = new URL('../../supabase/migrations/', import.meta.url);
+    for (const file of (await readdir(migrations)).filter(name => name.endsWith('.sql')).sort()) {
+      await db.exec(await readFile(new URL(file, migrations), 'utf8'));
     }
     return db;
   } catch (error) {

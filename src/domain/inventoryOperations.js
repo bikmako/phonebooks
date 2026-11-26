@@ -1,5 +1,6 @@
 import { reservationTypes, returnTypes } from './warehouseTrade.js';
-import { warehouseProjection } from './warehouse.js';
+import { warehouseEvents } from './warehouse.js';
+import { legacyPhoneCost } from './legacyTradeState.js';
 import { getAccessorySaleTotals } from './accessories.js';
 import { getPhoneTotalCost, getSaleRevenue } from '../utils/calculations.js';
 import { roundMoney } from '../utils/format.js';
@@ -72,9 +73,10 @@ export function projectInventoryOperations(state) {
     add({ id: 'sale:' + sale.id, type: 'sale', date: sale.date, groupId: 'sale:' + sale.id,
       status: posted ? 'posted' : 'cancelled', lines: [line(phoneProductId(sale.phoneId), 1, posted ? -1 : 0)],
       postings: posting(sale.accountId, revenueMinor), revenueMinor,
-      costMinor: posted && phone ? money(getPhoneTotalCost(phone)) : 0 });
+      costMinor: posted ? legacyPhoneCost(sale, phone) ?? 0 : 0 });
   }
   for (const batch of state.accessoryBatches) {
+    if (batch.fromReturn) continue;
     const purchase = batch.kind === 'purchase';
     add({ id: 'acc_batch:' + batch.id, type: purchase ? 'purchase' : 'stock_adjustment', date: batch.date,
       lines: [line(accessoryProductId(batch.itemId), batch.qty, batch.qty * (batch.kind === 'writeoff' ? -1 : 1))],
@@ -105,7 +107,7 @@ export function projectInventoryOperations(state) {
     add({ id: 'cash:' + cash.id, type: cash.kind, date: cash.date,
       postings: posting(cash.accountId, money(cash.amount) * (cash.kind === 'deposit' ? 1 : -1)) });
   }
-  for (const operation of warehouseProjection(state).operations) {
+  for (const operation of warehouseEvents(state)) {
     const correction = returnTypes.includes(operation.type);
     const reservation = reservationTypes.includes(operation.type);
     add({ id: operation.id,
@@ -116,6 +118,7 @@ export function projectInventoryOperations(state) {
       costMinor: operation.costMinor, expenseMinor: operation.expenseMinor });
     if (correction || reservation) Object.assign(operations.at(-1), {
       tradeMode: operation.type, returnMinor: correction ? operation.amountMinor : 0, reason: operation.reason ?? null,
+      ...(operation.originalLine ? { originalLine: operation.originalLine } : {}),
     });
   }
   return operations;

@@ -1,4 +1,5 @@
 import { assert, makeAuditEntry, withAudit } from './shared.js';
+import { legacyFinancialEvents } from './legacyTradeState.js';
 import { activeReservations, assertReturn, portion, reservationTypes, returnTypes } from './warehouseTrade.js';
 import { today } from '../utils/format.js';
 
@@ -166,6 +167,9 @@ export function warehouseStock(state, id, now) {
   const { products, bookings } = warehouseProjection(state);
   const reservations = activeReservations(bookings, id, now);
   return { ...(products.get(id) ?? empty), reservations, reservedQuantity: reservations.reduce((sum, item) => sum + item.quantity, 0) };
+}
+export function warehouseEvents(state) {
+  return [...warehouseProjection(state).operations, ...legacyFinancialEvents(state)];
 }
 function validateTradeEvent(event) {
   const { type, units, amountMinor } = event;

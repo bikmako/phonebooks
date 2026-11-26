@@ -1,4 +1,5 @@
 import { warehouseStock } from './warehouse.js';
+import { legacyHeld, phoneUnavailable } from './legacyTradeState.js';
 
 export const INVENTORY_VERSION = 2;
 export const INVENTORY_KEY = 'inventoryModel';
@@ -111,13 +112,14 @@ export function projectInventory(state, catalog = state.catalog ?? emptyInventor
   const phones = state.phones.map(phone => ({
     id: phoneProductId(phone.id), name: phone.model, categoryId: 'smartphones', tracking: 'unit',
     attributes: Object.fromEntries(STANDARD_CATEGORIES[0].attributes.map(({ id }) => [id, phone[id]])),
-    quantity: phone.status === 'sold' ? 0 : 1, reservedQuantity: phone.status === 'reserved' ? 1 : 0,
+    quantity: phoneUnavailable(phone) ? 0 : 1, reservedQuantity: legacyHeld(state, phoneProductId(phone.id)) || Number(phone.status === 'reserved'),
     status: phone.status, ...(phone.plannedPrice > 0 ? { plannedPriceMinor: Math.round(phone.plannedPrice * 100) } : {}),
   }));
   const accessories = state.accessoryItems.map(item => ({
     id: accessoryProductId(item.id), name: item.name, categoryId: 'accessories', tracking: 'quantity',
     attributes: { type: item.category, compatibility: item.compatibility, color: item.color },
-    quantity: quantities.get(item.id) ?? 0, reservedQuantity: 0, status: item.archived ? 'archived' : 'active', ...(item.salePrice > 0 ? { plannedPriceMinor: Math.round(item.salePrice * 100) } : {}),
+    quantity: quantities.get(item.id) ?? 0, reservedQuantity: legacyHeld(state, accessoryProductId(item.id)),
+    status: item.archived ? 'archived' : 'active', ...(item.salePrice > 0 ? { plannedPriceMinor: Math.round(item.salePrice * 100) } : {}),
   }));
   return {
     version: catalog.version, revision: catalog.revision, revisionId: catalog.revisionId,

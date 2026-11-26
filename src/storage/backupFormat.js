@@ -75,7 +75,7 @@ export function validateState(input, { legacy = false } = {}) {
   const repairIds = new Set();
   for (const row of state.phones) {
     ref(row.purchaseAccountId, 'accounts', 'phones.purchaseAccountId');
-    choice(row.status, ['in_stock', 'reserved', 'repair', 'sold'], 'phones.status');
+    choice(row.status, ['in_stock', 'reserved', 'repair', 'sold', 'supplier_returned'], 'phones.status');
     // Optional nested extension: old v1 phones and backups remain byte-for-byte
     // intact. No extra object store or duplicated expense/payment is created.
     if (row.repairSessionId !== undefined && row.repairSessionId !== null) {
@@ -135,6 +135,31 @@ export function validateState(input, { legacy = false } = {}) {
     }
   }
   if (state.catalog !== undefined) validateInventory(state.catalog);
+  if (state.legacyTrade !== undefined) {
+    if (!Array.isArray(state.legacyTrade)) fail('Неверный журнал возвратов и броней');
+    const products = new Set([...state.phones.map(row => 'phone:' + row.id), ...state.accessoryItems.map(row => 'accessory:' + row.id)]);
+    const seen = new Set();
+    for (const row of state.legacyTrade) {
+      if (!object(row) || typeof row.id !== 'string' || seen.has(row.id) || !products.has(row.productId)) fail('Неверная запись возврата или брони');
+      seen.add(row.id);
+      text(row.date, 'legacyTrade.date');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(row.date) || !Number.isFinite(Date.parse(row.date))) fail('Неверная дата возврата или брони');
+      if (row.type === 'reserve') {
+        if (!Number.isSafeInteger(row.quantity) || row.quantity < 0 || !Number.isSafeInteger(row.unitMinor) || row.unitMinor <= 0 ||
+          !Number.isFinite(Date.parse(row.expiresAt)) || !['active', 'cancelled', 'sold'].includes(row.status)) fail('Неверная бронь');
+        for (const key of ['buyer', 'contact', 'note']) text(row[key], 'legacyTrade.' + key);
+      } else {
+        choice(row.type, ['customer_return', 'supplier_return', 'void_sale', 'compensation'], 'legacyTrade.type');
+        for (const key of ['units','amountMinor','cashMinor','revenueMinor','costMinor','expenseMinor','stockDelta','originalLine'])
+          if (!Number.isSafeInteger(row[key])) fail('Неверная сумма или количество возврата');
+        for (const key of ['originalId', 'name', 'reason', 'createdAt']) text(row[key], 'legacyTrade.' + key);
+        if (row.amountMinor) ref(row.accountId, 'accounts', 'legacyTrade.accountId');
+        const supplier = row.type === 'supplier_return';
+        if (row.units < 0 || row.amountMinor < 0 || row.originalLine < 1 || row.cashMinor !== (supplier ? row.amountMinor : -row.amountMinor) ||
+          row.revenueMinor !== (supplier ? 0 : row.cashMinor) || row.stockDelta !== (supplier ? -row.units : row.units)) fail('Финансы возврата не сходятся');
+      }
+    }
+  }
   validateWarehouse(state);
   return state;
 }

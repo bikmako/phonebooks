@@ -292,3 +292,37 @@ test('Solo transfers a live reservation and a corrected sale to the Team ledger 
   assert.equal((await feed(owner, space)).products[0].stockCostMinor, '900');
   assert.equal((await feed(owner, space)).totals.revenue_minor, 0);
 });
+
+test('Team returns separately priced legacy receipt lines and rejects ambiguous discounts or costs', async () => {
+  const owner = await employee();
+  const space = await workspace(owner);
+  const state = realisticSnapshot().indexedDB.state[0].value;
+  const source = state.accessorySales[0];
+  source.discount = 0;
+  const material = prepareSoloTransfer({ state });
+  await asUser(db, owner, 'select public.phonebooks_team_solo_import($1,$2,$3,$4,$5)',
+    [space, owner.sub, importKey, 'c'.repeat(64), material]);
+  const ids = source.items.map(row => 'accessory:' + row.itemId);
+  const receipt = 'acc_sale:' + source.id;
+  const first = (await tradeContext(owner, space, ids[0])).originals.find(row => row.id === receipt);
+  const second = (await tradeContext(owner, space, ids[1])).originals.find(row => row.id === receipt);
+  assert.deepEqual([first.line, second.line, Number(second.amountMinor)], [1, 2, 140000]);
+  const correction = { originalId: receipt, originalLine: 2, quantity: 1, reason: 'Возврат строки',
+    amountMinor: 70000, accountId: source.accountId };
+  await assert.rejects(tradeCommand(owner, space, ids[0], 'customer_return', correction), { code: 'PT409' });
+  const { operationId } = await tradeCommand(owner, space, ids[1], 'customer_return', correction);
+  const [entry] = (await db.query('select cost_minor, request_payload from phonebooks_team_private.inventory_operations where workspace_id=$1 and id=$2',
+    [space, operationId])).rows;
+  assert.equal(Number(entry.cost_minor), -Math.round(source.items[1].unitCost * 100));
+  assert.equal(entry.request_payload.originalLine, 2);
+  assert.equal((await tradeContext(owner, space, ids[0])).originals.find(row => row.id === receipt).leftUnits, 2);
+  assert.equal((await tradeContext(owner, space, ids[1])).originals.find(row => row.id === receipt).leftUnits, 1);
+
+  const unpricedSpace = await workspace(owner);
+  const unpriced = prepareSoloTransfer({ state: realisticSnapshot().indexedDB.state[0].value });
+  await asUser(db, owner, 'select public.phonebooks_team_solo_import($1,$2,$3,$4,$5)',
+    [unpricedSpace, owner.sub, importKey, 'd'.repeat(64), unpriced]);
+  const ambiguous = unpriced.historicalDetails.accessorySales[0];
+  await assert.rejects(tradeCommand(owner, unpricedSpace, 'accessory:' + ambiguous.items[1].itemId, 'customer_return',
+    { ...correction, originalId: 'acc_sale:' + ambiguous.id, accountId: ambiguous.accountId }), { code: 'PT409' });
+});

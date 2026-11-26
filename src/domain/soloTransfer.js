@@ -1,4 +1,5 @@
 import { warehouseProjection } from './warehouse.js';
+import { phoneUnavailable } from './legacyTradeState.js';
 import { parseImportFile, safeJson, validateState } from '../storage/backupFormat.js';
 import { accessoryProductId, INVENTORY_KEY, phoneProductId, projectInventory, validateInventory } from './inventory.js';
 import { projectInventoryOperations, summarizeInventoryOperations } from './inventoryOperations.js';
@@ -28,10 +29,11 @@ export function prepareSoloTransfer(source) {
   const savedCatalog = state.catalog ?? source.catalog;
   const catalog = savedCatalog == null ? undefined : validateInventory(safeCatalog(savedCatalog));
   const inventory = projectInventory(state, catalog);
-  const reservations = [...warehouseProjection(state).bookings.values()]
+  const reservations = [...warehouseProjection(state).bookings.values(), ...(state.legacyTrade ?? []).filter(row => row.type === 'reserve')]
     .filter(item => item.status === 'active' && Date.parse(item.expiresAt) > Date.now());
   const products = new Map(inventory.products.map(item => [item.id,
-    item.id.startsWith('product:') ? { ...item, reservedQuantity: 0 } : item]));
+    { ...item, reservedQuantity: item.id.startsWith('phone:') && item.status === 'reserved' &&
+      !reservations.some(booking => booking.productId === item.id) ? 1 : 0 }]));
   const operations = projectInventoryOperations(state);
   for (const operation of operations) {
     for (const line of operation.lines) {
@@ -48,7 +50,7 @@ export function prepareSoloTransfer(source) {
   const warehouseLots = [...warehouseProjection(state).products.values()].flatMap(item => item.lots);
   const lots = [
     ...warehouseLots,
-    ...state.phones.filter(phone => phone.status !== 'sold').map(phone => ({
+    ...state.phones.filter(phone => !phoneUnavailable(phone)).map(phone => ({
       id: 'phone:' + phone.id, productId: phoneProductId(phone.id), quantity: 1,
       costMinor: minor(getPhoneTotalCost(phone)), date: phone.purchaseDate, createdAt: phone.createdAt,
     })),
@@ -73,7 +75,7 @@ export function prepareSoloTransfer(source) {
   if (totals.revenueMinor !== minor(legacy.revenue) || totals.costMinor !== minor(legacy.cogs) ||
     totals.netProfitMinor !== minor(legacy.netProfit)) throw new Error('Не совпали выручка, себестоимость или прибыль.');
   const stockCostMinor = lots.reduce((sum, lot) => sum + lot.costMinor, 0);
-  const legacyStockCost = state.phones.filter(phone => phone.status !== 'sold')
+  const legacyStockCost = state.phones.filter(phone => !phoneUnavailable(phone))
     .reduce((sum, phone) => sum + minor(getPhoneTotalCost(phone)), 0) + minor(getAccessoryStockValue(state)) + warehouseLots.reduce((sum, lot) => sum + lot.costMinor, 0);
   if (!Number.isSafeInteger(stockCostMinor) || stockCostMinor !== legacyStockCost) throw new Error('Не совпала себестоимость остатков.');
 
