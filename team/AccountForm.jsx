@@ -1,5 +1,4 @@
 import React, { useEffect, useRef } from 'react';
-import { PageTitle } from '../src/product/ui.jsx';
 
 let turnstileScript;
 function loadTurnstile() {
@@ -64,7 +63,27 @@ const actions = {
   reset: 'Продолжить восстановление',
 };
 
-export function AccountForm({ view, siteKey, busy, onSubmit, onView }) {
+const secondaryLinks = {
+  login: [['recover', 'Забыли пароль?'], ['register', 'Создать аккаунт'], ['resend', 'Отправить письмо подтверждения повторно']],
+  register: [['login', 'Ко входу']],
+  recover: [['login', 'Ко входу']],
+  resend: [['login', 'Ко входу']],
+  password: [['login', 'Ко входу']],
+  confirm: [['login', 'Ко входу'], ['resend', 'Отправить письмо подтверждения повторно']],
+  reset: [['login', 'Ко входу'], ['recover', 'Запросить новую ссылку']],
+};
+
+export function AuthLayout({ soloUrl, children }) {
+  return <main className="pb-auth">
+    <div className="pb-auth-content">
+      <p className="pb-auth-logo">PhoneBooks<span aria-hidden="true" /></p>
+      {children}
+      {soloUrl && <a className="pb-auth-solo" href={soloUrl} rel="noreferrer">Перейти в Solo</a>}
+    </div>
+  </main>;
+}
+
+export function AccountForm({ view, siteKey, busy, note, error, onSubmit, onView }) {
   const [captcha, setCaptcha] = React.useState('');
   const [attempt, setAttempt] = React.useState(0);
   const callback = view === 'confirm' || view === 'reset';
@@ -72,9 +91,11 @@ export function AccountForm({ view, siteKey, busy, onSubmit, onView }) {
   const needsPassword = ['register', 'login', 'password'].includes(view);
   const verify = needsEmail && Boolean(siteKey);
   return (
-    <section aria-label={labels[view]}>
-      <PageTitle title={labels[view]} />
-      <form onSubmit={async event => {
+    <section className="pb-auth-view" aria-labelledby="pb-auth-title">
+      <h1 id="pb-auth-title">{labels[view]}</h1>
+      {note && <p className="pb-auth-feedback" role="status">{note}</p>}
+      {error && <p className="pb-auth-feedback pb-auth-error" role="alert">{error}</p>}
+      <form aria-busy={busy} onSubmit={async event => {
         event.preventDefault();
         const values = Object.fromEntries(new FormData(event.currentTarget));
         await onSubmit(view, verify ? { ...values, captcha } : values);
@@ -89,12 +110,15 @@ export function AccountForm({ view, siteKey, busy, onSubmit, onView }) {
             minLength={view === 'login' ? 1 : 12} maxLength={72} required />
         </label>}
         {verify && <Challenge key={attempt} siteKey={siteKey} onToken={setCaptcha} />}
-        <button disabled={busy || (verify && !captcha)}>{actions[view]}</button>
+        <button className="pb-auth-primary" disabled={busy || (verify && !captcha)}>
+          {busy && <span className="pb-auth-spinner" aria-hidden="true" />}
+          {actions[view]}
+        </button>
       </form>
-      <nav className="account-nav" aria-label="Действия с аккаунтом">
-        {Object.entries({ login: 'Ко входу', register: 'Создать аккаунт', recover: 'Забыли пароль?', resend: 'Отправить письмо подтверждения повторно' })
-          .filter(([name]) => name !== view)
-          .map(([name, label]) => <button className="secondary" type="button" key={name} disabled={busy} onClick={() => onView(name)}>{label}</button>)}
+      {busy && <p className="pb-auth-progress" role="status">Обрабатываем запрос…</p>}
+      <nav className="pb-auth-links" aria-label="Действия с аккаунтом">
+        {secondaryLinks[view].map(([name, label]) =>
+          <button type="button" key={name} disabled={busy} onClick={() => onView(name)}>{label}</button>)}
       </nav>
     </section>
   );

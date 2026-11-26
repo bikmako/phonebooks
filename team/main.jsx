@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Plus, Settings, UsersRound } from 'lucide-react';
-import { AppShell, PageTitle, Wordmark } from '../src/product/ui.jsx';
-import { AccountForm } from './AccountForm.jsx';
+import { AppShell, PageTitle } from '../src/product/ui.jsx';
+import { AccountForm, AuthLayout } from './AccountForm.jsx';
 import { Workspaces } from './Workspaces.jsx';
 import { clearCloudRequests, CloudWorkspace } from './CloudWorkspace.jsx';
 import { TeamPanel } from './TeamPanel.jsx';
 import '../src/product/product.css';
 import './styles.css';
+import './auth.css';
 
 const callbackUrl = new URL(location.href);
 const callbackView = callbackUrl.searchParams.get('view');
@@ -181,14 +182,16 @@ function TeamApp() {
     {note && <p role="status" className="notice">{note}</p>}
     {error && <p role="alert" className="notice error">{error}</p>}
   </>;
-  if (!data || !ready) return <main className="pb-auth">
-    <header><Wordmark /><span className="pb-mode">Team</span></header>
-    {notices}
-    {!ready && <p role="status">Проверяем сессию…</p>}
-    {ready && !config && <button onClick={() => location.reload()}>Повторить подключение</button>}
-    {ready && config && <AccountForm key={view} view={view} siteKey={config.turnstileSiteKey} busy={busy} onSubmit={submitAuth} onView={changeView} />}
-    {config?.soloUrl && <a className="pb-mode-link" href={config.soloUrl}>Перейти в Solo</a>}
-  </main>;
+  if (!data || !ready) return <AuthLayout soloUrl={config?.soloUrl}>
+    {ready && config ? <AccountForm key={view} view={view} siteKey={config.turnstileSiteKey}
+      busy={busy} note={note} error={error} onSubmit={submitAuth} onView={changeView} />
+      : <div className="pb-auth-view">
+        {!ready ? <p className="pb-auth-feedback" role="status">Проверяем сессию…</p> : <>
+          <p className="pb-auth-feedback pb-auth-error" role="alert">{error}</p>
+          <button className="pb-auth-primary" onClick={() => location.reload()}>Повторить подключение</button>
+        </>}
+      </div>}
+  </AuthLayout>;
 
   const permissions = data.selected?.permissions ?? [];
   const enabled = sections.filter(section => {

@@ -1,17 +1,3 @@
-@font-face {
-  font-family: Manrope;
-  src: url('../src/fonts/manrope-cyrillic.woff2') format('woff2');
-  font-weight: 400 800;
-  font-display: swap;
-  unicode-range: U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;
-}
-@font-face {
-  font-family: Manrope;
-  src: url('../src/fonts/manrope-latin.woff2') format('woff2');
-  font-weight: 400 800;
-  font-display: swap;
-  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
-}
 :root { color-scheme: light; font-family: Manrope, system-ui, sans-serif; color: var(--pb-ink); background: var(--pb-bg); line-height: 1.5; }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -21,7 +7,7 @@ h2 { font-size: 19px; font-weight: 800; letter-spacing: -.045em; line-height: 1.
 h3 { font-size: 15px; font-weight: 800; margin-top: 16px; }
 p { overflow-wrap: anywhere; }
 a { color: inherit; text-underline-offset: .2em; }
-.pb-panel, .pb-team-admin > section, .pb-auth section, .pb-transfer > details {
+.pb-panel, .pb-team-admin > section, .pb-transfer > details {
   background: var(--pb-surface); border: 1px solid var(--pb-line); border-radius: var(--pb-radius); padding: clamp(14px, 3vw, 22px); min-width: 0;
 }
 .pb-team-admin { display: grid; gap: 12px; }
@@ -56,13 +42,6 @@ ul:not(.pb-list) > li { display: flex; align-items: center; justify-content: spa
 li div { overflow-wrap: anywhere; }
 .notice { padding: 10px 12px; border: 1px solid var(--pb-line); background: var(--pb-surface); border-left: 3px solid var(--pb-accent); border-radius: 7px; margin: 0 0 10px; font-size: 13px; }
 .error { border-color: #b14f4a; color: #822722; }
-.pb-auth { width: min(100% - 32px, 450px); margin: max(26px, var(--pb-safe-top)) auto max(24px, var(--pb-safe-bottom)); }
-.pb-auth header { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 34px; }
-.pb-auth .pb-mode-link { justify-content: center; margin-top: 12px; font-size: 13px; }
-.pb-auth .account-nav button { min-height: 39px; font-size: 12px; }
-.pb-auth form { margin-top: 18px; }
-.pb-auth form > button { width: 100%; }
-.pb-auth .pb-description { color: var(--pb-muted); }
 .pb-icon-button { position: relative; min-width: 39px; min-height: 39px; padding: 8px; border: 0; background: transparent; color: var(--pb-ink); }
 .pb-invite-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--pb-accent); position: absolute; inset: 6px 6px auto auto; }
 .pb-workspace > * + :is(section, .pb-actions) { margin-top: 20px; }
