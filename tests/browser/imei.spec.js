@@ -98,7 +98,7 @@ for (const type of ['code128', 'qrcode', 'ocr']) test(`real ${type} works locall
   });
   await context.setOffline(true);
   await page.reload();
-  await page.locator('main').getByRole('button', { name: 'Скупка', exact: true }).click();
+  await page.locator('main').getByRole('button', { name: 'Добавить устройство', exact: true }).click();
   await open(page);
   const fixture = type === 'ocr' ? await textImage(page, ['IMEI', first]) : {
     name: 'barcode.png', mimeType: 'image/png',
@@ -166,7 +166,7 @@ test('captured camera frame uses real OCR, releases camera and respects duplicat
   await page.locator('#model').fill('Original phone'); await page.locator('#price').fill('1000'); await page.locator('#imei').last().fill(first);
   await page.getByRole('button', { name: 'Купить телефон', exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).state[0].phones.length).toBe(1);
-  await page.locator('main').getByRole('button', { name: 'Скупка', exact: true }).click();
+  await page.locator('main').getByRole('button', { name: 'Добавить устройство', exact: true }).click();
   await page.locator('#model').fill('Duplicate phone'); await page.locator('#price').fill('1000');
   await open(page);
   await expect(page.locator('#imei').last()).toHaveValue(first, { timeout: 60000 });

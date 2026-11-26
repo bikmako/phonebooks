@@ -242,7 +242,10 @@ export function PurchaseForm({ phone: s, onDone: t, onCancel: n }) {
               inputMode="numeric"
               className={cx("font-mono tracking-wide")}
             />
-            <Button type="button" variant="secondary" aria-label="Сканировать IMEI" title="Сканировать IMEI" onClick={() => setScannerOpen(true)}>
+            <Button type="button" variant="secondary" aria-label="Сканировать IMEI" title="Сканировать IMEI" onClick={event => {
+              event.currentTarget.focus({ preventScroll: true });
+              setScannerOpen(true);
+            }}>
               <Camera size={20} />
             </Button>
           </div>

@@ -46,13 +46,23 @@ async function login(page, address, secret = password) {
   await expect(page.getByRole('heading', { name: 'Рабочие пространства' })).toBeVisible();
 }
 
+async function go(page, route) {
+  await page.evaluate(route => { location.hash = '/' + route; }, route);
+  await expect(page).toHaveURL(new RegExp('#/' + route + '$'));
+}
+
+const workData = page => page.getByRole('region', { name: 'Рабочие данные' });
+
 async function createWorkspace(page, name) {
+  await page.getByRole('button', { name: 'Рабочие пространства', exact: true }).click();
   await page.getByLabel('Название нового пространства').fill(name);
   await page.getByRole('button', { name: 'Создать пространство' }).click();
-  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/#\/dashboard$/);
+  await expect(workData(page).getByText('Подключено', { exact: true })).toBeVisible();
 }
 
 async function invite(page, email) {
+  await page.getByRole('button', { name: 'Рабочие пространства', exact: true }).click();
   await page.getByLabel('Почта сотрудника').fill(email);
   await page.getByRole('button', { name: 'Создать приглашение' }).click();
   await expect(page.getByRole('listitem').filter({ hasText: email })).toContainText('Ожидает');
@@ -69,7 +79,9 @@ test('registration, email verification, session refresh, other-session revocatio
     expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([]);
     await page.context().clearCookies({ name: '__Host-pb-access' });
     await page.reload();
-    await expect(page.getByText(address, { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Аккаунт', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Аккаунт', exact: true })).toBeVisible();
+    await expect(page.locator('main').getByText(address, { exact: true })).toBeVisible();
     expect((await page.context().cookies(team)).some(cookie => cookie.name === '__Host-pb-access')).toBe(true);
     const otherPage = await other.newPage();
     await login(otherPage, address);
@@ -104,6 +116,7 @@ test('workspace selection, invitation acceptance, revocation and user isolation'
     await register(page, uniqueEmail());
     await createWorkspace(page, 'Первый магазин');
     await createWorkspace(page, 'Второй магазин');
+    await go(page, 'team');
     await page.getByLabel('Выбрать пространство').selectOption({ label: 'Первый магазин · Владелец' });
     await expect(page.getByRole('heading', { name: 'Первый магазин', exact: true })).toBeVisible();
     await invite(page, receiver);
@@ -130,6 +143,8 @@ test('workspace selection, invitation acceptance, revocation and user isolation'
     await register(invited, receiver);
     await expect(invited.getByRole('heading', { name: 'Входящие приглашения' })).toBeVisible();
     await invited.getByRole('button', { name: 'Принять приглашение' }).click();
+    await expect(invited).toHaveURL(/#\/dashboard$/);
+    await go(invited, 'team');
     await expect(invited.getByRole('heading', { name: 'Первый магазин', exact: true })).toBeVisible();
     await expect(invited.getByText('Ваша роль — Сотрудник.')).toBeVisible();
     await expect(invited.getByText(outsider, { exact: true })).toHaveCount(0);
@@ -152,6 +167,8 @@ test('Solo keeps its local data and opens offline after switching to Team and ba
   await register(page, uniqueEmail());
   await createWorkspace(page, 'Облачный магазин');
   expect(await page.context().cookies(solo)).toEqual([]);
+  const more = page.getByRole('button', { name: 'Ещё', exact: true });
+  if (await more.isVisible()) await more.click();
   await page.getByRole('link', { name: 'Перейти в Solo' }).click();
   await expect(businessName).toHaveValue('Локальный магазин');
   await page.evaluate(() => navigator.serviceWorker.ready);
@@ -168,15 +185,16 @@ test('team sees confirmed stock changes and can recover after a committed sale l
   try {
     await register(page, owner);
     await createWorkspace(page, 'Рабочий склад');
-    const stock = page.getByRole('region', { name: 'Облачный склад' });
-    const type = stock.getByLabel('Тип операции');
+    const stock = workData(page);
     const submit = stock.getByRole('button', { name: 'Провести операцию' });
     await expect(stock.getByText('Подключено', { exact: true })).toBeVisible();
-    await type.selectOption('deposit');
+    await go(page, 'finance');
+    await stock.getByRole('button', { name: 'Пополнить счёт' }).click();
     await stock.getByLabel('Сумма, ₽').fill('1000');
     await submit.click();
-    await expect(stock.getByText('Операция подтверждена сервером. Ревизия 1.')).toBeVisible();
-    await type.selectOption('purchase');
+    await expect(stock.getByText('Операция подтверждена сервером.')).toBeVisible();
+    await go(page, 'purchase');
+    await stock.getByRole('button', { name: 'Добавить товар' }).click();
     await stock.getByLabel('Название товара').fill('Тестовый ноутбук');
     await stock.getByLabel('Цена за единицу, ₽').fill('200');
     await submit.click();
@@ -186,15 +204,19 @@ test('team sees confirmed stock changes and can recover after a committed sale l
     const staffPage = await staffContext.newPage();
     await register(staffPage, receiver);
     await staffPage.getByRole('button', { name: 'Принять приглашение' }).click();
-    const staffStock = staffPage.getByRole('region', { name: 'Облачный склад' });
+    await expect(staffPage).toHaveURL(/#\/dashboard$/);
+    const staffStock = workData(staffPage);
+    await go(staffPage, 'purchase');
     const staffProduct = staffStock.getByRole('listitem').filter({ hasText: 'Тестовый ноутбук' });
     await expect(staffProduct).toContainText('Остаток 1');
-    await expect(staffStock.getByRole('heading', { name: 'Касса и итоги предприятия' })).toHaveCount(0);
+    await expect(staffStock.getByRole('heading', { name: 'Касса и счета', exact: true })).toHaveCount(0);
     await staffPage.route('**/api/cloud/command', async route => {
       const response = await route.fetch();
       expect(response.ok()).toBe(true);
       await route.abort('failed');
     }, { times: 1 });
+    await go(staffPage, 'sales');
+    await staffStock.getByRole('button', { name: 'Оформить продажу' }).click();
     await staffStock.getByRole('combobox', { name: 'Товар', exact: true }).selectOption({ label: 'Тестовый ноутбук' });
     await staffStock.getByLabel('Цена за единицу, ₽').fill('340');
     await staffStock.getByRole('button', { name: 'Провести операцию' }).click();
@@ -204,12 +226,17 @@ test('team sees confirmed stock changes and can recover after a committed sale l
     await staffContext.setOffline(true);
     await expect(staffStock.getByText(/Нет интернета/)).toBeVisible();
     await expect(staffStock.getByRole('button', { name: 'Проверить операцию' })).toBeDisabled();
+    await go(staffPage, 'purchase');
     await expect(staffProduct).toBeVisible();
     await staffContext.setOffline(false);
     await staffStock.getByRole('button', { name: 'Проверить операцию' }).click();
-    await expect(staffStock.getByText('Операция подтверждена сервером. Ревизия 3.')).toBeVisible();
+    await expect(staffStock.getByText('Операция подтверждена сервером.')).toBeVisible();
+    await go(page, 'purchase');
     await expect(stock.getByRole('listitem').filter({ hasText: 'Тестовый ноутбук' })).toContainText('Остаток 0');
-    await expect(stock.getByText(/Продажи 1$/)).toBeVisible();
+    await go(page, 'sales');
+    await expect(stock.getByRole('heading', { name: 'Операции продаж' })).toBeVisible();
+    await stock.getByRole('button', { name: /Тестовый ноутбук/ }).click();
+    await expect(stock.getByText(/Валовая прибыль/).filter({ hasText: '140' })).toBeVisible();
   } finally {
     await staffContext.close();
   }
@@ -220,21 +247,27 @@ test('owner reviews a local Solo backup before an atomic import and can replay t
   const file = { name: 'solo.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(buildExportFile(data))) };
   await register(page, uniqueEmail());
   await createWorkspace(page, 'Перенос склада');
-  const stock = page.getByRole('region', { name: 'Облачный склад' });
+  const stock = workData(page);
   await expect(stock.getByText('Подключено', { exact: true })).toBeVisible();
+  await go(page, 'settings');
   await stock.getByText('Перенос из Solo', { exact: true }).click();
   const input = stock.getByLabel('Резервная копия Solo');
   const confirm = stock.getByRole('button', { name: 'Подтвердить перенос' });
   await input.setInputFiles(file);
   await expect(stock.getByText(/Карточки: 5\./)).toBeVisible();
+  await go(page, 'purchase');
   await expect(stock.getByText('Склад пуст.')).toBeVisible();
+  await go(page, 'settings');
   await confirm.click();
   await expect(stock.getByText('Сервер подтвердил перенос и сверку данных.')).toBeVisible();
+  await go(page, 'purchase');
   await expect(stock.getByRole('listitem').filter({ hasText: 'Чехол' })).toContainText('Остаток');
+  await go(page, 'settings');
   await input.setInputFiles([]);
   await input.setInputFiles(file);
   await confirm.click();
   await expect(stock.getByText('Сервер подтвердил ранее завершённый перенос.')).toBeVisible();
+  await go(page, 'purchase');
   await expect(stock.getByRole('listitem').filter({ hasText: 'Чехол' })).toHaveCount(1);
 });
 
@@ -264,21 +297,25 @@ test('large Solo backup resumes after a reload without reuploading an acknowledg
   });
   await register(page, uniqueEmail());
   await createWorkspace(page, 'Большой перенос');
-  const stock = page.getByRole('region', { name: 'Облачный склад' });
+  const stock = workData(page);
   const open = async () => {
     await expect(stock.getByText('Подключено', { exact: true })).toBeVisible();
+    await go(page, 'settings');
     await stock.getByText('Перенос из Solo', { exact: true }).click();
     await stock.getByLabel('Резервная копия Solo').setInputFiles(file);
     await stock.getByRole('button', { name: 'Подтвердить перенос' }).click();
   };
   await open();
   await expect(stock.getByRole('alert')).toContainText('Повторите перенос той же копии');
+  await go(page, 'purchase');
   await expect(stock.getByText('Склад пуст.')).toBeVisible();
+  await go(page, 'settings');
   await page.reload();
   await open();
   await expect(stock.getByText('Сервер подтвердил перенос и сверку данных.')).toBeVisible({ timeout: 30_000 });
   expect(positions.filter(position => position === 0)).toHaveLength(1);
   expect(positions.filter(position => position === 1)).toHaveLength(2);
+  await go(page, 'purchase');
   await expect(stock.getByRole('listitem').filter({ hasText: 'Чехол' })).toHaveCount(1);
 });
 
@@ -297,8 +334,9 @@ test('cancelling before server publication leaves Team empty and allows restarti
   });
   await register(page, uniqueEmail());
   await createWorkspace(page, 'Отмена переноса');
-  const stock = page.getByRole('region', { name: 'Облачный склад' });
+  const stock = workData(page);
   await expect(stock.getByText('Подключено', { exact: true })).toBeVisible();
+  await go(page, 'settings');
   await stock.getByText('Перенос из Solo', { exact: true }).click();
   await stock.getByLabel('Резервная копия Solo').setInputFiles({ name: 'solo.json', mimeType: 'application/json', buffer });
   const confirm = stock.getByRole('button', { name: 'Подтвердить перенос' });
@@ -311,7 +349,9 @@ test('cancelling before server publication leaves Team empty and allows restarti
     allowCommit = true;
     release();
   }
+  await go(page, 'purchase');
   await expect(stock.getByText('Склад пуст.')).toBeVisible();
+  await go(page, 'settings');
   await confirm.click();
   await expect(stock.getByText('Сервер подтвердил перенос и сверку данных.')).toBeVisible();
 });
@@ -323,16 +363,19 @@ test('owner creates and assigns a reusable role, denies sensitive access live an
     await register(page, uniqueEmail());
     await createWorkspace(page, 'Команда без управляющего');
     const panel = page.getByRole('region', { name: 'Команда', exact: true });
-    const stock = page.getByRole('region', { name: 'Облачный склад' });
-    await stock.getByLabel('Тип операции').selectOption('deposit');
+    const stock = workData(page);
+    await go(page, 'finance');
+    await stock.getByRole('button', { name: 'Пополнить счёт' }).click();
     await stock.getByLabel('Сумма, ₽').fill('100');
     await stock.getByRole('button', { name: 'Провести операцию' }).click();
-    await expect(stock.getByText(/Ревизия 1/)).toBeVisible();
-    await stock.getByLabel('Тип операции').selectOption('purchase');
+    await expect(stock.getByText('Операция подтверждена сервером.')).toBeVisible();
+    await go(page, 'purchase');
+    await stock.getByRole('button', { name: 'Добавить товар' }).click();
     await stock.getByLabel('Название товара').fill('Телефон для проверки прав');
     await stock.getByLabel('Цена за единицу, ₽').fill('20');
     await stock.getByRole('button', { name: 'Провести операцию' }).click();
     await expect(stock.getByRole('listitem').filter({ hasText: 'Телефон для проверки прав' })).toBeVisible();
+    await go(page, 'team');
     await panel.getByText('Роли и права доступа', { exact: true }).click();
     await panel.getByLabel('Название роли').fill('Продавец');
     await panel.getByRole('checkbox', { name: 'Просмотр товаров', exact: true }).check();
@@ -348,9 +391,15 @@ test('owner creates and assigns a reusable role, denies sensitive access live an
     const staff = await staffContext.newPage();
     await register(staff, staffEmail);
     await staff.getByRole('button', { name: 'Принять приглашение' }).click();
-    const staffStock = staff.getByRole('region', { name: 'Облачный склад' });
+    await expect(staff).toHaveURL(/#\/dashboard$/);
+    const staffStock = workData(staff);
+    await expect(staff).toHaveURL(/#\/dashboard$/);
+    await go(staff, 'team');
     await expect(staff.getByText('Ваша роль — Продавец.')).toBeVisible();
-    await expect(staffStock.getByRole('heading', { name: 'Касса и итоги предприятия' })).toBeVisible();
+    await go(staff, 'finance');
+    await expect(staffStock.getByRole('heading', { name: 'Касса и счета', exact: true })).toBeVisible();
+    await go(staff, 'sales');
+    await staffStock.getByRole('button', { name: 'Оформить продажу' }).click();
     await expect(staffStock.getByRole('button', { name: 'Провести операцию' })).toBeVisible();
     await staff.route('**/api/cloud/command', route => route.abort('failed'), { times: 1 });
     await staffStock.getByRole('combobox', { name: 'Товар', exact: true }).selectOption({ label: 'Телефон для проверки прав' });
@@ -363,8 +412,8 @@ test('owner creates and assigns a reusable role, denies sensitive access live an
     await panel.getByRole('combobox', { name: 'Просмотр кассы', exact: true }).selectOption('false');
     await panel.getByRole('combobox', { name: 'Оформление продаж', exact: true }).selectOption('false');
     await panel.getByRole('button', { name: 'Сохранить доступ сотрудника', exact: true }).click();
-    await expect(staffStock.getByRole('heading', { name: 'Касса и итоги предприятия' })).toHaveCount(0, { timeout: 12_000 });
-    await expect(staffStock.getByRole('button', { name: 'Провести операцию' })).toHaveCount(0);
+    await expect(staffStock.getByRole('heading', { name: 'Касса и счета', exact: true })).toHaveCount(0, { timeout: 12_000 });
+    await expect(staffStock.getByRole('button', { name: 'Провести операцию' })).toHaveCount(0, { timeout: 12_000 });
     await expect(staffStock.getByRole('button', { name: 'Проверить операцию' })).toHaveCount(0);
     expect(await staff.evaluate(() => Object.keys(sessionStorage).filter(key => key.startsWith('phonebooks.team.pending:')))).toEqual([]);
     await panel.getByText('Журнал действий', { exact: true }).click();

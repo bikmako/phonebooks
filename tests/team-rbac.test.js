@@ -166,3 +166,46 @@ test('delegated invitations and access management cannot grant beyond the caller
   await manage(owner,space,'revoke_member',{userId:delegate.sub,revision:1});
   await assert.rejects(rpc(receiver,'accept_invitation',pending),{code:'PT403'});
 });
+
+test('product repair start is versioned and replayable, and history applies field permissions', async () => {
+  const [owner, staff, outsider] = await Promise.all([person(), person(), person()]);
+  const space = await spaceFor(owner);
+  const limited = roleId();
+  await role(owner, space, limited, ['stock.read', 'finance.history.read']);
+  await invite(owner, space, staff, limited);
+  await command(owner, space, { type: 'deposit', accountId: cash, amountMinor: 10000 });
+  await command(owner, space, {
+    type: 'purchase', accountId: cash, quantity: 1, unitPriceMinor: 3000,
+    name: 'В ремонте', categoryId: 'smartphones', tracking: 'unit',
+  });
+  const [product] = (await feed(owner, space)).products;
+  const start = { type: 'repair_start', productId: product.id, expectedVersion: product.version };
+  await assert.rejects(command(staff, space, start), { code: 'PT403' });
+  const request = randomUUID();
+  const receipt = await command(owner, space, start, request);
+  assert.deepEqual(await command(owner, space, start, request), receipt);
+  await assert.rejects(command(owner, space, start), { code: 'PT409' });
+  const [inRepair] = (await feed(owner, space)).products;
+  assert.equal(inRepair.inRepair, true);
+  assert.equal(inRepair.quantity, 1);
+  assert.equal(inRepair.stockCostMinor, '3000');
+  await assert.rejects(command(owner, space, {
+    type: 'sale', productId: product.id, expectedVersion: inRepair.version,
+    accountId: cash, unitPriceMinor: 9000, quantity: 1,
+  }), { code: 'PT409' });
+  await command(owner, space, {
+    type: 'repair', productId: product.id, expectedVersion: inRepair.version, amountMinor: 500, accountId: cash,
+  });
+  const history = (caller, sku, kind = null) => rpc(caller, 'operation_history', space, caller.sub, sku, kind, null, null, 0);
+  const repairs = await history(owner, product.id, 'repair');
+  assert.deepEqual(repairs.items.map(item => item.type), ['repair', 'repair_start']);
+  assert.equal(repairs.items[0].postings[0].amountMinor, '-500');
+  assert.equal(repairs.items[1].products[0].quantity, 1);
+  assert.equal((await history(staff, product.id)).items[0].postings, undefined);
+  await assert.rejects(history(staff, null, 'cash'), { code: 'PT403' });
+  await assert.rejects(history(outsider, product.id), { code: 'PT403' });
+  assert.deepEqual((await history(owner, null, 'cash')).flow, { inMinor: '10000', outMinor: '3500', netMinor: '6500' });
+  await assign(owner, space, staff, limited, 1, { 'stock.read': false });
+  await assert.rejects(history(staff, product.id), { code: 'PT403' });
+  assert.ok((await history(staff, null)).items.every(item => !item.products && !item.postings));
+});

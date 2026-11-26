@@ -325,7 +325,7 @@ test('unsaved repair confirmation can be cancelled without losing fields or data
   await seed(page); await ready(page, request);
   await page.goto('./#/purchase');
   const phone = page.locator('main').getByText('iPhone 14').filter({ visible: true }).first();
-  await phone.click(); await page.getByRole('button', { name: 'Ремонт', exact: true }).click();
+  await phone.click(); await page.getByRole('button', { name: 'Передать в ремонт', exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).state[0].phones[2].status).toBe('repair');
   await phone.click(); await page.getByRole('button', { name: 'Завершить ремонт', exact: true }).click();
   const amount = page.locator('#repair-amount'); await amount.fill('1234');
