@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5.0" />
-    <meta name="theme-color" content="#f5f7fb" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f7f5f1" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#191816" media="(prefers-color-scheme: dark)" />
     <meta name="color-scheme" content="light dark" />
     <meta name="description" content="PhoneBooks — простая бухгалтерия для бизнеса по скупке и продаже смартфонов: склад, касса, прибыль по каждому телефону." />
     <title>PhoneBooks — бухгалтерия скупки смартфонов</title>
@@ -23,9 +23,9 @@
 
     <style>
       /* Первый экран до загрузки React — без белой вспышки */
-      html, body { background: #f5f7fb; margin: 0; }
+      html, body { background: #f7f5f1; margin: 0; }
       @media (prefers-color-scheme: dark) {
-        html, body { background: #0b1220; }
+        html, body { background: #191816; }
       }
       #boot {
         position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
@@ -33,13 +33,11 @@
       }
       #boot .mark {
         width: 44px; height: 44px; border-radius: 13px;
-        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+        background: #1d1d1b;
         display: flex; align-items: center; justify-content: center;
         box-shadow: 0 8px 24px -8px rgba(37, 99, 235, .5);
-        animation: pulse 1.4s ease-in-out infinite;
       }
       #boot .mark svg { width: 22px; height: 22px; color: #fff; }
-      @keyframes pulse { 0%,100% { transform: scale(1); opacity: 1 } 50% { transform: scale(.94); opacity: .85 } }
     </style>
     <!-- Точка входа исходного проекта; при сборке Vite подставит хэшированные ассеты -->
     <script type="module" src="/src/main.jsx"></script>
@@ -53,7 +51,7 @@
     <div id="boot" aria-hidden="true">
       <div class="mark">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
-          <path d="M4 19V10M10 19V5M16 19v-7M22 19v-3" />
+          <path d="M12 4v16M5 8l14 8M5 16l14-8" />
         </svg>
       </div>
     </div>

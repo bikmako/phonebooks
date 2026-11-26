@@ -46,7 +46,7 @@ export function AppShell({ route, navigate, mode, switchUrl, onSwitch, identity,
     return () => viewport.removeEventListener('resize', resize);
   }, []);
   const items = routes.filter(([id]) => enabled.includes(id));
-  const current = route === 'accessories' ? 'purchase' : route;
+  const current = ['accessories', 'catalog'].includes(route) ? 'purchase' : route;
   const mainRoutes = ['dashboard', 'purchase', 'finance'];
   const moreActive = !mainRoutes.includes(current);
   const modeLink = switchUrl && <a className="pb-mode-link" href={switchUrl} rel="noreferrer" onClick={onSwitch}>Перейти в {mode === 'Solo' ? 'Team' : 'Solo'}<ChevronRight size={15} /></a>;

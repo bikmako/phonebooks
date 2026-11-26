@@ -8,6 +8,7 @@ export const ROUTES = [
   "dashboard",
   "purchase",
   "accessories",
+  "catalog",
   "sales",
   "repairs",
   "finance",

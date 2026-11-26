@@ -32,9 +32,10 @@ export function AppLayout({ route, hideTitle, onNavigate, onQuickAction, childre
       eyebrow={dashboard ? 'Обзор' : undefined} description={dashboard ? 'Учёт скупки, продаж и ремонтов' : undefined}
       action={<button className="pb-action pb-desktop-add" type="button" onClick={onQuickAction}><Plus size={17} />Новая операция</button>} /></div>}
     <div key={route}>
-      {['purchase', 'accessories'].includes(route) && <nav className="pb-tabs pb-stock-sections" aria-label="Разделы склада">
+      {['purchase', 'accessories', 'catalog'].includes(route) && <nav className="pb-tabs pb-stock-sections" aria-label="Разделы склада">
         <button aria-current={route === 'purchase' ? 'page' : undefined} onClick={() => onNavigate('purchase')}>Смартфоны</button>
         <button aria-current={route === 'accessories' ? 'page' : undefined} onClick={() => onNavigate('accessories')}>Аксессуары</button>
+        <button aria-current={route === 'catalog' ? 'page' : undefined} onClick={() => onNavigate('catalog')}>Другие товары</button>
       </nav>}
       {children}
     </div>

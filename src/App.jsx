@@ -9,6 +9,7 @@ import { QuickActionSheet } from "./components/QuickActionSheet.jsx";
 import { cx } from "./components/ui.jsx";
 import { useStore } from "./hooks/useStore.jsx";
 import { AccessoriesPage } from "./pages/Accessories.jsx";
+import { CatalogPage } from "./pages/Catalog.jsx";
 import { DashboardPage } from "./pages/Dashboard.jsx";
 import { FinancePage } from "./pages/Finance.jsx";
 import { HistoryPage } from "./pages/History.jsx";
@@ -67,6 +68,8 @@ export function App() {
               }}
             />
           );
+        case "catalog":
+          return <CatalogPage />;
         case "accessories":
           return <AccessoriesPage />;
         case "sales":
