@@ -5,7 +5,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, resolve, sep } from "node:path";
 import worker from "../../server/team-worker.js";
-import { nodeHandler } from "./node-http.js";
+import { nodeHandler } from "../../server/node-http.js";
 import { asUser, seedSession, seedUser, teamDatabase, testImportKey } from "./team-database.js";
 
 const db = await teamDatabase();

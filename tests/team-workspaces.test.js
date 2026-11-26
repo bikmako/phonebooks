@@ -3,6 +3,28 @@ import { randomUUID } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import { asUser as runAsUser, seedSession, seedUser as insertUser, teamDatabase } from './support/team-database.js';
 import { crossModeUrl } from '../src/utils/modeUrl.js';
+import worker from '../server/team-worker.js';
+
+test('Team email actions use the Team origin on a shared Auth project', async (t) => {
+  const requests = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    requests.push(new URL(url));
+    return Response.json({});
+  });
+
+  const origin = 'https://team.phonebooks.test';
+  const env = { SUPABASE_URL: 'https://auth.phonebooks.test', SUPABASE_PUBLISHABLE_KEY: 'test-key' };
+  for (const action of ['register', 'resend', 'recover']) {
+    const response = await worker.fetch(new Request(origin + '/api/auth/' + action, {
+      method: 'POST',
+      headers: { Origin: origin, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'team@phonebooks.test', password: 'a-fixture-password', redirect_to: 'https://other.test/' }),
+    }), env);
+    assert.equal(response.status, 200);
+  }
+  assert.deepEqual(requests.map(({ pathname }) => pathname), ['/auth/v1/signup', '/auth/v1/resend', '/auth/v1/recover']);
+  assert.deepEqual(requests.map(url => url.searchParams.get('redirect_to')), Array(3).fill(origin + '/'));
+});
 
 let db;
 

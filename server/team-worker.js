@@ -259,7 +259,8 @@ async function authRoute(path, body, env, request, cookies) {
   };
   if (!Object.hasOwn(operations, path)) throw new HttpError(404, "Страница не найдена.");
   const [operation, extra] = operations[path];
-  const result = await auth(env, operation, { body: { email: address, ...extra(), ...challenge } });
+  const redirect = new URLSearchParams({ redirect_to: new URL("/", request.url).href });
+  const result = await auth(env, operation + "?" + redirect, { body: { email: address, ...extra(), ...challenge } });
   if (!result.response.ok) {
     // Keep account existence out of public registration and recovery responses.
     if (result.response.status >= 500 || result.response.status === 429 || result.data.error_code === "captcha_failed") {

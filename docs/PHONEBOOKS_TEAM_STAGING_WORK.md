@@ -67,6 +67,12 @@ select cron.schedule('phonebooks-prune-transfers', '15 * * * *',
 2. Установить тексты подтверждения и восстановления из `supabase/templates/confirmation.html` и `supabase/templates/recovery.html`. Ссылки с `TokenHash` открывают `/?view=confirm` или `/?view=reset` на Team. Приложение подтверждает действие после клика пользователя.
 3. Настроить имеющийся SMTP в Auth. Нужны разрешённый адрес отправителя, хост, порт и учётные данные провайдера. Проверить доставку на отдельные тестовые ящики. Если SMTP доступен только после платного подключения или нет разрешения на домен отправителя, зафиксировать ограничение. Встроенная почта Supabase имеет ограничения для внешних адресатов. [Supabase SMTP](https://supabase.com/docs/guides/auth/auth-smtp), [шаблоны Auth](https://supabase.com/docs/guides/auth/auth-email-templates)
 
+Если проект Auth используется прежним стендом аккаунтов, сохранить его Site URL и текущие шаблоны. Добавить точный HTTPS-адрес Team с завершающим слешем в Redirect URLs. Team передаёт этот адрес как `redirect_to` при регистрации, повторной отправке и восстановлении. В каждом шаблоне ветка `{{ if eq .RedirectTo "https://team-staging.example/" }}` формирует письмо Team со ссылкой на `{{ .RedirectTo }}?view=confirm#{{ .TokenHash }}` или `?view=reset#{{ .TokenHash }}`. Ветка `{{ else }}` сохраняет прежнее письмо. Заменить адрес в условии точным адресом Team staging и проверить оба направления.
+
+### Запуск Team на Render
+
+Использовать отдельный Web Service с планом Free и веткой `feat/phonebooks-2-solo-team`. Команда сборки `npm ci --include=dev && npm run build:team`, команда запуска `node server/render-team-staging.js`. Render передаёт `RENDER_EXTERNAL_URL` и `PORT`. Задать ключ publishable, секрет переноса, адрес Solo staging и при необходимости публичный ключ Turnstile. Адаптер вызывает тот же Worker и использует тот же Supabase staging. Отдельная БД и диск на Render не нужны. SMTP обслуживает Supabase Auth.
+
 ## 4. Приёмка перед пилотом
 
 - **Auth.** Регистрация и письмо, ссылка после использования и истечения, восстановление пароля, вход, выход, завершение других сессий. Проверить в реальном почтовом ящике и со второго устройства.
