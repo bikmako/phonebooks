@@ -5,6 +5,8 @@ import { App } from "./App.jsx";
 import { StoreProvider } from "./hooks/useStore.jsx";
 import { initTheme } from "./hooks/useTheme.jsx";
 import "./styles/app.css";
+import "./product/product.css";
+import "./product/solo.css";
 import { startUpdates } from "./updates/service.js";
 
 // Убираем splash с первого экрана сразу после первого кадра (как в готовой сборке).

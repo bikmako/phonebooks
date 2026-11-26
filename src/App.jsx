@@ -54,8 +54,11 @@ export function App() {
     O = React.useMemo(() => {
       switch (a.route) {
         case "purchase":
+        case "repairs":
           return (
             <PurchasePage
+              key={a.route}
+              repairMode={a.route === "repairs"}
               formOpen={o}
               onOpenForm={() => l(!0)}
               onCloseForm={() => l(!1)}
@@ -97,7 +100,7 @@ export function App() {
     }, [a.route, o, d, v]);
   return s ? (
     <Fragment>
-      <AppLayout route={a.route} onNavigate={w} onQuickAction={() => i(!0)}>
+      <AppLayout route={a.route} hideTitle={a.route === "purchase" && o} onNavigate={w} onQuickAction={() => i(!0)}>
         {O}
       </AppLayout>
       <QuickActionSheet

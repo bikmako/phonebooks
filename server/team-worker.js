@@ -312,12 +312,17 @@ function cloudRoute(path, body) {
 }
 
 function teamRoute(path, body) {
-  const { p_workspace, p_actor, p_action, p_input, p_member, p_kind, p_from, p_to, p_offset } = body;
+  const { p_workspace, p_actor, p_action, p_input, p_member, p_kind, p_from, p_to, p_offset, p_product } = body;
   if (typeof p_workspace !== "string" || typeof p_actor !== "string") throw new HttpError(400, "Проверьте параметры пространства.");
   const scope = { p_workspace, p_actor };
   if (path === "/api/team/members") return ["members", scope];
   if (path === "/api/team/manage" && typeof p_action === "string" && p_input && typeof p_input === "object" && !Array.isArray(p_input)) {
     return ["manage", { ...scope, p_action, p_input }];
+  }
+  if (path === "/api/team/operations" &&
+      [p_product, p_kind, p_from, p_to].every(value => value === null || typeof value === "string") &&
+      Number.isSafeInteger(p_offset)) {
+    return ["operation_history", { ...scope, p_product, p_kind, p_from, p_to, p_offset }];
   }
   if ([p_member, p_from, p_to].every(value => value === null || typeof value === "string")) {
     const range = { ...scope, p_member, p_from, p_to };

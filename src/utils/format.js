@@ -24,6 +24,7 @@ export function formatAmount(s) {
       : moneyFormatterPrecise.format(s)
     : "0";
 }
+export const formatPreciseMoney = value => formatAmount(value) + " ₽";
 export function formatCompactMoney(s) {
   const t = Math.abs(s);
   return t >= 1e6

@@ -1,9 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Plus, Settings, UsersRound } from 'lucide-react';
+import { AppShell, PageTitle, Wordmark } from '../src/product/ui.jsx';
 import { AccountForm } from './AccountForm.jsx';
 import { Workspaces } from './Workspaces.jsx';
 import { clearCloudRequests, CloudWorkspace } from './CloudWorkspace.jsx';
 import { TeamPanel } from './TeamPanel.jsx';
+import '../src/product/product.css';
 import './styles.css';
 
 const callbackUrl = new URL(location.href);
@@ -15,10 +18,18 @@ async function api(path, body) {
   const response = await fetch('/api/' + path, body === undefined ? { cache: 'no-store' } : {
     method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   }).catch(() => { throw new Error('Нет соединения с PhoneBooks Team. Попробуйте ещё раз.'); });
-  const data = await response.json();
-  if (!response.ok) throw Object.assign(new Error(data.error), { status: response.status });
+  const data = await response.json().catch(() => null);
+  if (!response.ok || !data) {
+    const message = response.status < 500 && data?.error ? data.error
+      : response.status === 403 ? 'У вас нет доступа к этому действию.'
+      : 'Сервис временно недоступен. Попробуйте ещё раз.';
+    throw Object.assign(new Error(message), { status: response.status });
+  }
   return data;
 }
+
+const sections = ['dashboard', 'purchase', 'sales', 'repairs', 'finance', 'history', 'team', 'settings'];
+const readRoute = () => sections.includes(location.hash.slice(2)) ? location.hash.slice(2) : 'dashboard';
 
 function TeamApp() {
   const [config, setConfig] = useState(null);
@@ -29,8 +40,22 @@ function TeamApp() {
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
   const [inviteLink, setInviteLink] = useState('');
+  const [route, setRoute] = useState(readRoute);
+  const [addRequest, setAddRequest] = useState(0);
   const working = useRef(false);
   const selectedId = useRef('');
+
+  function navigate(next) {
+    location.hash = '/' + next;
+    setRoute(next);
+    window.scrollTo(0, 0);
+  }
+
+  useEffect(() => {
+    const change = () => { setRoute(readRoute()); window.scrollTo(0, 0); };
+    window.addEventListener('hashchange', change);
+    return () => window.removeEventListener('hashchange', change);
+  }, []);
 
   function clearWorkspace() {
     selectedId.current = '';
@@ -132,6 +157,7 @@ function TeamApp() {
     create: (name, requestId) => run(async () => {
       const [workspace] = await api('workspaces/create', { p_name: name, p_request_id: requestId });
       await loadWorkspaces(workspace.id);
+      navigate('dashboard');
     }),
     invite: (email, role) => run(async () => {
       await api('invitations/create', { p_workspace_id: data.selected.id, p_email: email, p_role: role });
@@ -142,6 +168,7 @@ function TeamApp() {
     accept: id => run(async () => {
       const workspaceId = await api('invitations/accept', { p_invitation_id: id });
       await loadWorkspaces(workspaceId);
+      navigate('dashboard');
     }),
     revoke: id => run(async () => {
       await api('invitations/revoke', { p_workspace_id: data.selected.id, p_invitation_id: id });
@@ -150,20 +177,48 @@ function TeamApp() {
     }),
   };
 
-  return (
-    <main>
-      <header>
-        <h1>PhoneBooks Team</h1>
-        {config?.soloUrl && <a href={config.soloUrl} rel="noreferrer">Перейти в Solo</a>}
-      </header>
-      {note && <p role="status" className="notice">{note}</p>}
-      {error && <p role="alert" className="notice error">{error}</p>}
-      {!ready && <p role="status">Проверяем сессию…</p>}
-      {ready && !config && <button onClick={() => location.reload()}>Повторить подключение</button>}
-      {ready && config && (data ? <>
-        <section aria-label="Сессия">
-          <p>{data.account.email}</p>
-          <div className="account-nav">
+  const notices = <>
+    {note && <p role="status" className="notice">{note}</p>}
+    {error && <p role="alert" className="notice error">{error}</p>}
+  </>;
+  if (!data || !ready) return <main className="pb-auth">
+    <header><Wordmark /><span className="pb-mode">Team</span></header>
+    {notices}
+    {!ready && <p role="status">Проверяем сессию…</p>}
+    {ready && !config && <button onClick={() => location.reload()}>Повторить подключение</button>}
+    {ready && config && <AccountForm key={view} view={view} siteKey={config.turnstileSiteKey} busy={busy} onSubmit={submitAuth} onView={changeView} />}
+    {config?.soloUrl && <a className="pb-mode-link" href={config.soloUrl}>Перейти в Solo</a>}
+  </main>;
+
+  const permissions = data.selected?.permissions ?? [];
+  const enabled = sections.filter(section => {
+    if (section === 'team' || section === 'settings') return true;
+    if (!data.selected) return false;
+    if (section === 'purchase') return permissions.includes('stock.read');
+    if (section === 'sales') return permissions.some(permission => ['trade.sale', 'finance.history.read', 'analytics.company', 'analytics.self'].includes(permission));
+    if (section === 'repairs') return permissions.includes('stock.read') || permissions.includes('finance.history.read');
+    if (section === 'finance') return permissions.some(permission => ['finance.cash.read', 'finance.history.read', 'finance.deposit', 'analytics.company', 'analytics.self'].includes(permission));
+    if (section === 'history') return permissions.includes('finance.history.read');
+    return true;
+  });
+  const active = enabled.includes(route) ? route : data.selected ? 'dashboard' : 'team';
+  const mayAdd = permissions.includes('stock.read') && permissions.includes('trade.purchase');
+  const add = mayAdd ? () => { navigate('purchase'); setAddRequest(value => value + 1); } : undefined;
+  return <AppShell route={active} navigate={navigate} mode="Team" identity={data.selected?.name ?? data.account.email}
+    enabled={enabled} switchUrl={config.soloUrl} onAdd={add}
+    tools={<>
+      <button className="pb-icon-button" onClick={() => navigate('team')} aria-label="Рабочие пространства"><UsersRound size={19} />
+        {data.incoming.length > 0 && <span className="pb-invite-dot" />}
+      </button>
+      <button className="pb-icon-button" onClick={() => navigate('settings')} aria-label="Аккаунт"><Settings size={19} /></button>
+    </>}>
+    {notices}
+    {active === 'settings' && <>
+      <PageTitle title="Настройки" />
+      <div className="pb-panel" aria-label="Сессия">
+        <h2>Аккаунт</h2>
+        <p>{data.account.email}</p>
+        <div className="account-nav">
             <button className="secondary" disabled={busy} onClick={() => run(async () => {
               await api('auth/logout-others', {});
               setNote('Другие сессии завершены.');
@@ -174,17 +229,20 @@ function TeamApp() {
               clearWorkspace();
               setView('login');
             })}>Выйти</button>
-          </div>
-        </section>
-        <Workspaces key={accountId} data={data} busy={busy} inviteLink={inviteLink} actions={actions} />
-        {data.selected && <CloudWorkspace key={accountId + ':' + data.selected.id + ':' + data.selected.role}
-          workspace={data.selected} actor={accountId} api={api}
-          onAccessChanged={() => void run(loadWorkspaces, { refresh: true, quiet: true })} />}
-        {data.selected && <TeamPanel key={'team:' + accountId + ':' + data.selected.id}
-          workspace={data.selected} actor={accountId} api={api} onChanged={() => void loadWorkspaces().catch(() => {})} />}
-      </> : <AccountForm key={view} view={view} siteKey={config.turnstileSiteKey} busy={busy} onSubmit={submitAuth} onView={changeView} />)}
-    </main>
-  );
+        </div>
+      </div>
+    </>}
+    {active === 'team' && <PageTitle title="Команда" description={data.selected?.name} />}
+    <div hidden={active !== 'team'} className="pb-team-admin">
+      <Workspaces key={accountId} data={data} busy={busy} inviteLink={inviteLink} actions={actions} />
+      {data.selected && <TeamPanel key={'team:' + accountId + ':' + data.selected.id}
+        workspace={data.selected} actor={accountId} api={api} onChanged={() => void loadWorkspaces().catch(() => {})} />}
+    </div>
+    {data.selected && <CloudWorkspace key={accountId + ':' + data.selected.id + ':' + data.selected.role}
+      workspace={data.selected} actor={accountId} api={api} route={active} navigate={navigate}
+      addRequest={addRequest} onAdd={add}
+      onAccessChanged={() => void run(loadWorkspaces, { refresh: true, quiet: true })} />}
+  </AppShell>;
 }
 
 createRoot(document.getElementById('root')).render(<TeamApp />);

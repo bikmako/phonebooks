@@ -1,0 +1,79 @@
+body, html.dark body { background: var(--pb-bg); color: var(--pb-ink); }
+:root, :root.dark {
+  --canvas: var(--pb-bg); --surface: var(--pb-surface);
+  --ink-900: var(--pb-ink); --ink-700: var(--pb-ink); --ink-500: var(--pb-muted); --ink-400: var(--pb-muted);
+  --brand: #8a6a06; --grid: var(--pb-line); --shadow-card: none;
+  --shadow-float: 0 10px 32px #15141017;
+}
+.pb-overview-wordmark, .pb-desktop-add { display: none; }
+.pb-text-button { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; font-size: 12px; font-weight: 750; }
+.pb-text-button:hover { text-decoration: underline; text-underline-offset: 3px; }
+.pb-overview-actions { margin-top: 20px; }
+.pb-positive, .pb-metric > .pb-positive { color: var(--pb-good); }
+.pb-negative, .pb-metric > .pb-negative { color: #a13631; }
+.dark .pb-negative { color: #ffa29a; }
+.card, .dark .card, .card:hover { background: var(--pb-surface); border-color: var(--pb-line); border-radius: var(--pb-radius); box-shadow: none; transform: none; }
+.btn-primary, .btn-primary:hover, .btn-success, .btn-success:hover {
+  background: var(--pb-primary); color: var(--pb-on-primary); border-radius: 8px; box-shadow: none; transform: none;
+}
+.btn-secondary { background: var(--pb-surface); border-radius: 8px; }
+.bg-white, .dark .bg-white, .bg-white\/95, .dark .bg-white\/95 { background-color: var(--pb-surface); }
+[class*="bg-gradient-to-"] { background-image: none; background-color: var(--pb-primary); }
+[class*="backdrop-blur"] { backdrop-filter: none; -webkit-backdrop-filter: none; }
+.bg-slate-50, .bg-slate-100, .dark .bg-slate-50, .dark .bg-slate-100 { background-color: var(--pb-panel); }
+.border-slate-100, .border-slate-200, .dark .border-slate-100, .dark .border-slate-200 { border-color: var(--pb-line); }
+.text-brand-600, .text-brand-700, .dark .text-brand-600, .dark .text-brand-700 { color: var(--pb-ink); }
+.bg-brand-50, .dark .bg-brand-50 { background: var(--pb-warn-bg); }
+.bg-brand-600, .dark .bg-brand-600, .chip-active, .dark .chip-active { background: var(--pb-primary); color: var(--pb-on-primary); }
+.pb-stock-form { max-width: 680px; margin-inline: auto; }
+.pb-stock-form .pb-back { margin-bottom: 14px; }
+.pb-back { margin-top: 10px; }
+.pb-stock-tabs { margin-top: 12px; }
+.pb-form-actions { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+.pb-sales-toolbar { justify-content: space-between; }
+.pb-stock-list .pb-row { padding-block: 7px; }
+.pb-stock-list .pb-row-end strong { margin-top: 3px; }
+.pb-stock-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
+.pb-stock-controls > :first-child { flex: 1 1 200px; }
+.pb-stock-controls select { padding-inline: 8px; min-height: 44px; border: 1px solid var(--pb-line); border-radius: 8px; background: var(--pb-surface); }
+.pb-stock-controls label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.pb-device-title { font-size: 26px; font-weight: 800; letter-spacing: -.06em; overflow-wrap: anywhere; }
+.pb-device-title::after { content: ''; display: inline-block; margin-left: 9px; width: 2px; height: .85em; background: var(--pb-accent); transform: skew(-20deg); }
+.pb-finance-chart { margin-bottom: 20px; }
+.pb-finance-flow > div { display: flex; justify-content: space-between; gap: 14px; padding: 8px 2px; border-bottom: 1px solid var(--pb-line); }
+.pb-finance-flow dt { font-size: 13px; }
+.pb-finance-flow dd { font-weight: 800; text-align: end; }
+@media (min-width: 900px) {
+  .pb-overview-wordmark { display: inline; }
+  .pb-overview-label { display: none; }
+  .pb-heading .pb-desktop-add { display: inline-flex; }
+}
+@media (max-width: 899px) {
+  .pb-heading .pb-desktop-add { display: none; }
+}
+
+.pb-content:has(.pb-phone-detail) .pb-layout-heading,
+.pb-content:has(.pb-phone-detail) .pb-stock-sections { display: none; }
+.pb-phone-detail { max-width: 700px; }
+.pb-phone-detail > .pb-back { margin-bottom: 15px; }
+.pb-phone-detail > .pb-heading { margin-bottom: 4px; }
+.pb-device-caption { color: var(--pb-muted); font-size: 14px; margin: 0 0 8px; }
+.pb-device-tabs { margin-block: 18px 14px; }
+.pb-device-actions { margin: 18px 0 8px; }
+.pb-phone-detail .pb-finance-flow dd { min-width: 0; overflow-wrap: anywhere; }
+
+@media (max-width: 639px) {
+  .pb-content:has(.accessories-page) { padding-top: 12px; }
+  .pb-content:has(.accessories-page) .pb-layout-heading {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+  .pb-content:has(.accessories-page) .pb-stock-sections { margin-bottom: 8px; }
+  .accessories-page { --accessories-gap: 7px; }
+}
+html:not(.dark) :is(.bg-brand-50\/50, .bg-brand-50\/60, .bg-brand-50\/70) { background-color: var(--pb-panel); }
+html:not(.dark) :is(.border-brand-100, .border-brand-200, .border-emerald-200) { border-color: var(--pb-line); }
+@media (max-width: 639px) {
+  .pb-content:has(.accessories-page) { padding-top: 8px; }
+  .accessories-page { --accessories-gap: 5px; }
+  .accessories-page .accessories-list-heading { margin-top: 0; }
+}

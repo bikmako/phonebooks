@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { formatMinor as money } from './CloudReports.jsx';
 
 const groups = ['Склад', 'Торговые операции', 'Ремонт', 'Финансы', 'Аналитика', 'Данные', 'Управление командой'];
 const actions = {
-  purchase: 'Закупка', sale: 'Продажа', repair: 'Ремонт', expense: 'Расход', deposit: 'Пополнение кассы',
+  purchase: 'Закупка', sale: 'Продажа', repair: 'Завершение ремонта', repair_start: 'Передача в ремонт', expense: 'Расход', deposit: 'Пополнение кассы',
   stock_adjustment: 'Корректировка остатка', 'product.edit': 'Редактирование товара', 'role.create': 'Создание роли',
   'role.edit': 'Изменение роли', 'role.archive': 'Архивирование роли', 'member.role': 'Назначение роли',
   'member.permission': 'Изменение индивидуального права', 'member.revoke': 'Отзыв доступа',
@@ -14,7 +15,6 @@ const metrics = {
   grossMinor: 'Валовая прибыль', netMinor: 'Чистая прибыль предприятия', expenses: 'Расходные операции',
   expensesMinor: 'Сумма расходов', repairs: 'Ремонты', cashMinor: 'Текущая касса', stockMinor: 'Текущая стоимость склада',
 };
-const money = value => new Intl.NumberFormat('ru', { style: 'currency', currency: 'RUB' }).format(Number(value) / 100);
 const initialFilter = { member: '', from: '', to: '', kind: '' };
 const parameters = filter => ({ p_member: filter.member || null, p_from: filter.from || null, p_to: filter.to || null });
 

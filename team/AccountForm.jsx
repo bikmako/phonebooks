@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { PageTitle } from '../src/product/ui.jsx';
 
 let turnstileScript;
 function loadTurnstile() {
@@ -71,8 +72,8 @@ export function AccountForm({ view, siteKey, busy, onSubmit, onView }) {
   const needsPassword = ['register', 'login', 'password'].includes(view);
   const verify = needsEmail && Boolean(siteKey);
   return (
-    <section aria-labelledby="account-title">
-      <h2 id="account-title">{labels[view]}</h2>
+    <section aria-label={labels[view]}>
+      <PageTitle title={labels[view]} />
       <form onSubmit={async event => {
         event.preventDefault();
         const values = Object.fromEntries(new FormData(event.currentTarget));

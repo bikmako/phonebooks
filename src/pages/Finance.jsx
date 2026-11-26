@@ -28,7 +28,11 @@ import { deleteCashOp } from "../domain/cashOps.js";
 import { deleteExpense } from "../domain/expenses.js";
 import { deleteTransfer } from "../domain/transfers.js";
 import { useStore } from "../hooks/useStore.jsx";
+import { FinanceChart } from "../product/FinanceChart.jsx";
+import { Metrics, PeriodSelect, SectionTitle } from "../product/ui.jsx";
 import { getAccountBalances, getStats } from "../utils/calculations.js";
+import { getChartData } from "../utils/chartData.js";
+import { getAllOperations } from "../utils/operations.js";
 import {
   ACCESSORY_CATEGORY_LABELS,
   EXPENSE_CATEGORY_SHORT,
@@ -38,15 +42,20 @@ import {
   formatCompactMoney,
   formatDate,
   formatMoney,
+  formatPreciseMoney,
   getPeriod,
+  inPeriod,
   plural,
+  roundMoney,
 } from "../utils/format.js";
 import {
   ArrowDownLeft,
   ArrowLeftRight,
   ArrowUpRight,
   Banknote,
+  ChartNoAxesCombined,
   ChevronDown,
+  Coins,
   Landmark,
   Pencil,
   Plus,
@@ -89,7 +98,7 @@ export const EXPENSE_PRESETS = [
   },
 ];
 export function FinancePage({ initialTab: s }) {
-  const { data: t, mutate: n, notify: a } = useStore(),
+  const { data: t, mutate: n, notify: a, period, setPeriod } = useStore(),
     [c, r] = React.useState(s ?? "accounts"),
     [i, o] = React.useState(null),
     [l, d] = React.useState(null),
@@ -101,8 +110,15 @@ export function FinancePage({ initialTab: s }) {
     [S, g] = React.useState(0),
     b = React.useMemo(() => getAccountBalances(t), [t]),
     B = b.reduce((k, F) => k + F.balance, 0),
-    y = React.useMemo(() => getStats(t, getPeriod("month")), [t]),
-    j = React.useMemo(() => getAccessoryStats(t, getPeriod("month")), [t]),
+    range = React.useMemo(() => getPeriod(period), [period]),
+    y = React.useMemo(() => getStats(t, range), [t, range]),
+    j = React.useMemo(() => getAccessoryStats(t, range), [t, range]),
+    timeline = React.useMemo(() => getChartData(t, period), [t, period]),
+    flow = React.useMemo(() => getAllOperations(t).filter(operation => inPeriod(operation.date, range)).reduce((totals, operation) => {
+      if (operation.moneyEffect > 0) totals.income += operation.moneyEffect;
+      if (operation.moneyEffect < 0) totals.outcome -= operation.moneyEffect;
+      return totals;
+    }, { income: 0, outcome: 0 }), [t, range]),
     u = React.useMemo(
       () =>
         [...t.expenses].sort((k, F) =>
@@ -186,6 +202,24 @@ export function FinancePage({ initialTab: s }) {
     };
   return (
     <div className="space-y-4">
+      <PeriodSelect value={period} onChange={setPeriod} />
+      <Metrics items={[
+        { label: "Выручка", value: formatPreciseMoney(y.revenue), Icon: Coins },
+        { label: "Расходы с себестоимостью", value: formatPreciseMoney(roundMoney(y.cogs + y.opex + y.writeOff)), Icon: Receipt },
+        { label: "Чистая прибыль", value: formatPreciseMoney(y.netProfit), Icon: ChartNoAxesCombined },
+      ]} />
+      <section className="pb-finance-chart">
+        <SectionTitle>Динамика</SectionTitle>
+        <FinanceChart data={timeline} series={[{ key: "income", label: "Выручка" }, { key: "profit", label: "Чистая прибыль" }]} />
+      </section>
+      <section>
+        <SectionTitle>Движение денежных средств</SectionTitle>
+        <dl className="pb-finance-flow">
+          <div><dt>Приходы</dt><dd>{formatPreciseMoney(roundMoney(flow.income))}</dd></div>
+          <div><dt>Расходы</dt><dd>{formatPreciseMoney(roundMoney(flow.outcome))}</dd></div>
+          <div><dt>Изменение остатков</dt><dd>{formatPreciseMoney(y.cashFlow)}</dd></div>
+        </dl>
+      </section>
       <Card className="overflow-hidden">
         <div className="bg-gradient-to-br from-brand-600 to-brand-700 px-4 py-4 text-white sm:px-5">
           <p className="text-[11.5px] font-medium text-white/60">Всего денег</p>
@@ -238,7 +272,7 @@ export function FinancePage({ initialTab: s }) {
       {(t.accessoryItems.length > 0 || y.accSalesCount > 0) && (
         <Card className="card-pad">
           <p className="text-[12px] font-semibold text-ink-500">
-            Аксессуары · за месяц
+            Аксессуары · {range.label.toLowerCase()}
           </p>
           <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12.5px] sm:grid-cols-4">
             <span className="text-ink-500">

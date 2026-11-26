@@ -41,7 +41,7 @@ export function SaleForm({
   onDone: n,
   onCancel: a,
 }) {
-  const { data: c, mutate: r, notify: i } = useStore(),
+  const { data: c, mutatePersisted: r, notify: i } = useStore(),
     o = c.accounts.filter((P) => !P.archived),
     l = c.phones.find((P) => P.id === t),
     d = React.useRef(!1),
@@ -189,10 +189,10 @@ export function SaleForm({
     nn = s
       ? !!x.phoneId && M > 0 && !ie && !!x.accountId && ee > 0
       : ((qt && ee > 0) || cs) && !!x.accountId,
-    an = () => {
+    an = async () => {
       var H;
       L(!0);
-      const P = r(
+      const P = await r(
         s
           ? (me) => updateSale(me, x)
           : (me) =>
@@ -590,7 +590,7 @@ export function SaleForm({
           rows={2}
         />
       </Field>
-      <div className="sticky bottom-0 -mx-5 flex gap-2 border-t border-slate-100 bg-white px-5 pb-[max(16px,env(safe-area-inset-bottom))] pt-3">
+      <div className="pb-form-actions flex gap-2 border-t border-slate-100 pt-3">
         <Button variant="secondary" className="flex-1" onClick={a}>
           Отмена
         </Button>
