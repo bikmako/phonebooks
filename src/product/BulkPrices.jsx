@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { parseMinor } from '../domain/warehouse.js';
 import { PageTitle } from './ui.jsx';
 import { warehouseMoney } from './WarehouseFields.jsx';
@@ -58,6 +59,7 @@ export function BulkPrices({ products, categories = [], canPrice = true, canEdit
   const display = (value, kind) => kind === 'price' ? warehouseMoney(value)
     : value == null ? '—' : typeof value === 'boolean' ? (value ? 'Да' : 'Нет') : String(value);
   return <section aria-label="Массовое редактирование" className="pb-catalog-form pb-bulk">
+    <button className="pb-action pb-action-secondary pb-warehouse-back" disabled={busy} onClick={onClose}><ArrowLeft size={16} />К складу</button>
     <PageTitle title="Массовое редактирование" />
     {error && <p role="alert">{error}</p>}
     {undo && <p role="status">Изменено товаров: {undo.rows.length}</p>}
@@ -94,8 +96,7 @@ export function BulkPrices({ products, categories = [], canPrice = true, canEdit
           </select> : <input className="input" value={value} maxLength={200} type={field.type === 'number' ? 'number' : 'text'}
             step={field.type === 'number' ? 'any' : undefined} onChange={event => setValue(event.target.value)} />}</label>}
       </fieldset>
-      <button className="pb-action" disabled={busy || disabled || !selected.length || (!price && !field)}>Предпросмотр изменений</button>
+      <button type="submit" className="pb-action" disabled={busy || disabled || !selected.length || (!price && !field)}>Предпросмотр изменений</button>
     </form>}
-    <button className="pb-action pb-action-secondary" disabled={busy} onClick={onClose}>К складу</button>
   </section>;
 }

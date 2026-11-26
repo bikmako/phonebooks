@@ -345,7 +345,7 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
               defaultValue={type === 'sale' ? priceInput(selection?.plannedPriceMinor) : undefined} required /></label>
             <label>Счёт<select name="accountId" required>{data.accounts.filter(item => !item.archived).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
           </>}
-          <button disabled={type === 'purchase' && !selection && !permissions.includes('stock.create')}>
+          <button type="submit" disabled={type === 'purchase' && !selection && !permissions.includes('stock.create')}>
             {sending ? 'Ожидаем подтверждения…' : 'Провести операцию'}<ArrowRight size={16} />
           </button>
         </fieldset>

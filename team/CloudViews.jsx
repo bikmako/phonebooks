@@ -66,7 +66,7 @@ export function TeamStock({ products, categories, repairs, onOpen, onCreate, onC
       </button></li>;
     })}</ul> : <p className="pb-empty">{!active.length ? (repairs ? 'В ремонте пока нет устройств.' : 'Склад пуст.') : 'Товары с такими параметрами не найдены.'}</p>}
     {matches.length > limit && <button className="secondary" onClick={() => setLimit(limit + 30)}>Показать ещё</button>}
-    {(onCreate || onCategories || onBulk) && <div className="pb-actions pb-stock-actions">
+    {(onCreate || onCategories || onBulk) && <div className="pb-actions pb-stock-actions pb-warehouse-actions">
       {onCreate && <button onClick={onCreate}><Plus size={17} />Добавить товар</button>}
       {onCategories && <button className="secondary" onClick={onCategories}>Категории товаров</button>}
       {onBulk && <button className="secondary" onClick={onBulk}>Массовое редактирование</button>}
@@ -99,7 +99,7 @@ export function TeamProduct({ product, categories, onBack, onOperation, actions,
     </div>}
     {tab !== 'info' && history?.(tab)}
     {tab === 'info' && <dl className="metric-list">{values.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>}
-    <div className="pb-actions">{actions.map(type => <button key={type} onClick={() => onOperation(type)}>
+    <div className="pb-actions pb-warehouse-actions">{actions.map(type => <button key={type} onClick={() => onOperation(type)}>
       {type === 'sale' ? 'Продать' : type === 'repair' ? 'Завершить ремонт' : type === 'repair_start' ? 'Передать в ремонт' : operationNames[type]}
     </button>)}{onEdit && <button className="secondary" onClick={onEdit}>Изменить</button>}</div>
   </section>;

@@ -189,3 +189,29 @@ button.pb-row:hover { background: var(--pb-panel); }
   .pb-top-tools { gap: 4px; }
   .pb-topbar .pb-mode { display: none; }
 }
+
+.pb-warehouse-actions, .pb-bulk .pb-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr));
+  gap: 8px;
+  align-items: stretch;
+}
+:is(.pb-warehouse-actions, .pb-bulk .pb-actions) > button {
+  justify-self: stretch;
+  width: 100%;
+  min-height: 46px;
+  padding: 9px 12px;
+  line-height: 1.25;
+  text-align: center;
+  white-space: normal;
+}
+.pb-catalog-form > button[type=submit], .pb-catalog-form fieldset > button[type=submit],
+.pb-command fieldset > button[type=submit] {
+  justify-self: stretch;
+  width: 100%;
+  min-height: 46px;
+}
+.pb-warehouse-back { justify-self: start; width: fit-content; }
+@media (max-width: 420px) {
+  .pb-warehouse-actions, .pb-bulk .pb-actions { grid-template-columns: minmax(0, 1fr); }
+}

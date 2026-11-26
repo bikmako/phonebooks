@@ -11,6 +11,16 @@ async function shot(page, info, name) {
   const suffix = info.project.name === 'team-iphone-webkit' ? 'iphone' : 'desktop';
   await page.screenshot({ path: resolve(directory, name + '-' + suffix + '.png'), animations: 'disabled' });
 }
+async function alignedPreview(page) {
+  const sizes = await page.locator('.pb-bulk .pb-actions > button').evaluateAll(elements =>
+    elements.map(element => element.getBoundingClientRect().toJSON()));
+  expect(sizes).toHaveLength(2);
+  expect(Math.abs(sizes[0].width - sizes[1].width)).toBeLessThan(1);
+  expect(Math.abs(sizes[0].height - sizes[1].height)).toBeLessThan(1);
+  if (page.viewportSize().width <= 420) expect(sizes[0].x).toBe(sizes[1].x);
+  else expect(sizes[0].y).toBe(sizes[1].y);
+}
+
 const button = (page, name) => page.getByRole('button', { name, exact: true });
 const heading = (page, name) => page.getByRole('heading', { name, exact: true });
 const field = (page, name) => page.getByRole('textbox', { name, exact: true });
@@ -69,6 +79,7 @@ test('Solo universal stock purchases, repairs, sales, offline reload and bulk un
   await page.getByRole('checkbox', { name: 'Учебный ноутбук' }).check();
   await field(page, 'Новая плановая цена, ₽').fill('950');
   await button(page, 'Предпросмотр изменений').click();
+  await alignedPreview(page);
   await shot(page, info, 'solo-bulk-preview');
   await button(page, 'Применить изменения').click();
   await button(page, 'Отменить изменения').click();
@@ -136,6 +147,7 @@ test('Team custom category, dynamic stock, global history, rename and IMEI scan'
   await page.getByRole('checkbox', { name: 'Модуль S8' }).check();
   await field(page, 'Новая плановая цена, ₽').fill('95');
   await button(page, 'Предпросмотр изменений').click();
+  await alignedPreview(page);
   await shot(page, info, 'team-bulk-preview');
   await button(page, 'Применить изменения').click();
   await button(page, 'Отменить изменения').click();

@@ -107,7 +107,7 @@ export function CatalogPage({ initialProduct }) {
     {form === 'category' && <form className="pb-catalog-form" onSubmit={saveCategory}>
       <PageTitle title={custom ? 'Редактирование категории' : 'Новая категория'} />
       <CategoryFields key={custom?.id ?? 'new'} category={custom} />
-      <button className="pb-action" disabled={busy}>Сохранить категорию</button>
+      <button type="submit" className="pb-action" disabled={busy}>Сохранить категорию</button>
     </form>}
     {form === 'product' && <form className="pb-catalog-form" onSubmit={saveProduct}>
       <PageTitle title={product ? 'Редактирование товара' : 'Добавить товар'} />
@@ -122,7 +122,7 @@ export function CatalogPage({ initialProduct }) {
       </div>
       <div className="pb-catalog-fields" key={category}><AttributeFields category={selected} attributes={product?.attributes} /></div>
       <label>Плановая цена продажи, ₽<input className="input" name="plannedPrice" inputMode="decimal" defaultValue={priceInput(product?.plannedPriceMinor)} /></label>
-      <button className="pb-action" disabled={busy}>Сохранить товар</button>
+      <button type="submit" className="pb-action" disabled={busy}>Сохранить товар</button>
     </form>}
     {form === 'detail' && (product ? <>
       <PageTitle title={product.name} eyebrow={categories.find(item => item.id === product.categoryId)?.name} />
@@ -136,7 +136,7 @@ export function CatalogPage({ initialProduct }) {
         {categories.find(item => item.id === product.categoryId)?.attributes.filter(field => Object.hasOwn(product.attributes, field.id))
           .map(field => <div key={field.id}><dt>{field.name}</dt><dd>{field.type === 'boolean' ? (product.attributes[field.id] ? 'Да' : 'Нет') : product.attributes[field.id]}</dd></div>)}
       </dl>
-      <div className="pb-actions">
+      <div className="pb-actions pb-warehouse-actions">
         {(!product.purchased || product.tracking === 'quantity') && <button className="pb-action" onClick={() => open('purchase', product)}>{details.purchase}</button>}
         {product.quantity > 0 && !product.inRepair && <button className="pb-action" onClick={() => open('sale', product)}>{details.sale}</button>}
         {product.tracking === 'unit' && product.quantity === 1 && <button className="pb-action pb-action-secondary"
@@ -160,7 +160,7 @@ export function CatalogPage({ initialProduct }) {
           {data.accounts.filter(account => !account.archived).map(account => <option value={account.id} key={account.id}>{account.name}</option>)}
         </select></label>
       </>}
-      <button className="pb-action" disabled={busy}>Провести операцию</button>
+      <button type="submit" className="pb-action" disabled={busy}>Провести операцию</button>
     </form>}
     {form === 'bulk' && <BulkPrices products={catalog.products.map(item =>
       item.id.startsWith('product:') ? item : { ...item, version: 1, priceOnly: true })}
@@ -206,7 +206,7 @@ export function CatalogPage({ initialProduct }) {
           <ChevronRight size={16} aria-hidden="true" />
         </button>
       </li>)}</ul> : <p className="pb-empty">Карточки товаров пока не найдены.</p>}
-      <div className="pb-actions">
+      <div className="pb-actions pb-warehouse-actions">
         <button className="pb-action" onClick={() => open('product')}><Plus size={16} />Добавить товар</button>
         <button className="pb-action pb-action-secondary" onClick={() => open('category')}>Новая категория</button>
         {saved.categories.some(item => item.id === filter) && <button className="pb-action pb-action-secondary"

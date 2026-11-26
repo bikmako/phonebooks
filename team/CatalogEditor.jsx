@@ -52,7 +52,7 @@ export function CatalogEditor({ mode, products, categories, product, canPrice, c
             <div className="group-fields" key={chosen}><AttributeFields category={category} attributes={product.attributes} /></div>
             {canPrice && <label>Плановая цена продажи, ₽<input name="plannedPrice" inputMode="decimal" defaultValue={priceInput(product.plannedPriceMinor)} /></label>}
           </>}
-        <button>{mode === 'category' ? 'Сохранить категорию' : 'Сохранить товар'}</button>
+        <button type="submit">{mode === 'category' ? 'Сохранить категорию' : 'Сохранить товар'}</button>
       </fieldset>
     </form>
   </section>;
