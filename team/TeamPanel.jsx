@@ -3,7 +3,7 @@ import { formatMinor as money } from './CloudReports.jsx';
 
 const groups = ['Склад', 'Торговые операции', 'Ремонт', 'Финансы', 'Аналитика', 'Данные', 'Управление командой'];
 const actions = {
-  purchase: 'Закупка', sale: 'Продажа', repair: 'Завершение ремонта', repair_start: 'Передача в ремонт', expense: 'Расход', deposit: 'Пополнение кассы',
+  'workspace.rename': 'Изменение названия предприятия', 'category.save': 'Изменение категории', purchase: 'Закупка', sale: 'Продажа', repair: 'Завершение ремонта', repair_start: 'Передача в ремонт', expense: 'Расход', deposit: 'Пополнение кассы',
   stock_adjustment: 'Корректировка остатка', 'product.edit': 'Редактирование товара', 'role.create': 'Создание роли',
   'role.edit': 'Изменение роли', 'role.archive': 'Архивирование роли', 'member.role': 'Назначение роли',
   'member.permission': 'Изменение индивидуального права', 'member.revoke': 'Отзыв доступа',

@@ -5,21 +5,21 @@ import { formatMinor } from './CloudReports.jsx';
 import { TeamOperations } from './CloudViews.jsx';
 
 export function TeamHistory({ api, scope, revision, permissionKey, online, product, kind, period = 'all', title,
-  latest = false, onHistory, fallback }) {
+  latest = false, onHistory, fallback, query }) {
   const [offset, setOffset] = useState(0);
   const [loaded, setLoaded] = useState(null);
   const { p_workspace, p_actor } = scope;
-  const key = [p_workspace, p_actor, revision, permissionKey, product, kind, period, offset].join(':');
+  const key = [p_workspace, p_actor, revision, permissionKey, product, kind, period, offset, query].join(':');
   useEffect(() => {
     if (!online) return;
     let obsolete = false;
     const range = period === 'all' ? { from: null, to: null } : getPeriod(period);
     api('team/operations', { p_workspace, p_actor, p_product: product ?? null, p_kind: kind ?? null,
-      p_from: range.from, p_to: range.to, p_offset: offset })
+      p_from: range.from, p_to: range.to, p_offset: offset, ...(query != null ? { p_query: query } : {}) })
       .then(data => { if (!obsolete) setLoaded({ key, data }); })
       .catch(() => { if (!obsolete) setLoaded({ key, error: true }); });
     return () => { obsolete = true; };
-  }, [api, p_workspace, p_actor, product, kind, period, offset, online, key]);
+  }, [api, p_workspace, p_actor, product, kind, period, offset, online, key, query]);
 
   const response = loaded?.key === key ? loaded : null;
   const rows = response?.data?.items;

@@ -4,6 +4,7 @@
  * Восстановлено из production-бандла PhoneBooks. Логика и разметка сохранены без изменений;
  * локальные имена переменных в теле функций оставлены как в бандле.
  */
+import { warehouseProjection } from "../domain/warehouse.js";
 import { getSaleProfit, getSaleRevenue, getPhoneTotalCost } from "./calculations.js";
 import {
   addDays,
@@ -109,6 +110,8 @@ export function getChartData(state, t, n = today()) {
       inPeriod(d.date, a) &&
       o(d.date, 0, d.qty * d.unitCost);
   for (const d of state.expenses) inPeriod(d.date, a) && o(d.date, 0, d.amount);
+  for (const operation of warehouseProjection(state).operations)
+    if (operation.type === 'sale' && inPeriod(operation.date, a)) o(operation.date, operation.revenueMinor / 100, operation.costMinor / 100);
   const l = Array.from(r.values()).sort((d, x) => d.key.localeCompare(x.key));
   if (t === "all" && l.length > 12) {
     const d = new Map();

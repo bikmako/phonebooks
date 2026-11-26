@@ -4,6 +4,7 @@
  * Восстановлено из production-бандла PhoneBooks. Логика и разметка сохранены без изменений;
  * локальные имена переменных в теле функций оставлены как в бандле.
  */
+import { warehouseProjection } from "../domain/warehouse.js";
 import { daysBetween, inPeriod, roundMoney, today } from "./format.js";
 // Repairs are the single source for both cost and account debits.
 export const getPhoneRepairs = phone => phone.repairs ?? [];
@@ -51,6 +52,12 @@ export function getAccountBalances(state, t) {
           ),
         )),
         i++);
+    for (const operation of warehouseProjection(state).operations) {
+      if (operation.accountId !== n.id) continue;
+      if (operation.cashMinor > 0) c += operation.cashMinor / 100;
+      else r -= operation.cashMinor / 100;
+      i++;
+    }
     const o = roundMoney(n.openingBalance + c - r);
     return {
       account: n,
@@ -87,6 +94,8 @@ export function getAccountDelta(state, t) {
         0,
         a.items.reduce((c, r) => c + r.qty * r.unitPrice, 0) - a.discount,
       ));
+  for (const operation of warehouseProjection(state).operations)
+    if (operation.accountId === t) n += operation.cashMinor / 100;
   return roundMoney(n);
 }
 export function getTotalMoney(state, t) {
@@ -178,8 +187,10 @@ export function getStats(state, t) {
         .filter((u) => u.kind === "purchase" && inPeriod(u.date, t))
         .reduce((u, N) => u + N.qty * N.unitCost, 0),
     ),
-    A = roundMoney(i + d),
-    L = roundMoney(o + x),
+    warehouse = warehouseProjection(state).operations.filter(operation => inPeriod(operation.date, t)),
+    warehouseSales = warehouse.filter(operation => operation.type === 'sale'),
+    A = roundMoney(i + d + warehouseSales.reduce((sum, operation) => sum + operation.revenueMinor / 100, 0)),
+    L = roundMoney(o + x + warehouseSales.reduce((sum, operation) => sum + operation.costMinor / 100, 0)),
     O = roundMoney(A - L),
     m = roundMoney(r.reduce((u, N) => u + N.amount, 0)),
     f = roundMoney(O - m - p),
@@ -217,11 +228,11 @@ export function getStats(state, t) {
     opex: m,
     netProfit: f,
     purchases: y,
-    salesCount: n.length + l.length,
-    purchasesCount: c.length,
+    salesCount: n.length + l.length + warehouseSales.length,
+    purchasesCount: c.length + warehouse.filter(operation => operation.type === "purchase").length,
     expensesCount: r.length,
     averageCheck:
-      n.length + l.length ? roundMoney(A / (n.length + l.length)) : 0,
+      n.length + l.length + warehouseSales.length ? roundMoney(A / (n.length + l.length + warehouseSales.length)) : 0,
     averageMargin: j.length
       ? Math.round((j.reduce((u, N) => u + N, 0) / j.length) * 100)
       : 0,
@@ -230,7 +241,7 @@ export function getStats(state, t) {
     withdrawals: g,
     transfersIn: b,
     transfersOut: B,
-    cashFlow: roundMoney(A - y - w - m - getRepairs(state).filter(repair => inPeriod(repair.date, t)).reduce((sum, repair) => sum + repair.amount, 0) + S - g),
+    cashFlow: roundMoney(A - y - w - m + warehouse.filter(operation => operation.type !== "sale").reduce((sum, operation) => sum + operation.cashMinor / 100, 0) - getRepairs(state).filter(repair => inPeriod(repair.date, t)).reduce((sum, repair) => sum + repair.amount, 0) + S - g),
     phoneRevenue: i,
     phoneCogs: o,
     accRevenue: d,

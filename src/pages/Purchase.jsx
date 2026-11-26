@@ -6,6 +6,7 @@ import { PHONE_STATUS_TABS } from '../components/purchase/PhoneDetailParts.jsx';
 import { PurchaseForm } from '../components/purchase/PurchaseForm.jsx';
 import { Button, Card, ConfirmDialog, SearchInput } from '../components/ui.jsx';
 import { deletePhone } from '../domain/phones.js';
+import { WarehouseActivity } from '../components/WarehouseActivity.jsx';
 import { useStore } from '../hooks/useStore.jsx';
 import { PageTitle, SectionTitle, Status } from '../product/ui.jsx';
 import { getPhoneRepairs, getRepairTotal } from '../utils/calculations.js';
@@ -13,13 +14,13 @@ import { PHONE_STATUS_LABELS } from '../utils/constants.js';
 import { clearDraft, readDraft } from '../utils/drafts.js';
 import { formatDate, formatMoney } from '../utils/format.js';
 
-export function PurchasePage({ formOpen, onOpenForm, onCloseForm, onSell, repairMode }) {
+export function PurchasePage({ formOpen, onOpenForm, onCloseForm, onSell, repairMode, initialProduct, onOpenWarehouse }) {
   const { data, mutatePersisted, notify } = useStore();
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
   const [order, setOrder] = useState('recent');
   const [limit, setLimit] = useState(25);
-  const [phone, setPhone] = useState(null);
+  const [phone, setPhone] = useState(() => data.phones.find(item => item.id === initialProduct) ?? null);
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [draft, setDraft] = useState(() => readDraft('phone-new'));
@@ -115,6 +116,7 @@ export function PurchasePage({ formOpen, onOpenForm, onCloseForm, onSell, repair
         : data.phones.length ? 'Нет устройств с этим статусом.' : 'Склад пуст. Оформите первую скупку.'}</p>}
       {items.length > limit && <button type="button" className="pb-action pb-action-secondary pb-back" onClick={() => setLimit(limit + 25)}>Показать ещё</button>}
     </section>
+    {repairMode && <WarehouseActivity repairs query={query} onOpen={onOpenWarehouse} />}
     {!repairMode && <div className="pb-actions">
       <button className="pb-action" onClick={onOpenForm}><Plus size={17} />Добавить устройство</button>
     </div>}

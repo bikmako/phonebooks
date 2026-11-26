@@ -209,3 +209,46 @@ test('product repair start is versioned and replayable, and history applies fiel
   await assert.rejects(history(staff, product.id), { code: 'PT403' });
   assert.ok((await history(staff, null)).items.every(item => !item.products && !item.postings));
 });
+
+test('catalogue writes enforce individual grants, deduplicate, and roll back an entire stale batch', async () => {
+  const [owner, staff] = await Promise.all([person(), person()]);
+  const space = await spaceFor(owner);
+  const limited = roleId();
+  await role(owner, space, limited, ['stock.read', 'finance.history.read']);
+  await invite(owner, space, staff, limited);
+  const category = { type: 'save_category', categoryId: 'modules', name: 'Модули',
+    attributes: [{ id: 'size', name: 'Объём', type: 'number' }], expectedVersion: 0 };
+  await assert.rejects(command(staff, space, category), { code: 'PT403' });
+  await command(owner, space, category);
+  await command(owner, space, { type: 'deposit', accountId: cash, amountMinor: 10000 });
+  for (const name of ['Память A', 'Память B']) await command(owner, space, {
+    type: 'purchase', name, accountId: cash, quantity: 4, unitPriceMinor: 500, plannedPriceMinor: 900,
+    categoryId: 'modules', tracking: 'quantity', attributes: { size: 16 },
+  });
+  const [first, second] = (await feed(owner, space)).products;
+  const price = { type: 'bulk_price', items: [
+    { id: first.id, version: first.version, plannedPriceMinor: 1200 },
+    { id: second.id, version: second.version, plannedPriceMinor: 1200 },
+  ] };
+  await assert.rejects(command(staff, space, price), { code: 'PT403' });
+  await assert.rejects(command(owner, space, { ...price, items: [price.items[0], { ...price.items[1], version: 1 }] }), { code: 'PT409' });
+  assert.deepEqual((await feed(owner, space)).products.map(item => item.plannedPriceMinor), ['900', '900']);
+  const request = randomUUID();
+  const receipt = await command(owner, space, price, request);
+  assert.deepEqual(await command(owner, space, price, request), receipt);
+  const edited = await feed(owner, space);
+  assert.deepEqual(edited.products.map(item => item.plannedPriceMinor), ['1200', '1200']);
+  const attrs = { type: 'bulk_attributes', items: edited.products.map(item =>
+    ({ id: item.id, version: item.version, attributes: { size: 32 } })) };
+  await assert.rejects(command(staff, space, attrs), { code: 'PT403' });
+  await command(owner, space, attrs);
+  assert.deepEqual((await feed(owner, space)).products.map(item => item.attributes.size), [32, 32]);
+  const search = await rpc(owner, 'search_history', space, owner.sub, null, null, null, null, 0, 'Память B');
+  assert.equal(search.items.length, 1);
+  assert.equal((await rpc(staff, 'search_history', space, staff.sub, null, null, null, null, 0, 'Память B')).items[0].postings, undefined);
+  await assert.rejects(command(owner, space, { ...category, expectedVersion: 1, attributes: [] }), { code: 'PT400' });
+  const rename = { type: 'rename_workspace', previousName: 'Команда', name: 'Новая команда' };
+  await assert.rejects(command(staff, space, rename), { code: 'PT403' });
+  await command(owner, space, rename);
+  await assert.rejects(command(owner, space, rename), { code: 'PT409' });
+});

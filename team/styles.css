@@ -76,3 +76,6 @@ li div { overflow-wrap: anywhere; }
 .pb-history-pages { margin-top: 12px; }
 .pb-operation-detail { flex-wrap: wrap; }
 .pb-detail .pb-history { margin-bottom: 15px; }
+
+.pb-catalog-form { max-width: 690px; }
+.imei-scanner-upload { display: inline-flex; justify-content: center; align-items: center; gap: 6px; padding: 8px; border: 1px solid var(--pb-line); border-radius: 8px; }

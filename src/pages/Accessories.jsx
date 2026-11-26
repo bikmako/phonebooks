@@ -48,15 +48,15 @@ import {
 } from "lucide-react";
 import React from "react";
 
-export function AccessoriesPage() {
+export function AccessoriesPage({ initialProduct } = {}) {
   const { data: s, period: t } = useStore(),
     [n, a] = React.useState(""),
     [c, r] = React.useState("all"),
     [i, o] = React.useState("all"),
     [l, d] = React.useState("low"),
-    [x, v] = React.useState({
-      open: !1,
-      item: null,
+    [x, v] = React.useState(() => {
+      const item = s.accessoryItems.find(item => item.id === initialProduct);
+      return { open: Boolean(item), item: item ?? null };
     }),
     [p, w] = React.useState(!1),
     [A, L] = React.useState(void 0),

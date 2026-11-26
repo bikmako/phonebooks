@@ -4,6 +4,7 @@
  * Восстановлено из production-бандла PhoneBooks. Логика и разметка сохранены без изменений;
  * локальные имена переменных в теле функций оставлены как в бандле.
  */
+import { warehouseLabels, warehouseProjection } from "../domain/warehouse.js";
 import { getSaleProfit, getSaleRevenue } from "./calculations.js";
 import { roundMoney } from "./format.js";
 export function getAllOperations(state) {
@@ -201,6 +202,14 @@ export function getAllOperations(state) {
         saleId: m.id,
       },
     });
+  }
+  for (const operation of warehouseProjection(state).operations) {
+    c.push({ id: operation.id, kind: 'warehouse', type: operation.type === 'repair' ? 'expense' : operation.type,
+      date: operation.date, createdAt: operation.createdAt, title: warehouseLabels[operation.type] + ' · ' + operation.name,
+      subtitle: operation.units + ' шт.', amount: operation.cashMinor / 100, moneyEffect: operation.cashMinor / 100,
+      status: 'completed', accountId: operation.accountId, icon: operation.type === 'sale' ? 'sale' : 'package',
+      meta: { account: n.get(operation.accountId)?.name ?? '—', productId: operation.productId,
+        profit: operation.type === 'sale' ? (operation.revenueMinor - operation.costMinor) / 100 : undefined } });
   }
   return c.sort((m, f) =>
     m.date === f.date

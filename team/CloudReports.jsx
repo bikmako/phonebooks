@@ -4,16 +4,8 @@ import { FinanceChart } from '../src/product/FinanceChart.jsx';
 import { Metrics, PeriodSelect, SectionTitle } from '../src/product/ui.jsx';
 import { addDays, formatShortDate, getPeriod, parseDate, toISODate, today } from '../src/utils/format.js';
 
-const money = new Intl.NumberFormat('ru', { style: 'currency', currency: 'RUB', maximumFractionDigits: 2 });
-export function formatMinor(value) {
-  const minor = BigInt(value);
-  const rubles = minor / 100n;
-  const kopecks = minor % 100n;
-  const amount = rubles === 0n && kopecks < 0n ? -0 : rubles;
-  return money.formatToParts(amount).flatMap(({ type, value }) =>
-    type === 'fraction' ? (kopecks ? [String(kopecks < 0 ? -kopecks : kopecks).padStart(2, '0')] : [])
-      : type === 'decimal' && !kopecks ? [] : [value]).join('');
-}
+import { formatMinorMoney as formatMinor } from '../src/utils/format.js';
+export { formatMinor };
 
 function reportRanges(period) {
   const range = getPeriod(period);

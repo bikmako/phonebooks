@@ -81,3 +81,12 @@ html:not(.dark) :is(.border-brand-100, .border-brand-200, .border-emerald-200) {
 .pb-catalog-form .pb-heading { margin-bottom: 0; }
 .pb-catalog-fields { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
 .pb-catalog-fields > label { flex: 1 1 180px; }
+
+.pb-stock-controls + .pb-tabs { margin-top: 12px; }
+.pb-top-tools .pb-icon-button { display: grid; place-items: center; width: 36px; height: 36px; }
+.pb-catalog-form fieldset { display: grid; gap: 9px; }
+
+.pb-content:has(.pb-catalog[data-view]) .pb-layout-heading,
+.pb-content:has(.pb-catalog[data-view]) .pb-stock-sections { display: none; }
+.pb-catalog-form > label, .pb-catalog-fields > label, .pb-warehouse-imei > label { font-size: 13px; font-weight: 700; }
+.pb-catalog-form select.input { border-color: var(--pb-line); }

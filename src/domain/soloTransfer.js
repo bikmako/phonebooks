@@ -1,3 +1,4 @@
+import { warehouseProjection } from './warehouse.js';
 import { parseImportFile, safeJson, validateState } from '../storage/backupFormat.js';
 import { accessoryProductId, INVENTORY_KEY, phoneProductId, projectInventory, validateInventory } from './inventory.js';
 import { projectInventoryOperations, summarizeInventoryOperations } from './inventoryOperations.js';
@@ -24,8 +25,8 @@ function minor(value) {
 export function prepareSoloTransfer(source) {
   const state = validateState(source?.state, { legacy: true });
   if (state.settings.currency !== 'RUB') throw new Error('Перенос пока поддерживает счета в рублях.');
-  const catalog = source.catalog === null || source.catalog === undefined
-    ? undefined : validateInventory(safeCatalog(source.catalog));
+  const savedCatalog = state.catalog ?? source.catalog;
+  const catalog = savedCatalog == null ? undefined : validateInventory(safeCatalog(savedCatalog));
   const inventory = projectInventory(state, catalog);
   const products = new Map(inventory.products.map(item => [item.id, item]));
   const operations = projectInventoryOperations(state);
@@ -41,7 +42,9 @@ export function prepareSoloTransfer(source) {
       });
     }
   }
+  const warehouseLots = [...warehouseProjection(state).products.values()].flatMap(item => item.lots);
   const lots = [
+    ...warehouseLots,
     ...state.phones.filter(phone => phone.status !== 'sold').map(phone => ({
       id: 'phone:' + phone.id, productId: phoneProductId(phone.id), quantity: 1,
       costMinor: minor(getPhoneTotalCost(phone)), date: phone.purchaseDate, createdAt: phone.createdAt,
@@ -68,7 +71,7 @@ export function prepareSoloTransfer(source) {
     totals.netProfitMinor !== minor(legacy.netProfit)) throw new Error('Не совпали выручка, себестоимость или прибыль.');
   const stockCostMinor = lots.reduce((sum, lot) => sum + lot.costMinor, 0);
   const legacyStockCost = state.phones.filter(phone => phone.status !== 'sold')
-    .reduce((sum, phone) => sum + minor(getPhoneTotalCost(phone)), 0) + minor(getAccessoryStockValue(state));
+    .reduce((sum, phone) => sum + minor(getPhoneTotalCost(phone)), 0) + minor(getAccessoryStockValue(state)) + warehouseLots.reduce((sum, lot) => sum + lot.costMinor, 0);
   if (!Number.isSafeInteger(stockCostMinor) || stockCostMinor !== legacyStockCost) throw new Error('Не совпала себестоимость остатков.');
 
   const accounts = getAccountBalances(state).map(({ account, balance }) => {

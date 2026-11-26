@@ -312,7 +312,7 @@ function cloudRoute(path, body) {
 }
 
 function teamRoute(path, body) {
-  const { p_workspace, p_actor, p_action, p_input, p_member, p_kind, p_from, p_to, p_offset, p_product } = body;
+  const { p_workspace, p_actor, p_action, p_input, p_member, p_kind, p_from, p_to, p_offset, p_product, p_query } = body;
   if (typeof p_workspace !== "string" || typeof p_actor !== "string") throw new HttpError(400, "Проверьте параметры пространства.");
   const scope = { p_workspace, p_actor };
   if (path === "/api/team/members") return ["members", scope];
@@ -322,6 +322,9 @@ function teamRoute(path, body) {
   if (path === "/api/team/operations" &&
       [p_product, p_kind, p_from, p_to].every(value => value === null || typeof value === "string") &&
       Number.isSafeInteger(p_offset)) {
+    if (typeof p_query === "string" && p_query.length <= 120) {
+      return ["search_history", { ...scope, p_product, p_kind, p_from, p_to, p_offset, p_query }];
+    }
     return ["operation_history", { ...scope, p_product, p_kind, p_from, p_to, p_offset }];
   }
   if ([p_member, p_from, p_to].every(value => value === null || typeof value === "string")) {
@@ -427,7 +430,7 @@ async function api(path, request, env, cookies, origin) {
   throw new HttpError(404, "Страница не найдена.");
 }
 
-const csp = "default-src 'none'; script-src 'self' https://challenges.cloudflare.com; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
+const csp = "default-src 'none'; script-src 'self' 'wasm-unsafe-eval' https://challenges.cloudflare.com; worker-src 'self'; style-src 'self'; img-src 'self' blob:; font-src 'self'; connect-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; form-action 'self'; base-uri 'none'; frame-ancestors 'none'";
 
 export default {
   async fetch(request, env) {
@@ -439,7 +442,7 @@ export default {
         response = await api(url.pathname, request, env, cookies, url.origin);
       } else if (request.method !== "GET" && request.method !== "HEAD") {
         throw new HttpError(405, "Метод не поддерживается.");
-      } else if (url.pathname === "/" || url.pathname === "/index.html" || url.pathname.startsWith("/assets/")) {
+      } else if (url.pathname === "/" || url.pathname === "/index.html" || url.pathname.startsWith("/assets/") || url.pathname.startsWith("/scanner-assets/")) {
         const assetPath = url.pathname === "/" ? "/index.html" : url.pathname;
         response = await env.ASSETS.fetch(new Request(new URL(assetPath, url.origin), { method: request.method }));
         const headers = new Headers(response.headers);

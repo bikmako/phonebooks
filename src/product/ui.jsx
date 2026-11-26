@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Asterisk, CalendarDays, ChartNoAxesCombined, ChevronDown, ChevronRight, Clock3,
-  LayoutGrid, Plus, Settings, ShoppingBag, TrendingUp, UsersRound, Wrench,
+  LayoutGrid, Plus, Search, Settings, ShoppingBag, TrendingUp, UsersRound, Wrench,
 } from 'lucide-react';
 import { PERIOD_OPTIONS } from '../utils/constants.js';
 
@@ -12,6 +12,7 @@ const routes = [
   ['repairs', 'Ремонт', Wrench],
   ['finance', 'Финансы', ChartNoAxesCombined],
   ['history', 'История', Clock3],
+  ['search', 'Поиск', Search],
   ['team', 'Команда', UsersRound],
   ['settings', 'Настройки', Settings],
 ];

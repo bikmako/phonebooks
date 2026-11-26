@@ -24,7 +24,7 @@ async function withInventoryTransaction(mode, action) {
     ]);
     if (pending) throw new Error('Сначала завершите восстановление прерванного импорта');
     const state = validateState(current, { legacy: true });
-    const catalog = stored === undefined ? emptyInventory() : validateInventory(stored);
+    const catalog = state.catalog ?? (stored === undefined ? emptyInventory() : validateInventory(stored));
     const result = action(state, catalog, meta);
     await done;
     return result;
@@ -33,6 +33,10 @@ async function withInventoryTransaction(mode, action) {
     await done.catch(() => {});
     throw error;
   }
+}
+
+export function readInventoryCatalog() {
+  return withInventoryTransaction('readonly', (_, catalog) => catalog);
 }
 
 export function loadInventory() {

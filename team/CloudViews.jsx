@@ -17,7 +17,7 @@ const productStatus = product => product.inRepair ? 'repair' : product.quantity 
   : product.reserved === product.quantity ? 'reserved' : 'stock';
 const productIcon = product => product.categoryId === 'smartphones' ? Smartphone : Package;
 
-export function TeamStock({ products, categories, repairs, onOpen, onCreate }) {
+export function TeamStock({ products, categories, repairs, onOpen, onCreate, onCategories, onBulk }) {
   const [category, setCategory] = useState('');
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
@@ -66,17 +66,22 @@ export function TeamStock({ products, categories, repairs, onOpen, onCreate }) {
       </button></li>;
     })}</ul> : <p className="pb-empty">{!active.length ? (repairs ? 'В ремонте пока нет устройств.' : 'Склад пуст.') : 'Товары с такими параметрами не найдены.'}</p>}
     {matches.length > limit && <button className="secondary" onClick={() => setLimit(limit + 30)}>Показать ещё</button>}
-    {onCreate && <div className="pb-actions pb-stock-actions"><button onClick={onCreate}><Plus size={17} />Добавить товар</button></div>}
+    {(onCreate || onCategories || onBulk) && <div className="pb-actions pb-stock-actions">
+      {onCreate && <button onClick={onCreate}><Plus size={17} />Добавить товар</button>}
+      {onCategories && <button className="secondary" onClick={onCategories}>Категории товаров</button>}
+      {onBulk && <button className="secondary" onClick={onBulk}>Массовое редактирование</button>}
+    </div>}
   </section>;
 }
 
-export function TeamProduct({ product, categories, onBack, onOperation, actions, history }) {
+export function TeamProduct({ product, categories, onBack, onOperation, actions, history, onEdit }) {
   const [tab, setTab] = useState('info');
   const status = productStatus(product);
   const category = categories.find(item => item.id === product.categoryId);
   const labels = new Map(category?.attributes?.map(field => [field.id, field.name]));
   const values = [
     ['Остаток', product.quantity + ' шт.'],
+    ['Плановая цена продажи', product.plannedPriceMinor == null ? '—' : formatMinor(product.plannedPriceMinor)],
     ...(product.reserved ? [['В резерве', product.reserved + ' шт.']] : []),
     ...Object.entries(product.attributes ?? {}).filter(([, value]) => value !== '').map(([key, value]) => [
       labels.get(key) ?? key, typeof value === 'boolean' ? (value ? 'Да' : 'Нет') : key === 'condition' ? PHONE_CONDITIONS[value] ?? String(value) : String(value),
@@ -96,7 +101,7 @@ export function TeamProduct({ product, categories, onBack, onOperation, actions,
     {tab === 'info' && <dl className="metric-list">{values.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>}
     <div className="pb-actions">{actions.map(type => <button key={type} onClick={() => onOperation(type)}>
       {type === 'sale' ? 'Продать' : type === 'repair' ? 'Завершить ремонт' : type === 'repair_start' ? 'Передать в ремонт' : operationNames[type]}
-    </button>)}</div>
+    </button>)}{onEdit && <button className="secondary" onClick={onEdit}>Изменить</button>}</div>
   </section>;
 }
 

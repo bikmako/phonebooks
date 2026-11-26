@@ -7,6 +7,7 @@ const dateFormat = new Intl.DateTimeFormat('ru', { dateStyle: 'medium', timeStyl
 export function Workspaces({ data, busy, inviteLink, actions }) {
   const { workspaces, selected, incoming, outgoing } = data;
   const invitationRoles = selected?.inviteRoles ?? [];
+  const renameRequest = React.useRef(null);
   const creationRequest = React.useRef(null);
 
   function formAction(event, action) {
@@ -50,6 +51,18 @@ export function Workspaces({ data, busy, inviteLink, actions }) {
       {selected && <section aria-labelledby="selected-title">
         <h2 id="selected-title">{selected.name}</h2>
         <p>Ваша роль — {selected.roleName ?? roleLabel[selected.role]}.</p>
+        {selected.role === 'owner' && <form key={selected.id + ':' + selected.name} onSubmit={event => formAction(event, async values => {
+          const name = values.get('workspaceName').trim();
+          if (renameRequest.current?.name !== name || renameRequest.current?.workspace !== selected.id || renameRequest.current?.previous !== selected.name) {
+            renameRequest.current = { name, previous: selected.name, workspace: selected.id, id: crypto.randomUUID() };
+          }
+          const success = await actions.rename(name, selected.name, renameRequest.current.id);
+          if (success) renameRequest.current = null;
+          return success;
+        })}>
+          <label>Название предприятия<input name="workspaceName" defaultValue={selected.name} maxLength={100} required /></label>
+          <button disabled={busy}>Сохранить название</button>
+        </form>}
         {selected.permissions?.includes('team.invite') && <>
           <h3>Приглашения сотрудников</h3>
           <form onSubmit={event => formAction(event, values => actions.invite(values.get('email'), values.get('role')))}>

@@ -1,8 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Plus } from 'lucide-react';
+import { WarehouseSearch } from '../src/product/WarehouseSearch.jsx';
 import { PageTitle, PeriodSelect, routeName, Status } from '../src/product/ui.jsx';
 import { CloudReports } from './CloudReports.jsx';
 import { TeamProduct, TeamStock } from './CloudViews.jsx';
+import { parseMinor as money } from '../src/domain/warehouse.js';
+import { AttributeFields, priceInput, readAttributes } from '../src/product/WarehouseFields.jsx';
+import { CatalogEditor } from './CatalogEditor.jsx';
 import { TeamHistory } from './TeamHistory.jsx';
 import { SoloTransfer } from './SoloTransfer.jsx';
 import { readCloudFeed } from './cloudFeed.js';
@@ -15,6 +19,9 @@ const writePermissions = {
   purchase: ['trade.purchase', 'stock.read'], sale: ['trade.sale', 'stock.read'],
   repair: ['repair.finish', 'stock.read'], repair_start: ['repair.start', 'stock.read'], expense: ['finance.expense', 'finance.cash.read'],
   stock_adjustment: ['stock.adjust', 'stock.read'], deposit: ['finance.deposit'],
+  save_category: ['stock.categories.manage', 'stock.read'], edit_product: ['stock.edit', 'stock.read'],
+  bulk_price: ['stock.bulk_edit', 'stock.planned_price.write', 'stock.read'],
+  bulk_attributes: ['stock.bulk_edit', 'stock.edit', 'stock.read'],
 };
 
 function canRetry(command, permissions) {
@@ -23,16 +30,12 @@ function canRetry(command, permissions) {
   if (command.type === 'purchase') {
     if (!command.productId) required.push('stock.create');
     if (command.unitPriceMinor > 0) required.push('finance.cash.read');
+    if (Object.hasOwn(command, 'plannedPriceMinor')) required.push('stock.planned_price.write');
   }
+  if (command.type === 'edit_product' && Object.hasOwn(command, 'plannedPriceMinor')) required.push('stock.planned_price.write');
   if (command.type === 'repair' && command.amountMinor > 0) required.push('repair.expense', 'finance.cash.read');
   if (command.type === 'stock_adjustment' && command.quantity < 0) required.push('stock.writeoff');
   return required.every(permission => permissions.includes(permission));
-}
-
-function money(value) {
-  const match = /^(\d{1,9})(?:[,.](\d{1,2}))?$/.exec(String(value).trim());
-  if (!match) throw new Error('Введите сумму в рублях с точностью до копеек.');
-  return Number(match[1]) * 100 + Number((match[2] ?? '').padEnd(2, '0'));
 }
 
 function commandFor(values, type, selection, categories) {
@@ -42,13 +45,11 @@ function commandFor(values, type, selection, categories) {
     else if (type !== 'purchase') throw new Error('Выберите товар.');
     else {
       const categoryId = values.get('categoryId');
-      const fields = categories.find(category => category.id === categoryId)?.attributes ?? [];
-      const attributes = Object.fromEntries(fields.flatMap(field => {
-        const value = values.get('attr:' + field.id);
-        if (value == null || value === '') return [];
-        return [[field.id, field.type === 'boolean' ? value === 'true' : field.type === 'number' ? Number(value) : value.trim()]];
-      }));
-      Object.assign(command, { name: values.get('name').trim(), categoryId, tracking: values.get('tracking'), attributes });
+      const category = categories.find(item => item.id === categoryId);
+      Object.assign(command, { name: values.get('name').trim(), categoryId, tracking: values.get('tracking'),
+        attributes: readAttributes(category, values) });
+      const price = values.get('plannedPrice')?.trim();
+      if (price) command.plannedPriceMinor = money(price);
     }
   }
   if (['purchase', 'sale', 'stock_adjustment'].includes(type)) command.quantity = Number(values.get('quantity'));
@@ -77,6 +78,7 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
   const scope = { p_workspace: workspace.id, p_actor: actor };
   const requestKey = requestPrefix + actor + ':' + workspace.id;
   const [data, setData] = useState(null);
+  const [editor, setEditor] = useState('');
   const [online, setOnline] = useState(navigator.onLine);
   const [connection, setConnection] = useState('connecting');
   const [period, setPeriod] = useState('month');
@@ -106,6 +108,7 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
           setData(null);
           setSelection(null);
           setType('');
+          setEditor('');
           setProductId('');
           setMessage('');
           setFailure('');
@@ -169,7 +172,7 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
   }
 
   async function send(request) {
-    if (sendingRef.current || !navigator.onLine) return;
+    if (sendingRef.current || !navigator.onLine) return false;
     sendingRef.current = true;
     savePending(request);
     setSending(true);
@@ -181,14 +184,16 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
       savePending(null);
       setSelection(null);
       setType('');
-      setProductId('');
+      if (request.command.type !== 'edit_product') setProductId('');
       setMessage('Операция подтверждена сервером.');
+      return true;
     } catch (error) {
       if (!mounted.current) return;
       if ([400, 401, 403, 409].includes(error.status)) {
         savePending(null);
         setFailure(error.status === 409 ? 'Операция отклонена. Проверьте остаток, кассу и актуальную версию товара.' : error.message);
       } else setFailure('Подтверждение не получено. После восстановления связи проверьте ту же операцию.');
+      return false;
     } finally {
       sendingRef.current = false;
       if (mounted.current) {
@@ -221,11 +226,13 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
   const currentProduct = data?.products.find(item => item.id === productId && !item.archived);
   const activeCategory = data?.categories.find(item => item.id === (categoryId || 'smartphones')) ?? data?.categories[0];
   function start(kind, product = null) {
+    setEditor('');
     setSelection(product);
     setType(kind);
     setFailure('');
     setMessage('');
     if (kind === 'sale') navigate('sales');
+    if (kind === 'purchase' && route === 'search') navigate('purchase');
     if (kind === 'repair' || kind === 'repair_start') navigate('repairs');
     window.scrollTo(0, 0);
   }
@@ -238,6 +245,8 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
   useEffect(() => {
     if (previousRoute.current === route) return;
     previousRoute.current = route;
+    setEditor('');
+    setMessage('');
     if (!type) {
       setProductId('');
       setSelection(null);
@@ -257,9 +266,14 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
     api, scope, revision: data.cursor, online: available, permissionKey: permissions.join(','),
   };
   const mayReadCash = permissions.includes('finance.cash.read');
-  const stockDetail = ['purchase', 'repairs'].includes(route) && mayReadStock && currentProduct && !type;
+  const canPrice = permissions.includes('stock.planned_price.write');
+  const canBulk = allowed.includes('bulk_price') || allowed.includes('bulk_attributes');
+  const editing = route === 'purchase' && (editor === 'bulk' ? canBulk : allowed.includes({ category: 'save_category', product: 'edit_product' }[editor]))
+    && (editor !== 'product' || currentProduct);
+  const saveCatalogue = command => send({ id: crypto.randomUUID(), command });
+  const stockDetail = ['purchase', 'repairs', 'search'].includes(route) && mayReadStock && currentProduct && !type && !editing;
   return <section className="pb-workspace" aria-label="Рабочие данные">
-    {![ 'team', 'settings' ].includes(route) && !stockDetail && <PageTitle
+    {![ 'team', 'settings' ].includes(route) && !stockDetail && !editing && <PageTitle
       title={type ? contextTitle[type] : route === 'dashboard'
         ? <><span className="pb-overview-wordmark">PhoneBooks</span><span className="pb-overview-label">Обзор</span></>
         : routeName(route)}
@@ -275,17 +289,26 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
     {data && <>
       {!type && ['dashboard', 'sales', 'finance'].includes(route) && <CloudReports data={data}
         workspaceId={workspace.id} actor={actor} api={api} route={route} online={available} navigate={navigate} period={period} setPeriod={setPeriod} />}
+      {route === 'search' && !stockDetail && <WarehouseSearch products={data.products} maySearchStock={mayReadStock}
+        onProduct={item => setProductId(item.id)} history={mayReadHistory ? query => <TeamHistory key={query} {...historyProps}
+          query={query} title="История операций" /> : undefined} />}
+      {editing && <CatalogEditor key={editor + ':' + (currentProduct?.id ?? '')} mode={editor} product={currentProduct}
+        categories={data.categories} products={data.products} canPrice={editor === 'bulk' ? allowed.includes('bulk_price') : canPrice} canEdit={allowed.includes('bulk_attributes')} disabled={!available || !!pending || sending}
+        onClose={() => setEditor('')} onSave={saveCatalogue} />}
       {stockDetail && <TeamProduct key={currentProduct.id} product={currentProduct} categories={data.categories} onBack={() => setProductId('')}
+        onEdit={available && !pending && allowed.includes('edit_product') && route === 'purchase' ? () => setEditor('product') : undefined}
         history={mayReadHistory ? tab => <TeamHistory key={tab} {...historyProps} product={currentProduct.id}
           kind={tab === 'repairs' ? 'repair' : null} title={tab === 'repairs' ? 'История ремонта' : 'Операции с товаром'} /> : undefined}
         actions={allowed.filter(kind => [
           ...(!currentProduct.inRepair && currentProduct.quantity > currentProduct.reserved ? ['sale'] : []),
           ...(!currentProduct.inRepair && currentProduct.tracking === 'unit' && currentProduct.quantity === 1 && currentProduct.reserved === 0 ? ['repair_start'] : []),
-          ...(currentProduct.inRepair ? ['repair'] : ['stock_adjustment', ...(currentProduct.tracking === 'quantity' ? ['purchase'] : [])]),
+          ...(currentProduct.inRepair ? ['repair'] : ['stock_adjustment', ...(currentProduct.tracking === 'quantity' || !currentProduct.purchased && !currentProduct.quantity ? ['purchase'] : [])]),
         ].includes(kind))} onOperation={kind => start(kind, currentProduct)} />}
-      {!type && !stockDetail && mayReadStock && ['purchase', 'repairs'].includes(route) && <TeamStock key={route}
+      {!type && !stockDetail && !editing && mayReadStock && ['purchase', 'repairs'].includes(route) && <TeamStock key={route}
         products={data.products} categories={data.categories} repairs={route === 'repairs'} onOpen={setProductId}
-        onCreate={route === 'purchase' && allowed.includes('purchase') ? () => start('purchase') : undefined} />}
+        onCreate={route === 'purchase' && allowed.includes('purchase') ? () => start('purchase') : undefined}
+        onCategories={route === 'purchase' && allowed.includes('save_category') ? () => setEditor('category') : undefined}
+        onBulk={route === 'purchase' && canBulk && data.products.length ? () => setEditor('bulk') : undefined} />}
       {!type && !stockDetail && route !== 'purchase' && <div className="pb-actions">
         {actions.filter(kind => allowed.includes(kind)).map(kind =>
           <button key={kind} onClick={() => start(kind)} disabled={!available || !!pending}><Plus size={17} />{contextTitle[kind]}</button>)}
@@ -298,7 +321,7 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
             {(type !== 'purchase' || permissions.includes('stock.create')) && <option value="">{type === 'purchase' ? 'Новая карточка' : 'Выберите товар'}</option>}
             {type === 'purchase' && !permissions.includes('stock.create') && <option value="">Выберите товар</option>}
             {data.products.filter(item => !item.archived &&
-              (type !== 'purchase' || item.tracking === 'quantity') &&
+              (type !== 'purchase' || (item.tracking === 'quantity' || !item.purchased && !item.quantity && !item.inRepair)) &&
               (type !== 'sale' || (!item.inRepair && item.quantity > item.reserved)) &&
               (type !== 'repair_start' || (item.tracking === 'unit' && item.quantity === 1 && !item.inRepair && !item.reserved)) &&
               (type !== 'repair' || (item.tracking === 'unit' && item.quantity === 1)))
@@ -312,16 +335,14 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
               <label>Учёт<select name="tracking" key={activeCategory?.id} defaultValue={activeCategory?.id === 'accessories' ? 'quantity' : 'unit'}>
                 <option value="unit">Поштучный</option><option value="quantity">Количественный</option></select></label>
             </div>
-            {activeCategory?.attributes?.length > 0 && <div className="group-fields" key={activeCategory.id}>
-              {activeCategory.attributes.map(field => <label key={field.id}>{field.name}{field.type === 'boolean'
-                ? <select name={'attr:' + field.id}><option value="">Не указано</option><option value="true">Да</option><option value="false">Нет</option></select>
-                : <input name={'attr:' + field.id} type={field.type === 'number' ? 'number' : 'text'} step="any" maxLength={200} inputMode={field.id === 'imei' ? 'numeric' : undefined} />}</label>)}
-            </div>}
+            <div className="group-fields" key={activeCategory?.id}><AttributeFields category={activeCategory} /></div>
+            {canPrice && <label>Плановая цена продажи, ₽<input name="plannedPrice" inputMode="decimal" /></label>}
           </>}
           {['purchase', 'sale', 'stock_adjustment'].includes(type) && <label>{type === 'stock_adjustment' ? 'Изменение количества' : 'Количество'}
             <input name="quantity" type="number" defaultValue="1" min={type === 'stock_adjustment' ? -100000 : 1} max="100000" step="1" required /></label>}
           {accountCommands.includes(type) && <>
-            <label>{['purchase', 'sale'].includes(type) ? 'Цена за единицу, ₽' : 'Сумма, ₽'}<input name="amount" inputMode="decimal" required /></label>
+            <label>{['purchase', 'sale'].includes(type) ? 'Цена за единицу, ₽' : 'Сумма, ₽'}<input key={type === 'sale' ? selection?.id : type} name="amount" inputMode="decimal"
+              defaultValue={type === 'sale' ? priceInput(selection?.plannedPriceMinor) : undefined} required /></label>
             <label>Счёт<select name="accountId" required>{data.accounts.filter(item => !item.archived).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
           </>}
           <button disabled={type === 'purchase' && !selection && !permissions.includes('stock.create')}>

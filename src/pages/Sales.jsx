@@ -4,6 +4,7 @@
  * Восстановлено из production-бандла PhoneBooks. Логика и разметка сохранены без изменений;
  * локальные имена переменных в теле функций оставлены как в бандле.
  */
+import { WarehouseActivity } from "../components/WarehouseActivity.jsx";
 import { SaleForm } from "../components/sales/SaleForm.jsx";
 import {
   Button,
@@ -58,6 +59,7 @@ export function SalesPage({
   onOpenForm: t,
   onCloseForm: n,
   presetPhoneId: a,
+  onOpenWarehouse,
 }) {
   const { data: c, mutate: r, notify: i } = useStore(),
     [period, setPeriod] = React.useState("all"),
@@ -461,6 +463,7 @@ export function SalesPage({
           </Fragment>
         )}
       </Card>
+      {d !== "cancelled" && <WarehouseActivity range={range} query={o} onOpen={onOpenWarehouse} />}
       {accessorySales.length > 0 && (
         <Card>
           <div className="card-pad pb-3">

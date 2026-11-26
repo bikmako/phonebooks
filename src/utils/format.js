@@ -173,3 +173,14 @@ export function inPeriod(s, t) {
   const n = s.slice(0, 10);
   return n >= t.from && n <= t.to;
 }
+
+const minorMoneyFormatter = new Intl.NumberFormat('ru', { style: 'currency', currency: 'RUB', maximumFractionDigits: 2 });
+export function formatMinorMoney(value) {
+  const minor = BigInt(value);
+  const rubles = minor / 100n;
+  const kopecks = minor % 100n;
+  const amount = rubles === 0n && kopecks < 0n ? -0 : rubles;
+  return minorMoneyFormatter.formatToParts(amount).flatMap(({ type, value }) =>
+    type === 'fraction' ? (kopecks ? [String(kopecks < 0 ? -kopecks : kopecks).padStart(2, '0')] : [])
+      : type === 'decimal' && !kopecks ? [] : [value]).join('');
+}

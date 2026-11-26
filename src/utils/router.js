@@ -13,6 +13,7 @@ export const ROUTES = [
   "repairs",
   "finance",
   "history",
+  "search",
   "settings",
 ];
 export function parseHashRoute() {
@@ -23,10 +24,10 @@ export function parseHashRoute() {
   return {
     route: a,
     action: c.get("action") ?? void 0,
-    phoneId: c.get("phone") ?? void 0,
+    phoneId: c.get("product") ?? c.get("phone") ?? void 0,
   };
 }
 export function navigateTo(s, t) {
-  const n = "";
+  const n = t ? "?" + new URLSearchParams({ product: t }) : "";
   window.location.hash = `/${s}${n}`;
 }

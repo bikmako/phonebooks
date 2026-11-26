@@ -9,6 +9,7 @@
     "dev": "vite",
     "prebuild": "node tools/prepare-scanner-assets.js",
     "build": "vite build",
+    "prebuild:team": "node tools/prepare-scanner-assets.js --team",
     "build:team": "vite build --config vite.team.config.js",
     "preview": "vite preview",
     "test": "node --test tests/*.test.js",

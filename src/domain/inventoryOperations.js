@@ -1,3 +1,4 @@
+import { warehouseProjection } from './warehouse.js';
 import { getAccessorySaleTotals } from './accessories.js';
 import { getPhoneTotalCost, getSaleRevenue } from '../utils/calculations.js';
 import { roundMoney } from '../utils/format.js';
@@ -5,7 +6,7 @@ import { accessoryProductId, phoneProductId } from './inventory.js';
 
 export const OPERATION_VERSION = 1;
 export const OPERATION_TYPES = Object.freeze([
-  'purchase', 'sale', 'expense', 'repair', 'customer_return', 'supplier_return',
+  'purchase', 'sale', 'expense', 'repair', 'repair_start', 'customer_return', 'supplier_return',
   'reservation', 'stock_adjustment', 'transfer', 'deposit', 'withdrawal',
 ]);
 const money = value => {
@@ -102,6 +103,11 @@ export function projectInventoryOperations(state) {
   for (const cash of state.cashOps) {
     add({ id: 'cash:' + cash.id, type: cash.kind, date: cash.date,
       postings: posting(cash.accountId, money(cash.amount) * (cash.kind === 'deposit' ? 1 : -1)) });
+  }
+  for (const operation of warehouseProjection(state).operations) {
+    add({ id: operation.id, type: operation.type, date: operation.date,
+      lines: [line(operation.productId, operation.units, operation.stockDelta)],
+      postings: posting(operation.accountId, operation.cashMinor), revenueMinor: operation.revenueMinor, costMinor: operation.costMinor });
   }
   return operations;
 }

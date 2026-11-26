@@ -119,6 +119,7 @@ const rpcArgs = {
   phonebooks_team_members: ["p_workspace", "p_actor"],
   phonebooks_team_manage: ["p_workspace", "p_actor", "p_action", "p_input"],
   phonebooks_team_audit: ["p_workspace", "p_actor", "p_member", "p_kind", "p_from", "p_to", "p_offset"],
+  phonebooks_team_search_history: ["p_workspace", "p_actor", "p_product", "p_kind", "p_from", "p_to", "p_offset", "p_query"],
   phonebooks_team_operation_history: ["p_workspace", "p_actor", "p_product", "p_kind", "p_from", "p_to", "p_offset"],
   phonebooks_team_stats: ["p_workspace", "p_actor", "p_member", "p_from", "p_to"],
 };
@@ -133,7 +134,7 @@ async function signedRpc(claims, operation, body) {
 }
 
 const assetsRoot = resolve("dist-team");
-const assetTypes = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
+const assetTypes = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".wasm": "application/wasm", ".woff2": "font/woff2" };
 const environment = {
   SUPABASE_URL: "http://127.0.0.1:" + providerPort,
   SUPABASE_PUBLISHABLE_KEY: "test-provider-key",

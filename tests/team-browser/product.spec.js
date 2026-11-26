@@ -102,6 +102,7 @@ test('Solo product navigation, device details and finance', async ({ page }, inf
   await expect(page.getByRole('button', { name: /Учебный монитор/ })).toBeVisible();
   await page.reload();
   await page.getByRole('button', { name: /Учебный монитор/ }).click();
+  await page.getByRole('button', { name: 'Изменить', exact: true }).click();
   await expect(page.getByLabel('Диагональ', { exact: true })).toHaveValue('27');
   expect(browserErrors).toEqual([]);
 });

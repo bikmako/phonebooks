@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Plus, Settings, UsersRound } from 'lucide-react';
+import { Plus, Search, Settings, UsersRound } from 'lucide-react';
 import { AppShell, PageTitle } from '../src/product/ui.jsx';
 import { AccountForm, AuthLayout } from './AccountForm.jsx';
 import { Workspaces } from './Workspaces.jsx';
@@ -29,7 +29,7 @@ async function api(path, body) {
   return data;
 }
 
-const sections = ['dashboard', 'purchase', 'sales', 'repairs', 'finance', 'history', 'team', 'settings'];
+const sections = ['dashboard', 'purchase', 'sales', 'repairs', 'finance', 'history', 'search', 'team', 'settings'];
 const readRoute = () => sections.includes(location.hash.slice(2)) ? location.hash.slice(2) : 'dashboard';
 
 function TeamApp() {
@@ -53,7 +53,7 @@ function TeamApp() {
   }
 
   useEffect(() => {
-    const change = () => { setRoute(readRoute()); window.scrollTo(0, 0); };
+    const change = () => { setRoute(readRoute()); setNote(''); window.scrollTo(0, 0); };
     window.addEventListener('hashchange', change);
     return () => window.removeEventListener('hashchange', change);
   }, []);
@@ -160,6 +160,12 @@ function TeamApp() {
       await loadWorkspaces(workspace.id);
       navigate('dashboard');
     }),
+    rename: (name, previousName, requestId) => run(async () => {
+      await api('cloud/command', { p_workspace: data.selected.id, p_actor: accountId,
+        p_request: requestId, p_command: { type: 'rename_workspace', name, previousName } });
+      await loadWorkspaces();
+      setNote('Название предприятия сохранено.');
+    }),
     invite: (email, role) => run(async () => {
       await api('invitations/create', { p_workspace_id: data.selected.id, p_email: email, p_role: role });
       await loadWorkspaces();
@@ -201,6 +207,7 @@ function TeamApp() {
     if (section === 'sales') return permissions.some(permission => ['trade.sale', 'finance.history.read', 'analytics.company', 'analytics.self'].includes(permission));
     if (section === 'repairs') return permissions.includes('stock.read') || permissions.includes('finance.history.read');
     if (section === 'finance') return permissions.some(permission => ['finance.cash.read', 'finance.history.read', 'finance.deposit', 'analytics.company', 'analytics.self'].includes(permission));
+    if (section === 'search') return permissions.includes('stock.read') || permissions.includes('finance.history.read');
     if (section === 'history') return permissions.includes('finance.history.read');
     return true;
   });
@@ -210,6 +217,7 @@ function TeamApp() {
   return <AppShell route={active} navigate={navigate} mode="Team" identity={data.selected?.name ?? data.account.email}
     enabled={enabled} switchUrl={config.soloUrl} onAdd={add}
     tools={<>
+      {enabled.includes('search') && <button className="pb-icon-button" onClick={() => navigate('search')} aria-label="Глобальный поиск"><Search size={19} /></button>}
       <button className="pb-icon-button" onClick={() => navigate('team')} aria-label="Рабочие пространства"><UsersRound size={19} />
         {data.incoming.length > 0 && <span className="pb-invite-dot" />}
       </button>

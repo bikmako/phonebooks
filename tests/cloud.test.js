@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { asUser, seedSession, seedUser, teamDatabase, testImportKey } from './support/team-database.js';
 import { buildExportFile } from '../src/storage/backupFormat.js';
+import { emptyInventory, saveInventoryProduct } from '../src/domain/inventory.js';
+import { recordWarehouse } from '../src/domain/warehouse.js';
+import { createInitialState } from '../src/storage/initialState.js';
 import { prepareSoloTransfer, transferSource } from '../src/domain/soloTransfer.js';
 import { realisticSnapshot } from './fixtures/realistic.js';
 
@@ -143,4 +146,29 @@ test('Solo preview and import preserve legacy stock and financial totals, with r
   await command(owner, space, { type: 'sale', productId: accessory.id, expectedVersion: accessory.version,
     quantity: 1, unitPriceMinor: 1500, accountId: data.accounts.find(item => !item.archived).id });
   assert.equal((await feed(owner, space)).totals.revenue_minor, material.summary.revenueMinor + 1500);
+});
+
+test('Team imports the new Solo warehouse with its repair history, price and reconciled balances', async () => {
+  const owner = await employee();
+  const space = await workspace(owner);
+  const state = createInitialState();
+  state.accounts[0].openingBalance = 500;
+  const id = 'product:local-device';
+  state.catalog = saveInventoryProduct(emptyInventory(), { id, name: 'Локальный ноутбук', categoryId: 'laptops',
+    tracking: 'unit', attributes: { serial: 'TST' }, plannedPriceMinor: 17000 });
+  const operation = (state, type, unitMinor, balance) => recordWarehouse(state, id, type,
+    { units: 1, unitMinor, accountId, version: 1, position: state.warehouse?.length ?? 0 }, balance);
+  const purchase = operation(state, 'purchase', 10000, 50000);
+  const start = operation(purchase, 'repair_start', 0, 40000);
+  const repaired = operation(start, 'repair', 2000, 40000);
+  const material = prepareSoloTransfer({ state: repaired });
+  await asUser(db, owner, 'select public.phonebooks_team_solo_import($1,$2,$3,$4,$5)', [
+    space, owner.sub, importKey, 'c'.repeat(64), material,
+  ]);
+  const current = await feed(owner, space);
+  assert.equal(current.products[0].plannedPriceMinor, '17000');
+  assert.equal(current.products[0].stockCostMinor, '12000');
+  assert.equal(current.products[0].purchased, true);
+  assert.equal(current.accounts[0].balanceMinor, '38000');
+  assert.ok(current.operations.some(item => item.type === 'repair_start'));
 });

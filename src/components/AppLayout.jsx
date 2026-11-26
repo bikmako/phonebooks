@@ -1,12 +1,12 @@
 import React from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { useStore } from '../hooks/useStore.jsx';
 import { ThemeToggle } from '../hooks/useTheme.jsx';
 import { AppShell, PageTitle, routeName } from '../product/ui.jsx';
 import { UpdateNotice } from '../updates/UpdateNotice.jsx';
 import { crossModeUrl } from '../utils/modeUrl.js';
 
-const enabled = ['dashboard', 'purchase', 'sales', 'repairs', 'finance', 'history', 'settings'];
+const enabled = ['dashboard', 'purchase', 'sales', 'repairs', 'finance', 'history', 'search', 'settings'];
 
 export function AppLayout({ route, hideTitle, onNavigate, onQuickAction, children }) {
   const { data, saveState, prepareForUpdate, notify } = useStore();
@@ -25,7 +25,7 @@ export function AppLayout({ route, hideTitle, onNavigate, onQuickAction, childre
     }
   }
   return <AppShell route={route} navigate={onNavigate} mode="Solo" identity={data.settings.businessName}
-    enabled={enabled} switchUrl={teamUrl} onSwitch={switchMode} onAdd={onQuickAction} tools={<ThemeToggle />}>
+    enabled={enabled} switchUrl={teamUrl} onSwitch={switchMode} onAdd={onQuickAction} tools={<><button className="pb-icon-button" onClick={() => onNavigate('search')} aria-label="Глобальный поиск"><Search size={19} /></button><ThemeToggle /></>}>
     <UpdateNotice />
     {saveState === 'error' && <p className="pb-empty" role="alert">Не удалось сохранить изменения.</p>}
     {!hideTitle && <div className="pb-layout-heading"><PageTitle title={dashboard ? <><span className="pb-overview-wordmark">PhoneBooks</span><span className="pb-overview-label">Обзор</span></> : routeName(route)}

@@ -1,3 +1,5 @@
+import { warehouseStock } from './warehouse.js';
+
 export const INVENTORY_VERSION = 2;
 export const INVENTORY_KEY = 'inventoryModel';
 
@@ -6,12 +8,12 @@ const standard = [
   ['smartphones', 'Смартфоны', textFields([
     ['imei', 'IMEI'], ['storage', 'Память'], ['color', 'Цвет'], ['condition', 'Состояние'], ['kit', 'Комплект'],
   ])],
-  ['laptops', 'Ноутбуки', []],
-  ['tablets', 'Планшеты', []],
-  ['consoles', 'Игровые приставки', []],
-  ['watches', 'Умные часы', []],
-  ['computers', 'Компьютеры', []],
-  ['components', 'Комплектующие', []],
+  ['laptops', 'Ноутбуки', textFields([['serial', 'Серийный номер'], ['processor', 'Процессор'], ['ram', 'Оперативная память'], ['storage', 'Накопитель']])],
+  ['tablets', 'Планшеты', textFields([['serial', 'Серийный номер'], ['storage', 'Память'], ['screen', 'Экран']])],
+  ['consoles', 'Игровые приставки', textFields([['serial', 'Серийный номер'], ['edition', 'Версия'], ['storage', 'Накопитель']])],
+  ['watches', 'Умные часы', textFields([['serial', 'Серийный номер'], ['size', 'Размер корпуса']])],
+  ['computers', 'Компьютеры', textFields([['serial', 'Серийный номер'], ['processor', 'Процессор'], ['ram', 'Оперативная память'], ['storage', 'Накопитель']])],
+  ['components', 'Комплектующие', textFields([['article', 'Артикул'], ['compatibility', 'Совместимость']])],
   ['accessories', 'Аксессуары', textFields([
     ['type', 'Вид'], ['compatibility', 'Совместимость'], ['color', 'Цвет'],
   ])],
@@ -52,6 +54,8 @@ function validateProduct(product, categories) {
   requireValid(object(product) && typeof product.id === 'string' && product.id.startsWith('product:') &&
     validId(product.id.slice('product:'.length)) && validName(product.name) &&
     ['unit', 'quantity'].includes(product.tracking) && validVersion(product.version), 'Неверная карточка товара');
+  requireValid(product.plannedPriceMinor == null || Number.isSafeInteger(product.plannedPriceMinor) &&
+    product.plannedPriceMinor >= 0 && product.plannedPriceMinor <= 10_000_000_000, 'Неверная плановая цена.');
   const category = categories.get(product.categoryId);
   requireValid(category && object(product.attributes), 'Неизвестная категория или характеристики товара');
   const fields = new Map(category.attributes.map(field => [field.id, field]));
@@ -99,7 +103,7 @@ export function saveInventoryProduct(inventory, product, expectedVersion = 0) {
   return validateInventory({ ...inventory, products });
 }
 
-export function projectInventory(state, catalog = emptyInventory()) {
+export function projectInventory(state, catalog = state.catalog ?? emptyInventory()) {
   const quantities = new Map();
   for (const batch of state.accessoryBatches) {
     quantities.set(batch.itemId, (quantities.get(batch.itemId) ?? 0) + batch.qtyLeft);
@@ -108,18 +112,20 @@ export function projectInventory(state, catalog = emptyInventory()) {
     id: phoneProductId(phone.id), name: phone.model, categoryId: 'smartphones', tracking: 'unit',
     attributes: Object.fromEntries(STANDARD_CATEGORIES[0].attributes.map(({ id }) => [id, phone[id]])),
     quantity: phone.status === 'sold' ? 0 : 1, reservedQuantity: phone.status === 'reserved' ? 1 : 0,
-    status: phone.status,
+    status: phone.status, ...(phone.plannedPrice > 0 ? { plannedPriceMinor: Math.round(phone.plannedPrice * 100) } : {}),
   }));
   const accessories = state.accessoryItems.map(item => ({
     id: accessoryProductId(item.id), name: item.name, categoryId: 'accessories', tracking: 'quantity',
     attributes: { type: item.category, compatibility: item.compatibility, color: item.color },
-    quantity: quantities.get(item.id) ?? 0, reservedQuantity: 0, status: item.archived ? 'archived' : 'active',
+    quantity: quantities.get(item.id) ?? 0, reservedQuantity: 0, status: item.archived ? 'archived' : 'active', ...(item.salePrice > 0 ? { plannedPriceMinor: Math.round(item.salePrice * 100) } : {}),
   }));
   return {
     version: catalog.version, revision: catalog.revision, revisionId: catalog.revisionId,
     categories: [...STANDARD_CATEGORIES, ...catalog.categories],
-    products: [...phones, ...accessories, ...catalog.products.map(product => ({
-      ...product, quantity: 0, reservedQuantity: 0, status: 'active',
-    }))],
+    products: [...phones, ...accessories, ...catalog.products.map(product => {
+      const { quantity, inRepair, stockCostMinor, purchased } = warehouseStock(state, product.id);
+      return { ...product, quantity, inRepair, stockCostMinor, purchased, reservedQuantity: 0,
+        status: inRepair ? 'repair' : 'active' };
+    })],
   };
 }

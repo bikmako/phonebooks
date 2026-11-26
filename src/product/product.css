@@ -168,3 +168,24 @@ button.pb-row:hover { background: var(--pb-panel); }
   .pb-side-nav button, .pb-more button, .pb-action, .pb-row, .pb-metric { transition: background-color .14s ease, color .14s ease, box-shadow .14s ease; }
 }
 
+
+.pb-warehouse-history, .pb-warehouse-search { margin-block: 14px; }
+.pb-warehouse-search input { min-width: 0; }
+.pb-bulk-items { max-height: 18rem; overflow: auto; border-block: 1px solid var(--pb-line); }
+.pb-bulk-items .pb-bulk-option { display: flex; align-items: center; gap: 9px; padding: 8px 4px; cursor: pointer; min-height: 42px; }
+.pb-bulk-option + .pb-bulk-option { border-top: 1px solid var(--pb-line); }
+.pb-bulk-items input[type=checkbox] { width: 17px; height: 17px; min-height: 0; accent-color: var(--pb-primary); }
+.pb-warehouse-imei { min-width: 0; }
+.pb-warehouse-imei > label { margin-bottom: 5px; }
+.pb-warehouse-imei .imei-input-row { display: flex; align-items: center; gap: 8px; }
+.pb-warehouse-imei input { flex: 1; min-width: 0; }
+.pb-warehouse-imei .pb-action { flex: 0 0 44px; padding-inline: 8px; }
+
+.pb-bulk { display: grid; gap: 10px; }
+.pb-bulk > .pb-heading { margin-bottom: 4px; }
+.pb-bulk > button { justify-self: start; }
+.pb-bulk > .pb-list > li { grid-template-columns: minmax(0, 1fr) auto; }
+@media (max-width: 360px) {
+  .pb-top-tools { gap: 4px; }
+  .pb-topbar .pb-mode { display: none; }
+}

@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowDownLeft, ArrowRight, ChartNoAxesCombined, Coins, Package, Plus, Smartphone, TrendingUp, Wrench } from 'lucide-react';
+import { warehouseProjection } from '../domain/warehouse.js';
 import { useStore } from '../hooks/useStore.jsx';
 import { Metrics, PeriodSelect, SectionTitle } from '../product/ui.jsx';
 import { getStats } from '../utils/calculations.js';
@@ -20,11 +21,12 @@ export function DashboardPage({ onNavigate, onNewPurchase, onNewSale }) {
     const range = getPeriod(period);
     const last = getPreviousPeriod(range);
     const accessoryCount = getAccessoryStockQty(data);
+    const otherStock = [...warehouseProjection(data).products.values()];
     return {
       stats: getStats(data, range),
       before: last ? getStats(data, last) : null,
-      stock: data.phones.filter(phone => ['in_stock', 'reserved'].includes(phone.status)).length + accessoryCount,
-      repairs: data.phones.filter(phone => phone.status === 'repair').length,
+      stock: data.phones.filter(phone => ['in_stock', 'reserved'].includes(phone.status)).length + accessoryCount + otherStock.filter(item => !item.inRepair).reduce((sum, item) => sum + item.quantity, 0),
+      repairs: data.phones.filter(phone => phone.status === 'repair').length + otherStock.filter(item => item.inRepair).length,
       operations: getAllOperations(data).filter(operation => inPeriod(operation.date, range)).slice(0, 5),
     };
   }, [data, period]);

@@ -30,6 +30,7 @@ export async function teamDatabase() {
       '202611250009_phonebooks_resumable_transfer',
       '202611250010_phonebooks_cloud_pagination',
       '202611260011_phonebooks_product_operations',
+      '202611260012_phonebooks_warehouse',
     ]) {
       await db.exec(await readFile(new URL('../../supabase/migrations/' + file + '.sql', import.meta.url), 'utf8'));
     }

@@ -1,5 +1,6 @@
 /** Portable local backup format. Never coerce or discard unknown state fields. */
 import { INVENTORY_KEY, validateInventory } from '../domain/inventory.js';
+import { validateWarehouse } from '../domain/warehouse.js';
 
 export const FORMAT_VERSION = 2;
 export const MAX_FILE_BYTES = 32 * 1024 * 1024;
@@ -133,6 +134,8 @@ export function validateState(input, { legacy = false } = {}) {
       }
     }
   }
+  if (state.catalog !== undefined) validateInventory(state.catalog);
+  validateWarehouse(state);
   return state;
 }
 export function validateLocal(entries) {
