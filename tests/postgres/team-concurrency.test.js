@@ -287,6 +287,43 @@ select opening_balance_minor+delta_minor from phonebooks_team_private.inventory_
   assert.equal(final.stdout.trim(),'30');
 });
 
+test('a spreadsheet preview cannot overwrite a concurrent warehouse revision and a later import can be reverted', { skip: !container, timeout: 30_000 }, async () => {
+  const {workspace, members:[leader, manager]} = await loadFixture(2, 0, 5000);
+  const request = randomUUID();
+  const productId = 'product:sheet_' + 'a'.repeat(64);
+  const plan = {
+    categories: [],
+    products: [{ id: productId, name: 'Sheet fixture', categoryId: 'other', tracking: 'quantity', attributes: {} }],
+    rows: [{ sourceRow: 2, type: 'opening', name: 'Sheet fixture', date: '2026-01-02', productId, quantity: 2,
+      amountMinor: 100, costMinor: 0, accountId: null, external: 'native-sheet-1' }],
+  };
+  const sqlImport = revision => `select public.phonebooks_team_sheet_import('${workspace}','${leader.member}','${request}','${revision}',${quoted(JSON.stringify(plan))});`;
+  let markAcquired;
+  const acquired = new Promise(resolve => { markAcquired = resolve; });
+  const first = psql(`begin;
+${authenticate(manager.member, manager.session)}
+${command(manager.member, randomUUID(), {type:'expense',amountMinor:100,accountId:account}, workspace)}
+\\echo phonebooks-command-uncommitted
+select pg_sleep(0.8);
+commit;`, output => { if (output.includes('phonebooks-command-uncommitted')) markAcquired(); });
+  await Promise.race([acquired, first.then(result => assert.fail(result.stderr || 'Expense did not take the workspace lock'))]);
+  const stale = await psql(timed(leader, '\\set VERBOSITY verbose\n' + sqlImport(1)));
+  assert.equal((await first).code, 0);
+  assert.match(stale.stderr, /PT409/);
+  const current = await psql(timed(leader, sqlImport(2)));
+  assert.equal(current.code, 0, current.stderr);
+  assert.match(current.stdout, /"revision": "3"/);
+  const reverted = await psql(timed(leader, `select public.phonebooks_team_sheet_revert('${workspace}','${leader.member}','${request}');`));
+  assert.equal(reverted.code, 0, reverted.stderr);
+  const results = await psql(`
+select opening_balance_minor+coalesce(delta_minor,0) from phonebooks_team_private.inventory_accounts a
+ left join phonebooks_team_private.inventory_account_movements m on m.workspace_id=a.workspace_id and m.account_id=a.id
+ where a.workspace_id='${workspace}';
+select count(*) from phonebooks_team_private.inventory_products where workspace_id='${workspace}';`);
+  assert.equal(results.code, 0, results.stderr);
+  assert.equal(results.stdout.trim(), '4900\n0');
+});
+
 test('native dump and restore preserve business records, roles, grants and workspace totals', { skip: !container, timeout: 60_000 }, async () => {
   const output = '/tmp/phonebooks-pilot-fixture.dump';
   const identities = '/tmp/phonebooks-pilot-identities.csv';
