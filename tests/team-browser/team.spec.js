@@ -231,6 +231,7 @@ test('workspace selection, invitation acceptance, revocation and user isolation'
 
 test('Solo keeps its local data and opens offline after switching to Team and back', async ({ page }) => {
   await page.goto(solo + '/#/settings');
+  await expect(page.getByRole('button', { name: 'Скачать полную копию', exact: true })).toBeEnabled();
   const businessName = page.getByRole('textbox', { name: 'Название бизнеса' });
   await businessName.fill('Локальный магазин');
   await page.getByRole('button', { name: 'Сохранить', exact: true }).click();
@@ -245,11 +246,12 @@ test('Solo keeps its local data and opens offline after switching to Team and ba
   if (await more.isVisible()) await more.click();
   await page.getByRole('link', { name: 'Перейти в Solo' }).click();
   await expect(businessName).toHaveValue('Локальный магазин');
-  await page.evaluate(() => navigator.serviceWorker.ready);
+  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller?.state)).toBe('activated');
   await page.context().setOffline(true);
   await page.reload();
   await expect(businessName).toHaveValue('Локальный магазин');
   await expect(page.getByText('Облачный магазин', { exact: true })).toHaveCount(0);
+  await page.context().setOffline(false);
 });
 
 test('team sees confirmed stock changes and can recover after a committed sale loses its response', async ({ page, browser }) => {
