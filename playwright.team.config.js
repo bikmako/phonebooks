@@ -6,7 +6,10 @@ export default defineConfig({
   workers: 2,
   projects: [
     { name: 'team-chromium', use: { browserName: 'chromium' } },
-    { name: 'team-firefox', use: { browserName: 'firefox' } },
+    { name: 'team-firefox', use: {
+      browserName: 'firefox',
+      launchOptions: { firefoxUserPrefs: { 'network.dns.ipv4OnlyDomains': 'localhost' } },
+    } },
     { name: 'team-iphone-webkit', use: { ...devices['iPhone 13'], browserName: 'webkit' } },
   ],
   use: {
@@ -22,9 +25,11 @@ export default defineConfig({
       timeout: 90_000,
     },
     {
-      command: 'npm run build && npm run preview -- --host localhost --port 4397 --strictPort',
+      // Keep the distinct Solo hostname in the browser and make the listener
+      // deterministic on hosts whose localhost resolves to both address families.
+      command: 'npm run build && npm run preview -- --host 127.0.0.1 --port 4397 --strictPort',
       env: { VITE_PHONEBOOKS_TEAM_URL: 'https://127.0.0.1:4398' },
-      url: 'http://localhost:4397',
+      url: 'http://127.0.0.1:4397',
       timeout: 90_000,
     },
   ],
