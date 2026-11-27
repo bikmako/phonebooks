@@ -33,7 +33,7 @@ import {
 import React from "react";
 import { jsx, jsxs } from "react/jsx-runtime";
 
-const teamUrl = crossModeUrl(isDemo ? demoTeamUrl : import.meta.env.VITE_PHONEBOOKS_TEAM_URL, window.location.origin);
+const teamUrl = isDemo ? demoTeamUrl : crossModeUrl(import.meta.env.VITE_PHONEBOOKS_TEAM_URL, window.location.origin);
 
 export function formatBytes(s) {
   return s < 1024

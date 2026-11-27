@@ -6,13 +6,13 @@ import { AccountForm, AuthLayout } from './AccountForm.jsx';
 import { Workspaces } from './Workspaces.jsx';
 import { clearCloudRequests, CloudWorkspace } from './CloudWorkspace.jsx';
 import { TeamPanel } from './TeamPanel.jsx';
-import { demoTeamUrl, isDemo } from '../src/demo/mode.js';
+import { demoTeamUrl, isDemo, isDemoEntry } from '../src/demo/mode.js';
 import { DemoBanner } from '../src/demo/DemoBanner.jsx';
 import '../src/product/product.css';
 import './styles.css';
 import './auth.css';
 
-if (isDemo && location.origin !== new URL(demoTeamUrl).origin) {
+if (isDemo && !isDemoEntry(location, demoTeamUrl)) {
   document.getElementById('root').textContent = 'Откройте демоверсию по адресу ' + demoTeamUrl;
   throw new Error('Demo origin required');
 }

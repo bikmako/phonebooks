@@ -12,7 +12,7 @@ const enabled = ['dashboard', 'purchase', 'sales', 'repairs', 'finance', 'histor
 
 export function AppLayout({ route, hideTitle, onNavigate, onQuickAction, children }) {
   const { data, saveState, prepareForUpdate, notify } = useStore();
-  const teamUrl = crossModeUrl(isDemo ? demoTeamUrl : import.meta.env.VITE_PHONEBOOKS_TEAM_URL, window.location.origin);
+  const teamUrl = isDemo ? demoTeamUrl : crossModeUrl(import.meta.env.VITE_PHONEBOOKS_TEAM_URL, window.location.origin);
   const dashboard = route === 'dashboard';
   async function switchMode(event) {
     event.preventDefault();
