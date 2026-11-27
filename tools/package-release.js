@@ -27,7 +27,9 @@ async function collect(source, dest, files) {
   catch (error) { if (error.code !== 'ENOTDIR') throw error; }
   if (!contents) { files[dest] = new Uint8Array(await readFile(source)); return; }
   for (const member of contents.sort((a,b) => a.name.localeCompare(b.name))) {
-    if (member.isSymbolicLink() || member.name.startsWith('.')) throw new Error('Unexpected file in build: ' + member.name);
+    if (member.isSymbolicLink() || (member.name.startsWith('.') && !(member.isFile() && member.name === '.nojekyll'))) {
+      throw new Error('Unexpected file in build: ' + member.name);
+    }
     await collect(join(source, member.name), dest + '/' + member.name, files);
   }
 }
