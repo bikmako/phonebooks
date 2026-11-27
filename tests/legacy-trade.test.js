@@ -44,3 +44,25 @@ test('a returned legacy phone restores its recorded cost, can sell again and ret
   assert.equal(material.operations.filter(row => row.type === 'customer_return').length, 1);
   assert.equal(state.sales.filter(row => row.phoneId === sale.phoneId && row.status === 'completed').length, 2);
 });
+
+test('legacy accessory partial returns restore the source FIFO lot rather than average receipt cost', () => {
+  let state = realisticSnapshot().indexedDB.state[0].value;
+  const sale = state.accessorySales[0];
+  sale.discount = 0;
+  const item = sale.items[0];
+  const [allocation] = item.allocations;
+  const before = state.accessoryBatches.find(row => row.id === allocation.batchId);
+  before.unitCost = 100;
+  const second = { ...before, id: 'batch-from-fixture', qty: 1, qtyLeft: 0, unitCost: 300 };
+  state.accessoryBatches.push(second);
+  item.allocations = [{ batchId: before.id, qty: 1 }, { batchId: second.id, qty: 1 }];
+  item.unitCost = 200;
+  const command = { type: 'customer_return', productId: 'accessory:' + item.itemId,
+    originalId: 'acc_sale:' + sale.id, quantity: 1, amountMinor: 70000, reason: 'Возврат', accountId: sale.accountId };
+  const first = applyLegacyTrade(state, command);
+  assert.equal(first.legacyTrade[0].costMinor, -10000);
+  const last = applyLegacyTrade(first, command);
+  assert.equal(last.legacyTrade[1].costMinor, -30000);
+  item.allocations = [{ batchId: before.id, qty: 2 }];
+  assert.throws(() => applyLegacyTrade(state, command), /история себестоимости/);
+});

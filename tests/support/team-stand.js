@@ -105,6 +105,10 @@ async function providerHandler(request) {
 }
 
 const rpcArgs = {
+  phonebooks_team_sheet_import: ['p_workspace','p_actor','p_request','p_expected','p_plan'],
+  phonebooks_team_sheet_check: ['p_workspace','p_actor','p_expected','p_plan'],
+  phonebooks_team_sheet_revert: ['p_workspace','p_actor','p_request'],
+  phonebooks_team_sheet_export: ['p_workspace','p_actor','p_kind','p_filter','p_after','p_revision'],
   phonebooks_team_account: [],
   phonebooks_team_overview: ["p_preferred"],
   phonebooks_team_create_workspace: ["p_name", "p_request_id"],

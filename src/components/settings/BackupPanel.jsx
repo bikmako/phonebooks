@@ -62,7 +62,7 @@ export function BackupPanel() {
     </div>
     {error && <p role="alert" className="mt-2 text-red-500">{error}</p>}
     <details className="mt-3"><summary>Точки восстановления ({store.backups.length})</summary>
-      {store.backups.map(backup => <div key={backup.id} className="mt-2 flex gap-2"><span>{backup.at} · {backup.phones} телефонов</span><Button size="sm" disabled={busy || !!plan} onClick={async () => {
+      {store.backups.map(backup => <div key={backup.id} className="mt-2 flex gap-2"><span>{backup.at} · {backup.reason === 'spreadsheet' ? 'До импорта таблицы' : backup.phones + ' телефонов'}</span><Button size="sm" disabled={busy || !!plan} onClick={async () => {
         try { const data = await readBackup(backup.id); if (!data) throw new Error('Точка восстановления повреждена'); await prepare({ data, legacy: true }); }
         catch (e) { setError(e.message); }
       }}>Просмотреть</Button></div>)}

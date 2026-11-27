@@ -9,6 +9,8 @@ import { parseMinor as money } from '../src/domain/warehouse.js';
 import { AttributeFields, priceInput, readAttributes } from '../src/product/WarehouseFields.jsx';
 import { CatalogEditor } from './CatalogEditor.jsx';
 import { TeamHistory } from './TeamHistory.jsx';
+import { TeamSpreadsheet } from './TeamSpreadsheet.jsx';
+import { Modal } from '../src/components/ui.jsx';
 import { SoloTransfer } from './SoloTransfer.jsx';
 import { readCloudFeed } from './cloudFeed.js';
 
@@ -96,6 +98,7 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
   const [holdsData, setHoldsData] = useState(null);
   const [tradeFailure, setTradeFailure] = useState('');
   const [tick, setTick] = useState(() => performance.now());
+  const [sheetFilter, setSheetFilter] = useState(null);
   const [categoryId, setCategoryId] = useState('');
   const seenAdd = useRef(addRequest);
   const [pending, setPending] = useState(() => readPending(requestKey));
@@ -124,6 +127,7 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
           setTradeOpen(false);
           setTradeData(null);
           setHoldsData(null);
+          setSheetFilter(null);
           setMessage('');
           setFailure('');
           onAccessChanged();
@@ -150,6 +154,11 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
     } finally {
       sync.current = false;
     }
+  }
+
+  async function spreadsheetChanged({ reset = false } = {}) {
+    if (reset) cached.current = null;
+    await refresh();
   }
 
   useEffect(() => {
@@ -396,7 +405,8 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
         onReserve={route === 'purchase' && available && allowed.includes('reserve') ? id => { setProductId(id); showTrade('reserve'); } : undefined}
         onCreate={route === 'purchase' && allowed.includes('purchase') ? () => start('purchase') : undefined}
         onCategories={route === 'purchase' && allowed.includes('save_category') ? () => setEditor('category') : undefined}
-        onBulk={route === 'purchase' && canBulk && data.products.length ? () => setEditor('bulk') : undefined} />}
+        onBulk={route === 'purchase' && canBulk && data.products.length ? () => setEditor('bulk') : undefined}
+        onExport={permissions.includes('data.export') ? setSheetFilter : undefined} />}
       {!type && !stockDetail && route !== 'purchase' && <div className="pb-actions">
         {actions.filter(kind => allowed.includes(kind)).map(kind =>
           <button key={kind} onClick={() => start(kind)} disabled={!available || !!pending}><Plus size={17} />{contextTitle[kind]}</button>)}
@@ -448,6 +458,17 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
           kind={route === 'sales' ? 'sale' : route === 'repairs' ? 'repair' : route === 'finance' && mayReadCash ? 'cash' : null}
           fallback={data.operations} />
       </>}
+      {!type && !stockDetail && permissions.includes('data.export') && ['sales','finance','history','team'].includes(route) &&
+        <button type="button" className="secondary" onClick={() => setSheetFilter({
+          kind: ({ sales: 'sale', finance: 'finance', history: 'history', team: 'employees' })[route],
+        })}>Экспорт за период</button>}
+      {sheetFilter && <Modal open size="lg" title="Экспорт таблицы" onClose={() => setSheetFilter(null)}>
+        <TeamSpreadsheet data={data} scope={scope} api={api} online={available} period={period} currentFilter={sheetFilter} onChanged={spreadsheetChanged} />
+      </Modal>}
+      {route === 'settings' && (permissions.includes('data.import') || permissions.includes('data.export')) &&
+        <details className="pb-panel"><summary>Импорт и экспорт Excel/CSV</summary>
+          <TeamSpreadsheet data={data} scope={scope} api={api} online={available && !pending && !sending} period={period} onChanged={spreadsheetChanged} />
+        </details>}
       {permissions.includes('data.solo_transfer') && <div className="pb-transfer" hidden={route !== 'settings'}>
         <SoloTransfer scope={scope} online={available && !pending && !sending} api={api} onImported={refresh} />
       </div>}

@@ -135,6 +135,9 @@ export function validateState(input, { legacy = false } = {}) {
     }
   }
   if (state.catalog !== undefined) validateInventory(state.catalog);
+  if (state.sheetImports !== undefined && (!Array.isArray(state.sheetImports) ||
+    state.sheetImports.some(value => typeof value !== 'string' || !/^[a-f0-9]{64}$/.test(value)) ||
+    new Set(state.sheetImports).size !== state.sheetImports.length)) fail('Неверные квитанции импорта таблиц');
   if (state.legacyTrade !== undefined) {
     if (!Array.isArray(state.legacyTrade)) fail('Неверный журнал возвратов и броней');
     const products = new Set([...state.phones.map(row => 'phone:' + row.id), ...state.accessoryItems.map(row => 'accessory:' + row.id)]);

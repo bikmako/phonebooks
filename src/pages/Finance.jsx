@@ -7,6 +7,7 @@
 import { AccountModal } from "../components/finance/AccountModal.jsx";
 import { CashOpModal } from "../components/finance/CashOpModal.jsx";
 import { ExpenseModal } from "../components/finance/ExpenseModal.jsx";
+import { FinanceSheetExport } from '../product/SoloSpreadsheet.jsx';
 import {
   ExpenseCategoryIcon,
   QuickFinanceAction,
@@ -202,7 +203,8 @@ export function FinancePage({ initialTab: s }) {
     };
   return (
     <div className="space-y-4">
-      <PeriodSelect value={period} onChange={setPeriod} />
+      <div className="pb-actions"><PeriodSelect value={period} onChange={setPeriod} />
+        <FinanceSheetExport filter={range} /></div>
       <Metrics items={[
         { label: "Выручка", value: formatPreciseMoney(y.revenue), Icon: Coins },
         { label: "Расходы с себестоимостью", value: formatPreciseMoney(roundMoney(y.cogs + y.opex + y.writeOff)), Icon: Receipt },

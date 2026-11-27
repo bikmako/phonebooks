@@ -88,7 +88,10 @@ export function getHistoryIcon(s) {
       ? ArrowDownLeft
       : (HISTORY_ICONS[s.icon] ?? Receipt);
 }
+import { SpreadsheetExportDialog } from '../product/SoloSpreadsheet.jsx';
+
 export function HistoryPage() {
+  const [exporting, setExporting] = React.useState(false);
   const { data: s } = useStore(),
     t = React.useMemo(() => getAllOperations(s), [s]),
     [n, a] = React.useState("all"),
@@ -112,7 +115,7 @@ export function HistoryPage() {
             }
           : i === "all"
             ? {
-                from: "2000-01-01",
+                from: "1900-01-01",
                 to: "2100-01-01",
               }
             : {
@@ -176,6 +179,9 @@ export function HistoryPage() {
   let S = 0;
   return (
     <div className="space-y-4">
+      <button className="pb-action pb-action-secondary" onClick={() => setExporting(true)}>Экспорт истории</button>
+      {exporting && <SpreadsheetExportDialog filter={{ kind: 'history', ...O, query: c, ids: m.map(row => row.id) }}
+        onClose={() => setExporting(false)} />}
       <Card className="p-4">
         <div className="grid grid-cols-3 gap-2">
           <div className="rounded-xl bg-emerald-50/70 px-3 py-2">

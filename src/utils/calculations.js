@@ -190,11 +190,12 @@ export function getStats(state, t) {
         .reduce((u, N) => u + N.qty * N.unitCost, 0),
     ),
     warehouse = warehouseEvents(state).filter(operation => inPeriod(operation.date, t)),
-    warehouseSales = warehouse.filter(operation => operation.type === 'sale'),
+    warehouseSales = new Set(warehouse.filter(operation => ['sale','historical_sale'].includes(operation.type)).map(operation => operation.groupId ?? operation.id)),
     A = roundMoney(i + d + warehouse.reduce((sum, operation) => sum + operation.revenueMinor, 0) / 100),
     L = roundMoney(o + x + warehouse.reduce((sum, operation) => sum + operation.costMinor, 0) / 100),
     O = roundMoney(A - L),
     m = roundMoney(r.reduce((u, N) => u + N.amount, 0)),
+    sheetExpenses = warehouse.filter(operation => ['expense','historical_expense'].includes(operation.type)),
     f = roundMoney(O - m - p - warehouse.reduce((sum, operation) => sum + operation.expenseMinor / 100, 0)),
     C = {};
   for (const u of r)
@@ -227,14 +228,14 @@ export function getStats(state, t) {
     revenue: A,
     cogs: L,
     grossProfit: O,
-    opex: m,
+    opex: roundMoney(m + sheetExpenses.reduce((sum, operation) => sum + operation.expenseMinor / 100, 0)),
     netProfit: f,
     purchases: y,
-    salesCount: n.length + l.length + warehouseSales.length,
+    salesCount: n.length + l.length + warehouseSales.size,
     purchasesCount: c.length + warehouse.filter(operation => operation.type === "purchase").length,
-    expensesCount: r.length,
+    expensesCount: r.length + sheetExpenses.length,
     averageCheck:
-      n.length + l.length + warehouseSales.length ? roundMoney(A / (n.length + l.length + warehouseSales.length)) : 0,
+      n.length + l.length + warehouseSales.size ? roundMoney(A / (n.length + l.length + warehouseSales.size)) : 0,
     averageMargin: j.length
       ? Math.round((j.reduce((u, N) => u + N, 0) / j.length) * 100)
       : 0,

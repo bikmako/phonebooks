@@ -78,10 +78,12 @@ export async function loadState() {
   acceptPersistedState(state);
   return checked;
 }
-export async function persistState(state) {
+export async function persistState(state, backupReason) {
   const db = await openDatabase();
   await new Promise((resolve, reject) => {
-    const tx = db.transaction([STORE_STATE, STORE_META], "readwrite");
+    const stores = [STORE_STATE, STORE_META];
+    if (backupReason) stores.push(STORE_BACKUPS);
+    const tx = db.transaction(stores, "readwrite");
     let failure;
     const request = tx.objectStore(STORE_STATE).get(KEY_CURRENT);
     request.onsuccess = () => {
@@ -91,6 +93,16 @@ export async function persistState(state) {
       const pending = tx.objectStore(STORE_META).get("pendingImport");
       pending.onsuccess = () => {
         if (pending.result) { failure = new Error("Выполняется импорт в другой вкладке"); tx.abort(); return; }
+        if (backupReason && request.result) {
+          const previous = request.result;
+          const backup = tx.objectStore(STORE_BACKUPS);
+          const point = makeBackup(previous, backupReason);
+          const existing = backup.getAll();
+          existing.onsuccess = () => {
+            backup.put(point);
+            for (const old of existing.result.sort((a, b) => b.at.localeCompare(a.at)).slice(MAX_BACKUPS - 1)) backup.delete(old.id);
+          };
+        }
         tx.objectStore(STORE_STATE).put(state, KEY_CURRENT);
         tx.objectStore(STORE_META).put({ at: new Date().toISOString() }, "lastSaved");
       };
@@ -116,15 +128,18 @@ export async function listBackups() {
     return [];
   }
 }
-export async function createBackup(s, t = "auto") {
-  const n = {
+function makeBackup(s, reason) {
+  return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     at: new Date().toISOString(),
     payload: JSON.stringify(s),
     phones: s.phones.length,
     sales: s.sales.length,
-    reason: t,
+    reason,
   };
+}
+export async function createBackup(s, t = "auto") {
+  const n = makeBackup(s, t);
   await runStore(STORE_BACKUPS, "readwrite", (r) => r.put(n));
   const c = (await listBackups()).slice(MAX_BACKUPS);
   for (const r of c)

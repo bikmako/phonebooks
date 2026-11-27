@@ -3,6 +3,7 @@ import { prepareSoloTransfer, TRANSFER_LIMIT } from '../src/domain/soloTransfer.
 import { sha256Hex, TRANSFER_CHUNK_REQUEST_BYTES } from '../src/domain/transferWire.js';
 
 const AUTH_LIMIT = 16384;
+const SHEET_LIMIT = 8 * 1024 * 1024;
 const cookieNames = {
   access: "__Host-pb-access",
   refresh: "__Host-pb-refresh",
@@ -400,7 +401,8 @@ async function api(path, request, env, cookies, origin) {
   if (request.method !== "POST") throw new HttpError(405, "Метод не поддерживается.");
   if (request.headers.get("Origin") !== origin) throw new HttpError(403, "Запрос с другого сайта отклонён.");
   const limit = path === "/api/cloud/import-solo" ? TRANSFER_LIMIT
-    : path === "/api/cloud/transfer" ? TRANSFER_CHUNK_REQUEST_BYTES : AUTH_LIMIT;
+    : path === "/api/cloud/transfer" ? TRANSFER_CHUNK_REQUEST_BYTES
+    : ["/api/cloud/sheet-import","/api/cloud/sheet-check"].includes(path) ? SHEET_LIMIT : AUTH_LIMIT;
   const body = await readBody(request, limit);
   if (path === "/api/session") {
     return respond(await withSession(env, request, cookies, token => rpc(env, token, "account")));
@@ -415,6 +417,18 @@ async function api(path, request, env, cookies, origin) {
   }
   if (path === "/api/cloud/transfer") {
     return respond(await withSession(env, request, cookies, token => resumableTransfer(env, token, body)));
+  }
+  if (["/api/cloud/sheet-import","/api/cloud/sheet-check","/api/cloud/sheet-revert","/api/cloud/sheet-export"].includes(path)) {
+    const scope = scopeFrom(body);
+    const routes = {
+      "/api/cloud/sheet-import": ["sheet_import", ["p_request","p_expected","p_plan"]],
+      "/api/cloud/sheet-check": ["sheet_check", ["p_expected","p_plan"]],
+      "/api/cloud/sheet-revert": ["sheet_revert", ["p_request"]],
+      "/api/cloud/sheet-export": ["sheet_export", ["p_kind","p_filter","p_after","p_revision"]],
+    };
+    const [operation, fields] = routes[path];
+    const parameters = { ...scope, ...Object.fromEntries(fields.map(field => [field, body[field]])) };
+    return respond(await withSession(env, request, cookies, token => rpc(env, token, operation, parameters, { timeout: 45000 })));
   }
   if (path === "/api/cloud/feed" || path === "/api/cloud/command") {
     const [operation, parameters] = cloudRoute(path, body);

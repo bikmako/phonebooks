@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto';
+import { mkdir } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { buildExportFile } from '../../src/storage/backupFormat.js';
 import { realisticSnapshot } from '../fixtures/realistic.js';
+import { readSpreadsheet, writeSpreadsheet } from '../../src/domain/spreadsheetFile.js';
+import { spreadsheetTemplate } from '../../src/domain/spreadsheet.js';
 
 const team = 'https://127.0.0.1:4398';
 const solo = 'http://localhost:4397';
@@ -59,6 +63,75 @@ async function createWorkspace(page, name) {
   await page.getByRole('button', { name: 'Создать пространство' }).click();
   await expect(page).toHaveURL(/#\/dashboard$/);
   await expect(workData(page).getByText('Подключено', { exact: true })).toBeVisible();
+}
+
+async function sheetShot(panel, info, mode) {
+  const directory = process.env.PHONEBOOKS_SHEET_SHOTS;
+  if (!directory || info.project.name === 'team-firefox') return;
+  await mkdir(directory, { recursive: true });
+  const suffix = info.project.name === 'team-iphone-webkit' ? 'iphone' : 'desktop';
+  const review = panel.locator('.pb-sheet-review');
+  await review.evaluate(element => element.scrollIntoView({ block: 'center' }));
+  await panel.page().screenshot({ path: resolve(directory, mode + '-' + suffix + '.png'), animations: 'disabled' });
+}
+
+for (const [mode, format] of [['Solo', 'csv'], ['Team', 'xlsx']]) {
+  test(mode + ' previews a real spreadsheet, cancels safely, imports history and downloads an export', async ({ page, context }, info) => {
+    if (mode === 'Team') {
+      await register(page, uniqueEmail());
+      await createWorkspace(page, 'Учебные таблицы');
+      await go(page, 'settings');
+    } else {
+      await page.goto(solo + '/#/settings');
+      await expect(page.getByRole('button', { name: 'Скачать полную копию' })).toBeEnabled();
+      await page.evaluate(async () => {
+        await navigator.serviceWorker.ready;
+        if (!navigator.serviceWorker.controller) await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true }));
+      });
+      await context.setOffline(true);
+    }
+    await page.getByText('Импорт и экспорт Excel/CSV', { exact: true }).click();
+    const panel = page.getByRole('region', { name: 'Таблицы Excel и CSV' });
+    const file = { name: 'demo.' + format, mimeType: 'application/octet-stream', buffer: Buffer.from(writeSpreadsheet(format, spreadsheetTemplate)) };
+    async function preview() {
+      await panel.getByLabel('Файл Excel или CSV').setInputFiles(file);
+      await panel.getByRole('button', { name: 'Проверить и показать сводку' }).click();
+      await expect(panel.getByText('Строк готово 2 · ошибок 0')).toBeVisible();
+    }
+    await preview();
+    await expect(panel.getByRole('button', { name: 'Подтвердить импорт' })).toBeDisabled();
+    await panel.getByRole('button', { name: 'Отменить импорт', exact: true }).click();
+    await expect(panel.getByText('Предпросмотр импорта')).toHaveCount(0);
+    await preview();
+    await sheetShot(panel, info, mode.toLowerCase());
+    await panel.getByRole('checkbox', { name: /Подтверждаю добавление строк/ }).check();
+    await panel.getByRole('button', { name: 'Подтвердить импорт' }).click();
+    await expect(panel.getByText('Импорт завершён. Строк: 2.')).toBeVisible({ timeout: 20000 });
+    await panel.getByRole('button', { name: 'Экспорт', exact: true }).click();
+    await panel.getByRole('combobox', { name: 'Данные', exact: true }).selectOption('sale');
+    if (mode === 'Solo') await panel.getByRole('combobox', { name: 'Формат файла', exact: true }).selectOption('csv');
+    const downloadPending = page.waitForEvent('download');
+    await panel.getByRole('button', { name: 'Скачать экспорт' }).click();
+    const download = await downloadPending;
+    const stream = await download.createReadStream();
+    const chunks = [];
+    for await (const piece of stream) chunks.push(piece);
+    const [exported] = readSpreadsheet(download.suggestedFilename(), Buffer.concat(chunks));
+    const [headers, sale] = exported.rows.map(row => row.values);
+    expect(Number(sale[headers.indexOf('Выручка, ₽')])).toBe(1400);
+    expect(Number(sale[headers.indexOf('Движение кассы, ₽')])).toBe(0);
+    if (mode === 'Team') {
+      await panel.getByRole('button', { name: 'Импорт', exact: true }).click();
+      page.once('dialog', dialog => dialog.accept());
+      await panel.getByRole('button', { name: 'Отменить последний импорт' }).click();
+      await expect(panel.getByText('Состояние до импорта восстановлено.')).toBeVisible();
+    } else {
+      await expect(page.getByText('До импорта таблицы', { exact: false })).toBeHidden();
+      await page.getByText(/Точки восстановления/).click();
+      await expect(page.getByText(/До импорта таблицы/)).toBeVisible();
+      await context.setOffline(false);
+    }
+  });
 }
 
 async function invite(page, email) {

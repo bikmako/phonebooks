@@ -3,11 +3,37 @@ import { accessoryProductId, phoneProductId } from './inventory.js';
 import { legacyBookings, legacyCorrections, legacyPhoneCost, phoneUnavailable } from './legacyTradeState.js';
 import { createSale } from './sales.js';
 import { assert, assertSufficientFunds, getActiveAccount, makeAuditEntry, makeId, nowISO, withAudit } from './shared.js';
-import { assertReturn, portion, remainingReturn, returnTypes } from './warehouseTrade.js';
+import { assertReturn, remainingReturn, returnTypes } from './warehouseTrade.js';
 import { getSaleRevenue } from '../utils/calculations.js';
 import { today } from '../utils/format.js';
 
 const minor = value => Math.round(value * 100);
+
+function returnedAccessoryLots(state, original, quantity, skipped) {
+  const item = original.item;
+  const parts = (item.allocations ?? []).map(allocation => {
+    const batch = state.accessoryBatches.find(row => row.id === allocation.batchId && row.itemId === item.itemId);
+    return { quantity: allocation.qty, unitMinor: batch ? minor(batch.unitCost) : null };
+  });
+  const total = parts.reduce((amount, row) => amount + row.quantity * (row.unitMinor ?? 0), 0);
+  if (!parts.some(row => row.unitMinor === null) && total === original.costMinor &&
+    parts.reduce((count, row) => count + row.quantity, 0) === original.units) {
+    const returned = [];
+    let left = quantity;
+    for (const part of parts) {
+      const offset = Math.min(skipped, part.quantity);
+      skipped -= offset;
+      const amount = Math.min(left, part.quantity - offset);
+      left -= amount;
+      if (amount) returned.push({ units: amount, unitMinor: part.unitMinor });
+    }
+    return returned;
+  }
+  assert(quantity === original.units, 'Для частичного возврата отсутствует история себестоимости по партиям.');
+  const price = Math.floor(original.costMinor / quantity);
+  const remainder = original.costMinor % quantity;
+  return [{ units: quantity - remainder, unitMinor: price }, { units: remainder, unitMinor: price + 1 }].filter(row => row.units);
+}
 
 export function legacyTradeContext(state, productId) {
   const phone = state.phones.find(row => phoneProductId(row.id) === productId);
@@ -98,14 +124,15 @@ export function applyLegacyTrade(state, command) {
       assert(Number.isSafeInteger(original.costMinor), 'Себестоимость исходной продажи недоступна.');
       if (phone) assert(phone.status === 'sold' && !state.sales.some(row => row.phoneId === phone.id && row.status === 'completed' &&
         row.id !== original.sale.id && !legacyCorrections(state, 'sale:' + row.id, productId).some(entry => entry.units)), 'Выберите последнюю невозвращённую продажу.');
-      costMinor = portion(original.costMinor, used, original.units) - portion(original.costMinor, used + quantity, original.units);
-      if (phone) next = { ...state,
-        sales: state.sales.map(row => row.id === original.sale.id ? { ...row, costMinor: original.costMinor } : row),
-        phones: state.phones.map(row => row.id === phone.id ? { ...row, status: command.toRepair ? 'repair' : 'in_stock', updatedAt: nowISO() } : row) };
-      else {
-        const price = Math.floor(-costMinor / quantity);
-        const remainder = -costMinor % quantity;
-        const lots = [[quantity - remainder, price], [remainder, price + 1]].filter(([units]) => units).map(([units, unitMinor]) => ({
+      if (phone) {
+        costMinor = -original.costMinor;
+        next = { ...state,
+          sales: state.sales.map(row => row.id === original.sale.id ? { ...row, costMinor: original.costMinor } : row),
+          phones: state.phones.map(row => row.id === phone.id ? { ...row, status: command.toRepair ? 'repair' : 'in_stock', updatedAt: nowISO() } : row) };
+      } else {
+        const restored = returnedAccessoryLots(state, original, quantity, used);
+        costMinor = -restored.reduce((sum, row) => sum + row.units * row.unitMinor, 0);
+        const lots = restored.map(({ units, unitMinor }) => ({
           id: makeId('batch'), itemId: accessory.id, qty: units, qtyLeft: units, unitCost: unitMinor / 100, accountId: '',
           kind: 'adjust', date: today(), createdAt: nowISO(), fromReturn: true,
         }));

@@ -17,7 +17,7 @@ const productStatus = product => product.inRepair ? 'repair' : product.quantity 
   : product.reserved === product.quantity ? 'reserved' : 'stock';
 const productIcon = product => product.categoryId === 'smartphones' ? Smartphone : Package;
 
-export function TeamStock({ products, categories, repairs, onOpen, onCreate, onCategories, onBulk, onReserve }) {
+export function TeamStock({ products, categories, repairs, onOpen, onCreate, onCategories, onBulk, onReserve, onExport }) {
   const [category, setCategory] = useState('');
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
@@ -68,10 +68,11 @@ export function TeamStock({ products, categories, repairs, onOpen, onCreate, onC
         onClick={() => onReserve(product.id)}>Забронировать</button>}</li>;
     })}</ul> : <p className="pb-empty">{!active.length ? (repairs ? 'В ремонте пока нет устройств.' : 'Склад пуст.') : 'Товары с такими параметрами не найдены.'}</p>}
     {matches.length > limit && <button className="secondary" onClick={() => setLimit(limit + 30)}>Показать ещё</button>}
-    {(onCreate || onCategories || onBulk) && <div className="pb-actions pb-stock-actions pb-warehouse-actions">
+    {(onCreate || onCategories || onBulk || onExport) && <div className="pb-actions pb-stock-actions pb-warehouse-actions">
       {onCreate && <button onClick={onCreate}><Plus size={17} />Добавить товар</button>}
       {onCategories && <button className="secondary" onClick={onCategories}>Категории товаров</button>}
       {onBulk && <button className="secondary" onClick={onBulk}>Массовое редактирование</button>}
+      {onExport && <button className="secondary" onClick={() => onExport({ kind: 'stock', category, query, status: repairs ? 'repair' : status })}>Экспорт склада</button>}
     </div>}
   </section>;
 }

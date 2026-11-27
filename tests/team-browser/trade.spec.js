@@ -1,6 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
+import { realisticSnapshot } from '../fixtures/realistic.js';
 
 const button = (page, name) => page.getByRole('button', { name, exact: true });
 const field = (page, name) => page.getByLabel(name, { exact: true });
@@ -49,6 +50,45 @@ async function customerReturn(page, project, mode) {
 
 test.beforeEach(async ({ page }, info) => {
   if (info.project.name !== 'team-iphone-webkit') await page.setViewportSize({ width: 1280, height: 900 });
+});
+
+test('legacy Solo phone and accessory forms open trade, return a phone and protect reserved units', async ({ page }) => {
+  await page.goto('http://localhost:4397/#/settings');
+  await expect(button(page, 'Скачать полную копию')).toBeEnabled();
+  const state = realisticSnapshot().indexedDB.state[0].value;
+  const sale = state.sales.find(item => item.status === 'completed');
+  const phone = state.phones.find(item => item.id === sale.phoneId);
+  await page.evaluate(data => new Promise((resolve, reject) => {
+    const request = indexedDB.open('phonebooks', 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      const tx = db.transaction('state', 'readwrite');
+      tx.objectStore('state').put(data, 'current');
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => reject(tx.error);
+    };
+  }), state);
+  await page.goto('http://localhost:4397/#/purchase');
+  await page.reload();
+  await page.getByRole('button', { name: new RegExp(phone.model) }).click();
+  await button(page, 'Возвраты и бронирования').click();
+  const dialog = page.getByRole('dialog', { name: 'Операции с товаром' });
+  await button(dialog, 'Возврат покупателя').click();
+  await field(dialog, 'Сумма возврата, ₽').fill('1000');
+  await field(dialog, 'Причина').fill('Проверка связи с исходным чеком');
+  await button(dialog, 'Возврат покупателя').click();
+  await expect(heading(dialog, 'Активные бронирования')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await button(page, 'Аксессуары').click();
+  const item = page.getByRole('article', { name: state.accessoryItems[0].name });
+  await button(item, 'Возвраты и бронирования').click();
+  await button(dialog, 'Забронировать').click();
+  await field(dialog, 'Имя покупателя').fill('Тестовая бронь');
+  await field(dialog, 'Срок бронирования').fill('2031-11-28T18:00');
+  await button(dialog, 'Забронировать').click();
+  await expect(dialog.getByText('Тестовая бронь', { exact: true })).toBeVisible();
 });
 
 test('Solo reserves from stock, sells from a reservation, and persists a refund offline', async ({ page, context }, info) => {

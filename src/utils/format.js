@@ -146,14 +146,14 @@ export function getPeriod(s, t = today()) {
       };
     default:
       return {
-        from: "2000-01-01",
+        from: "1900-01-01",
         to: "2100-12-31",
         label: "Всё время",
       };
   }
 }
 export function getPreviousPeriod(s, t = today()) {
-  if (s.from === "2000-01-01") return null;
+  if (s.from === "1900-01-01") return null;
   const n = parseDate(s.from);
   if (!n) return null;
   const a = daysBetween(s.from, s.to) + 1,

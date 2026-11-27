@@ -7,6 +7,8 @@ import { remainingReturn } from '../domain/warehouseTrade.js';
 import { useStore } from '../hooks/useStore.jsx';
 import { BulkPrices } from '../product/BulkPrices.jsx';
 import { TradePanel, tradeLabels } from '../product/TradePanel.jsx';
+import { SoloSpreadsheet } from '../product/SoloSpreadsheet.jsx';
+import { Modal } from '../components/ui.jsx';
 import { PageTitle, SectionTitle, Status } from '../product/ui.jsx';
 import { AttributeFields, CategoryFields, priceInput, readAttributes, readCategory, warehouseMoney } from '../product/WarehouseFields.jsx';
 import { readInventoryCatalog } from '../storage/inventoryStore.js';
@@ -27,6 +29,7 @@ export function CatalogPage({ initialProduct }) {
   const [sort, setSort] = useState('name');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [showSheets, setShowSheets] = useState(false);
   const [now, setNow] = useState(Date.now);
   const projection = warehouseProjection(data);
   useEffect(() => {
@@ -128,6 +131,9 @@ export function CatalogPage({ initialProduct }) {
     {form && form !== 'bulk' && <button className="pb-action pb-action-secondary pb-back" onClick={() => open(product && form !== 'detail' ? 'detail' : '', product)}>
       <ArrowLeft size={16} />{product && form !== 'detail' ? 'К карточке' : 'К каталогу'}</button>}
     {error && <p className="pb-empty" role="alert">{error}</p>}
+    {showSheets && <Modal open size="lg" title="Таблицы склада" onClose={() => setShowSheets(false)}>
+      <SoloSpreadsheet currentFilter={{ kind: 'stock', category: filter, query, status: status || 'all' }} />
+    </Modal>}
     {form === 'category' && <form className="pb-catalog-form" onSubmit={saveCategory}>
       <PageTitle title={custom ? 'Редактирование категории' : 'Новая категория'} />
       <CategoryFields key={custom?.id ?? 'new'} category={custom} />
@@ -215,6 +221,7 @@ export function CatalogPage({ initialProduct }) {
         })} />}
     {!form && <>
       <SectionTitle>Каталог товаров</SectionTitle>
+      <button className="pb-action pb-action-secondary" onClick={() => setShowSheets(true)}>Экспорт склада</button>
       <div className="pb-toolbar">
         <input className="input" type="search" aria-label="Поиск в каталоге" placeholder="Название или характеристика"
           value={query} onChange={event => setQuery(event.target.value)} />

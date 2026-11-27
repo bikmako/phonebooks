@@ -61,6 +61,8 @@ select cron.schedule('phonebooks-prune-transfers', '15 * * * *',
   $job$select phonebooks_team_private.prune_transfer_uploads();$job$);
 ```
 
+Дальнейшие миграции применяются в порядке имён. Для проверки таблиц после миграций 014–016 используйте [сценарии импорта, отката и экспорта](PHONEBOOKS_SPREADSHEETS.md).
+
 ## 3. Supabase Auth и SMTP
 
 1. Включить Email и обязательное подтверждение адреса. Установить Site URL точному HTTPS адресу staging Worker без завершающего слеша. Проверить в разрешённых Redirect URLs только используемые адреса. Сохранить текущие значения до изменения, если тот же staging уже обслуживает другой прогон.

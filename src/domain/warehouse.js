@@ -4,6 +4,7 @@ import { activeReservations, assertReturn, portion, reservationTypes, returnType
 import { today } from '../utils/format.js';
 
 export const warehouseLabels = {
+  opening: 'Начальный остаток', historical_sale: 'Историческая продажа', historical_expense: 'Исторический расход', expense: 'Расход',
   purchase: 'Закупка товара', sale: 'Продажа товара', repair_start: 'Передача в ремонт', repair: 'Завершение ремонта',
   customer_return: 'Возврат покупателя', supplier_return: 'Возврат поставщику', compensation: 'Денежная компенсация',
   void_sale: 'Отмена продажи', reserve: 'Бронирование', extend_reserve: 'Продление бронирования', cancel_reserve: 'Отмена бронирования',
@@ -68,6 +69,15 @@ function restoreLots(item, event, original, skipped) {
 function apply(context, event) {
   const { products, operations, byId, bookings, corrected } = context;
   const { productId, type, tracking, units, amountMinor } = event;
+  if (['historical_expense', 'expense', 'historical_sale'].includes(type)) {
+    const historySale = type === 'historical_sale';
+    const detail = { ...event, cashMinor: type === 'expense' ? -amountMinor : 0, stockDelta: 0,
+      revenueMinor: historySale ? amountMinor : 0, costMinor: historySale ? event.sourceCostMinor : 0,
+      expenseMinor: historySale ? 0 : amountMinor, allocations: [] };
+    operations.push(detail);
+    byId.set(event.id, detail);
+    return;
+  }
   const item = products.get(productId) ?? { ...empty, lots: [] };
   const unit = tracking === 'unit';
   const at = Date.parse(event.createdAt);
@@ -79,10 +89,10 @@ function apply(context, event) {
   let revenueMinor = 0;
   let expenseMinor = 0;
   let allocations = [];
-  if (type === 'purchase') {
+  if (type === 'purchase' || type === 'opening') {
     assert(!unit || (!item.purchased && units === 1), 'Для следующего поштучного товара создайте отдельную карточку.');
     stockDelta = units;
-    cashMinor = -amountMinor;
+    cashMinor = type === 'purchase' ? -amountMinor : 0;
     item.purchased = true;
     addLot(item, event, units, amountMinor);
   } else if (type === 'sale') {
@@ -174,11 +184,12 @@ export function warehouseEvents(state) {
 function validateTradeEvent(event) {
   const { type, units, amountMinor } = event;
   assert(Number.isSafeInteger(units) && units >= 0 && units <= 100000 &&
-    (units > 0 || ['compensation', 'extend_reserve', 'cancel_reserve'].includes(type)) &&
+    (units > 0 || ['compensation', 'extend_reserve', 'cancel_reserve', 'historical_expense', 'expense'].includes(type)) &&
     (!['compensation', 'extend_reserve', 'cancel_reserve'].includes(type) || units === 0) &&
     Number.isSafeInteger(amountMinor) && amountMinor >= 0 &&
     (!['sale', 'compensation'].includes(type) || amountMinor > 0) &&
     (!['repair_start', ...reservationTypes].includes(type) || amountMinor === 0), 'Неверная сумма или количество.');
+  if (type === 'historical_sale') assert(Number.isSafeInteger(event.sourceCostMinor) && event.sourceCostMinor >= 0, 'Не указана себестоимость продажи.');
   if (returnTypes.includes(type)) {
     assert(typeof event.originalId === 'string' && typeof event.reason === 'string' && event.reason.trim().length > 0 &&
       event.reason.length <= 500 && typeof event.toRepair === 'boolean' &&
@@ -227,8 +238,9 @@ export function validateWarehouse(state) {
   const ids = new Set();
   for (const event of state.warehouse) {
     assert(event && typeof event.id === 'string' && /^warehouse:[a-f0-9-]{36}$/.test(event.id) && !ids.has(event.id) &&
-      products.get(event.productId)?.tracking === event.tracking && typeof event.name === 'string' && event.name.length > 0 &&
-      Object.hasOwn(warehouseLabels, event.type) && (event.amountMinor ? accounts.has(event.accountId) : event.accountId === null) &&
+      (['historical_expense','expense'].includes(event.type) ? event.productId === null : products.get(event.productId)?.tracking === event.tracking) &&
+      typeof event.name === 'string' && event.name.length > 0 && Object.hasOwn(warehouseLabels, event.type) &&
+      (event.amountMinor && !['opening','historical_sale','historical_expense'].includes(event.type) ? accounts.has(event.accountId) : event.accountId === null) &&
       validDate(event.date) && typeof event.createdAt === 'string' && Number.isFinite(Date.parse(event.createdAt)), 'Неверная операция склада в копии.');
     validateTradeEvent(event);
     ids.add(event.id);

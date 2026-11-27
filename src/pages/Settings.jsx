@@ -1,4 +1,5 @@
 import { BackupPanel } from "../components/settings/BackupPanel.jsx";
+import { SoloSpreadsheet } from '../product/SoloSpreadsheet.jsx';
 /**
  * Настройки, бэкапы, проверка данных.
  *
@@ -192,6 +193,12 @@ export function SettingsPage() {
           База хранится локально в браузере, в облако ничего не отправляется.
           Для защиты от очистки браузера, удаления PWA и смены адреса сохраняйте копии в файлы.
         </p>
+      </Card>
+      <Card className="card-pad">
+        <details>
+          <summary>Импорт и экспорт Excel/CSV</summary>
+          <SoloSpreadsheet />
+        </details>
       </Card>
       <BackupPanel />
       <Card className="card-pad">

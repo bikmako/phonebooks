@@ -111,15 +111,17 @@ export function projectInventoryOperations(state) {
     const correction = returnTypes.includes(operation.type);
     const reservation = reservationTypes.includes(operation.type);
     add({ id: operation.id,
-      type: reservation ? 'reservation' : ['compensation', 'void_sale'].includes(operation.type) ? 'customer_return' : operation.type,
-      date: operation.date, relatedId: correction ? operation.originalId : null,
-      lines: [line(operation.productId, Math.max(operation.units, 1), operation.stockDelta, operation.allocations)],
+      type: reservation ? 'reservation' : ['compensation', 'void_sale'].includes(operation.type) ? 'customer_return' :
+        ({ opening: 'stock_adjustment', historical_sale: 'sale', historical_expense: 'expense' }[operation.type] ?? operation.type),
+      date: operation.date, relatedId: correction ? operation.originalId : null, groupId: operation.groupId ?? null,
+      lines: operation.productId ? [line(operation.productId, Math.max(operation.units, 1), operation.stockDelta, operation.allocations)] : [],
       postings: posting(operation.accountId, operation.cashMinor), revenueMinor: operation.revenueMinor,
       costMinor: operation.costMinor, expenseMinor: operation.expenseMinor });
     if (correction || reservation) Object.assign(operations.at(-1), {
       tradeMode: operation.type, returnMinor: correction ? operation.amountMinor : 0, reason: operation.reason ?? null,
       ...(operation.originalLine ? { originalLine: operation.originalLine } : {}),
     });
+    if (operation.type === 'historical_sale') operations.at(-1).sheetType = operation.type;
   }
   return operations;
 }
