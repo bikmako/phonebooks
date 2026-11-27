@@ -6,6 +6,7 @@ import { analyticsGrid } from '../src/domain/analyticsExport.js';
 import { guessMapping, previewSpreadsheet, spreadsheetTemplate } from '../src/domain/spreadsheet.js';
 import { readSpreadsheet, writeSpreadsheet } from '../src/domain/spreadsheetFile.js';
 import { createInitialState } from '../src/storage/initialState.js';
+import { getStats } from '../src/utils/calculations.js';
 import { asUser, seedSession, seedUser, teamDatabase } from './support/team-database.js';
 
 const accountId = 'ac_default_cash';
@@ -49,6 +50,9 @@ test('Solo reports capitalized repairs, partial refunds, supplier losses, histor
     averageMinor: 1567, margin: 61.29, purchasedUnits: 3, soldUnits: 2, sales: 3, stockMinor: 200,
   });
   assert.equal(report.previous.purchasedUnits, 1);
+  const overview = getStats(warehouseFixture(), range);
+  assert.deepEqual([overview.revenue, overview.cogs, overview.expensesTotal, overview.netProfit, overview.averageCheck],
+    [31, 12, 1.7, 17.3, 15.67]);
   assert.equal(report.previous.netMinor, 0);
   assert.equal(report.series.find(row => row.from === '2026-11-17').costMinor, -1200);
   assert.deepEqual(report.categories.find(row => row.id === 'custom'), {
@@ -74,6 +78,8 @@ test('Solo counts a legacy combined receipt once and exposes incomplete historic
   assert.equal(report.current.revenueMinor, 25000);
   assert.equal(report.current.sales, 1);
   assert.equal(report.current.averageMinor, 25000);
+  assert.equal(getStats(state, range).salesCount, 1);
+  assert.equal(getStats(state, range).averageCheck, 250);
   assert.equal(report.categories.find(row => row.name === 'Аксессуары').grossMinor, 4000);
   assert.equal(report.categories.find(row => row.name === 'Аксессуары').sellDays, null);
   assert.deepEqual(report.models.map(row => row.name), ['Телефон']);

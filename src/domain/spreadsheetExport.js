@@ -53,7 +53,7 @@ export function soloExport(state, kind, filter) {
     const totals = getStats(state, { from: filter.from ?? '1900-01-01', to: filter.to ?? '2999-12-31' });
     return [{ revenueMinor: Math.round(totals.revenue * 100), costMinor: Math.round(totals.cogs * 100),
       grossMinor: Math.round(totals.grossProfit * 100), netMinor: Math.round(totals.netProfit * 100),
-      expensesMinor: Math.round(totals.opex * 100), cashMinor: Math.round(getTotalMoney(state) * 100),
+      expensesMinor: Math.round(totals.expensesTotal * 100), cashMinor: Math.round(getTotalMoney(state) * 100),
       sales: totals.salesCount, purchases: totals.purchasesCount, expenses: totals.expensesCount }];
   }
   if (kind === 'reservation') return [...warehouseProjection(state).bookings.values(),

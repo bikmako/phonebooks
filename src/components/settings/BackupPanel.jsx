@@ -2,7 +2,7 @@ import React from 'react';
 import { Button, Card, CardHeader, Modal } from '../ui.jsx';
 import { useStore } from '../../hooks/useStore.jsx';
 import { downloadJson, readBackup } from '../../storage/db.js';
-import { parseImportFile, MAX_FILE_BYTES, COLLECTIONS } from '../../storage/backupFormat.js';
+import { buildExportFile, parseImportFile, MAX_FILE_BYTES, COLLECTIONS } from '../../storage/backupFormat.js';
 import { listRecoveryCopies } from '../../storage/fullBackup.js';
 import { checkDataIntegrity } from '../../domain/integrity.js';
 
@@ -54,7 +54,7 @@ export function BackupPanel() {
   ] : [];
   return <><Card className="card-pad">
     <CardHeader title="Резервные копии" subtitle="Полная локальная копия · формат 2 · без облака" />
-    <p className="mt-2 text-[12px] text-ink-500">На другом адресе сайта база будет отдельной. Сохраните файл на Netlify, проверьте перенос и оставьте старую установку до завершения проверки. Копия содержит финансовые и личные данные; храните её в защищённом месте.</p>
+    <p className="mt-2 text-[12px] text-ink-500">На другом адресе сайта база будет отдельной. Скачайте копию со старого адреса и проверьте перенос до удаления старой установки. Файл содержит финансовые и личные данные.</p>
     <div className="mt-3 flex flex-wrap gap-2">
       <Button variant="secondary" disabled={busy || !!plan} onClick={exportFile}>Скачать полную копию</Button>
       <label className="btn-secondary btn-md">Загрузить из файла<input className="hidden" aria-label="Файл резервной копии" type="file" accept=".json,application/json" disabled={busy || !!plan} onChange={event => { void read(event.target.files?.[0]); event.target.value = ''; }} /></label>
@@ -76,7 +76,10 @@ export function BackupPanel() {
       <Button disabled={busy || !overwrite || !acknowledged || !downloaded} onClick={async () => {
         setBusy(true); setError('');
         try {
-          await store.finishImport(plan, { confirmed: acknowledged, overwriteConfirmed: overwrite, saveBackup: async backup => downloadJson(`phonebooks-before-import-${Date.now()}.json`, backup) });
+          await store.finishImport(plan, { confirmed: acknowledged, overwriteConfirmed: overwrite, saveBackup: async () => {
+            if (!downloaded) throw new Error('Скачайте предварительную копию.');
+            // The confirmation applies to plan.before. The transaction verifies that the live snapshot still matches it.
+          } });
           currentPlan.current = null; setPlan(null);
           // Reload to apply theme and discard any mounted form drafts.
           location.reload();
@@ -91,9 +94,9 @@ export function BackupPanel() {
         <table><thead><tr><th>Раздел</th><th>Сейчас</th><th>В файле</th></tr></thead><tbody>{COLLECTIONS.map((name, i) => <tr key={name}><td>{LABELS[i]}</td><td>{store.data[name].length}</td><td>{state[name].length}</td></tr>)}</tbody></table>
         <p>Точек в файле: {plan.snapshot.indexedDB.backups.length}; ключей localStorage: {plan.snapshot.localStorage.length}. Бизнес: {state.settings.businessName}; валюта: {state.settings.currency}.</p>
         {issues.length > 0 && <div role="status"><p>Замечания к учёту ({issues.length}); импорт сохранит их без исправления:</p><ul>{issues.slice(0, 10).map((issue, i) => <li key={i}>{issue.message}</li>)}</ul></div>}
-        <Button variant="secondary" disabled={busy} onClick={async () => {
+        <Button variant="secondary" disabled={busy} onClick={() => {
           try {
-            downloadJson(`phonebooks-before-import-${Date.now()}.json`, await store.exportBackup()); setDownloaded(true);
+            downloadJson(`phonebooks-before-import-${Date.now()}.json`, buildExportFile(plan.before)); setDownloaded(true);
           } catch (e) { setError(e.message); }
         }}>Скачать предварительную полную копию</Button>
         <label className="flex gap-2"><input type="checkbox" checked={acknowledged} disabled={!downloaded || busy} onChange={e => setAcknowledged(e.target.checked)} />Я сохранил предварительную копию и подтверждаю импорт</label>

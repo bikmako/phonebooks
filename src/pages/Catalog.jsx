@@ -8,6 +8,7 @@ import { useStore } from '../hooks/useStore.jsx';
 import { BulkPrices } from '../product/BulkPrices.jsx';
 import { TradePanel, tradeLabels } from '../product/TradePanel.jsx';
 import { SoloSpreadsheet } from '../product/SoloSpreadsheet.jsx';
+import { isDemo } from '../demo/mode.js';
 import { Modal } from '../components/ui.jsx';
 import { PageTitle, SectionTitle, Status } from '../product/ui.jsx';
 import { AttributeFields, CategoryFields, priceInput, readAttributes, readCategory, warehouseMoney } from '../product/WarehouseFields.jsx';
@@ -221,7 +222,7 @@ export function CatalogPage({ initialProduct }) {
         })} />}
     {!form && <>
       <SectionTitle>Каталог товаров</SectionTitle>
-      <button className="pb-action pb-action-secondary" onClick={() => setShowSheets(true)}>Экспорт склада</button>
+      {!isDemo && <button className="pb-action pb-action-secondary" onClick={() => setShowSheets(true)}>Экспорт склада</button>}
       <div className="pb-toolbar">
         <input className="input" type="search" aria-label="Поиск в каталоге" placeholder="Название или характеристика"
           value={query} onChange={event => setQuery(event.target.value)} />

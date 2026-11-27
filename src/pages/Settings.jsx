@@ -21,6 +21,7 @@ import { ThemePicker } from "../hooks/useTheme.jsx";
 import { getStorageEstimate } from "../storage/db.js";
 import { formatDateTime, plural } from "../utils/format.js";
 import { crossModeUrl } from "../utils/modeUrl.js";
+import { demoTeamUrl, isDemo } from '../demo/mode.js';
 import {
   CircleCheck,
   HardDrive,
@@ -32,7 +33,7 @@ import {
 import React from "react";
 import { jsx, jsxs } from "react/jsx-runtime";
 
-const teamUrl = crossModeUrl(import.meta.env.VITE_PHONEBOOKS_TEAM_URL, window.location.origin);
+const teamUrl = crossModeUrl(isDemo ? demoTeamUrl : import.meta.env.VITE_PHONEBOOKS_TEAM_URL, window.location.origin);
 
 export function formatBytes(s) {
   return s < 1024
@@ -191,16 +192,16 @@ export function SettingsPage() {
         </p>
         <p className="mt-1.5 text-[11px] leading-relaxed text-ink-400">
           База хранится локально в браузере, в облако ничего не отправляется.
-          Для защиты от очистки браузера, удаления PWA и смены адреса сохраняйте копии в файлы.
+          {!isDemo && 'Для защиты от очистки браузера, удаления PWA и смены адреса сохраняйте копии в файлы.'}
         </p>
       </Card>
-      <Card className="card-pad">
+      {!isDemo && <><Card className="card-pad">
         <details>
           <summary>Импорт и экспорт Excel/CSV</summary>
           <SoloSpreadsheet />
         </details>
       </Card>
-      <BackupPanel />
+      <BackupPanel /></>}
       <Card className="card-pad">
         <CardHeader
           title="Проверка данных"

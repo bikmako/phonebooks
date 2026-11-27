@@ -1,10 +1,11 @@
 import { parseImportFile, validateState } from "./backupFormat.js";
+import { isDemo } from '../demo/mode.js';
 /**
  * IndexedDB, резервные копии, экспорт/импорт и миграция localStorage.
  *
  * Совместимая схема v1; завершение записи подтверждается транзакцией IndexedDB.
  */
-export const DB_NAME = "phonebooks",
+export const DB_NAME = isDemo ? 'phonebooks-demo-v2' : "phonebooks",
   DB_VERSION = 1,
   STORE_STATE = "state",
   STORE_BACKUPS = "backups",
@@ -177,10 +178,10 @@ export function downloadJson(s, t) {
   ((r.href = c),
     (r.download = s),
     (r.rel = "noopener"),
+    (r.hidden = true),
     document.body.appendChild(r),
     r.click(),
-    r.remove(),
-    setTimeout(() => URL.revokeObjectURL(c), 4e3));
+    setTimeout(() => { r.remove(); URL.revokeObjectURL(c); }, 30000));
 }
 export async function getStorageEstimate() {
   var s;

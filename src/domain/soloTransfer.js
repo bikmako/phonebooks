@@ -24,6 +24,7 @@ function minor(value) {
 }
 
 export function prepareSoloTransfer(source) {
+  if (source?.state?.demoData) throw new Error('Демонстрационные записи нельзя перенести.');
   const state = validateState(source?.state, { legacy: true });
   if (state.settings.currency !== 'RUB') throw new Error('Перенос пока поддерживает счета в рублях.');
   const savedCatalog = state.catalog ?? source.catalog;

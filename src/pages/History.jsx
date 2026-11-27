@@ -89,6 +89,7 @@ export function getHistoryIcon(s) {
       : (HISTORY_ICONS[s.icon] ?? Receipt);
 }
 import { SpreadsheetExportDialog } from '../product/SoloSpreadsheet.jsx';
+import { isDemo } from '../demo/mode.js';
 
 export function HistoryPage() {
   const [exporting, setExporting] = React.useState(false);
@@ -179,7 +180,7 @@ export function HistoryPage() {
   let S = 0;
   return (
     <div className="space-y-4">
-      <button className="pb-action pb-action-secondary" onClick={() => setExporting(true)}>Экспорт истории</button>
+      {!isDemo && <button className="pb-action pb-action-secondary" onClick={() => setExporting(true)}>Экспорт истории</button>}
       {exporting && <SpreadsheetExportDialog filter={{ kind: 'history', ...O, query: c, ids: m.map(row => row.id) }}
         onClose={() => setExporting(false)} />}
       <Card className="p-4">

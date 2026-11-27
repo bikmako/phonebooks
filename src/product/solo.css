@@ -32,9 +32,10 @@ body, html.dark body { background: var(--pb-bg); color: var(--pb-ink); }
 .pb-form-actions { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
 .pb-sales-toolbar { justify-content: space-between; }
 .pb-stock-list .pb-row { padding-block: 7px; }
+.pb-stock-list { min-width: 0; }
 .pb-stock-list .pb-row-end strong { margin-top: 3px; }
 .pb-stock-controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
-.pb-stock-controls > :first-child { flex: 1 1 200px; }
+.pb-stock-controls > :first-child { flex: 1 1 200px; min-width: 0; }
 .pb-stock-controls select { padding-inline: 8px; min-height: 44px; border: 1px solid var(--pb-line); border-radius: 8px; background: var(--pb-surface); }
 .pb-stock-controls label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .pb-finance-chart { margin-bottom: 20px; }

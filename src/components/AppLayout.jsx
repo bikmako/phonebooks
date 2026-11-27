@@ -5,12 +5,14 @@ import { ThemeToggle } from '../hooks/useTheme.jsx';
 import { AppShell, PageTitle, routeName } from '../product/ui.jsx';
 import { UpdateNotice } from '../updates/UpdateNotice.jsx';
 import { crossModeUrl } from '../utils/modeUrl.js';
+import { demoTeamUrl, isDemo } from '../demo/mode.js';
+import { DemoBanner } from '../demo/DemoBanner.jsx';
 
 const enabled = ['dashboard', 'purchase', 'sales', 'repairs', 'finance', 'history', 'search', 'settings'];
 
 export function AppLayout({ route, hideTitle, onNavigate, onQuickAction, children }) {
   const { data, saveState, prepareForUpdate, notify } = useStore();
-  const teamUrl = crossModeUrl(import.meta.env.VITE_PHONEBOOKS_TEAM_URL, window.location.origin);
+  const teamUrl = crossModeUrl(isDemo ? demoTeamUrl : import.meta.env.VITE_PHONEBOOKS_TEAM_URL, window.location.origin);
   const dashboard = route === 'dashboard';
   async function switchMode(event) {
     event.preventDefault();
@@ -26,7 +28,7 @@ export function AppLayout({ route, hideTitle, onNavigate, onQuickAction, childre
   }
   return <AppShell route={route} navigate={onNavigate} mode="Solo" identity={data.settings.businessName}
     enabled={enabled} switchUrl={teamUrl} onSwitch={switchMode} onAdd={onQuickAction} tools={<><button className="pb-icon-button" onClick={() => onNavigate('search')} aria-label="Глобальный поиск"><Search size={19} /></button><ThemeToggle /></>}>
-    <UpdateNotice />
+    {isDemo ? <DemoBanner /> : <UpdateNotice />}
     {saveState === 'error' && <p className="pb-empty" role="alert">Не удалось сохранить изменения.</p>}
     {!hideTitle && <div className="pb-layout-heading"><PageTitle title={dashboard ? <><span className="pb-overview-wordmark">PhoneBooks</span><span className="pb-overview-label">Обзор</span></> : routeName(route)}
       eyebrow={dashboard ? 'Обзор' : undefined} description={dashboard ? 'Учёт скупки, продаж и ремонтов' : undefined}

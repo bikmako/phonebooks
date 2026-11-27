@@ -1,0 +1,123 @@
+import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { extname, resolve, sep } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { cloudRoute, readBody, teamRoute } from './team-worker.js';
+import { nodeHandler } from './node-http.js';
+import { asUser, seedSession, seedUser, teamDatabase, testImportKey } from '../tests/support/team-database.js';
+import { createDemoState } from '../src/demo/seed.js';
+import { demoSoloUrl, demoTeamUrl } from '../src/demo/mode.js';
+import { prepareSoloTransfer } from '../src/domain/soloTransfer.js';
+
+const db = await teamDatabase();
+const importKey = await testImportKey(db);
+const guests = new Map();
+const scope = ['p_workspace', 'p_actor'];
+const routes = new Map([
+  ['cloud_page', [...scope, 'p_position']],
+  ['cloud_command', [...scope, 'p_request', 'p_command']],
+  ['members', scope],
+  ['trade_context', [...scope, 'p_product']],
+  ['stats', [...scope, 'p_member', 'p_from', 'p_to']],
+  ['analytics', [...scope, 'p_kind', 'p_from', 'p_to']],
+  ['audit', [...scope, 'p_member', 'p_kind', 'p_from', 'p_to', 'p_offset']],
+  ['operation_history', [...scope, 'p_product', 'p_kind', 'p_from', 'p_to', 'p_offset']],
+  ['search_history', [...scope, 'p_product', 'p_kind', 'p_from', 'p_to', 'p_offset', 'p_query']],
+]);
+
+async function seedGuest(label) {
+  const owner = await seedSession(db, await seedUser(db, 'owner-' + label + '@demo.invalid'));
+  const guest = await seedSession(db, await seedUser(db, 'manager-' + label + '@demo.invalid'));
+  const seller = await seedUser(db, 'seller-' + label + '@demo.invalid');
+  const [{ id }] = await asUser(db, owner, 'select * from public.phonebooks_team_create_workspace($1,$2)',
+    ['Магазин «Второй круг»', randomUUID()]);
+  await db.query(`insert into phonebooks_team_private.memberships(workspace_id,user_id,role)
+    values ($1,$2,'manager'),($1,$3,'employee')`, [id, guest.sub, seller]);
+  await db.query(`insert into phonebooks_team_private.member_overrides(workspace_id,user_id,permission,allowed)
+    select $1,$2,permission.id,true from phonebooks_team_private.permission_catalog permission where permission.available
+      and permission.id not like 'data.%' and (permission.id not like 'team.%' or permission.id in ('team.members.read','team.audit.read'))`, [id, guest.sub]);
+  await db.query(`update phonebooks_team_private.team_roles set grants=array_remove(array_remove(grants,'data.solo_transfer'),'team.invite')
+    where workspace_id=$1 and id='manager'`, [id]);
+  const material = prepareSoloTransfer({ state: createDemoState() });
+  await asUser(db, owner, 'select public.phonebooks_team_solo_import($1,$2,$3,$4,$5)',
+    [id, owner.sub, importKey, label.padEnd(64, '0'), material]);
+  await db.query(`update phonebooks_team_private.inventory_operations
+    set historical=false, actor_id=case when type='sale' and (occurred_on-date '2000-01-01')%2=0 then $2::uuid
+      when type in ('purchase','expense') then $3::uuid else actor_id end
+    where workspace_id=$1 and coalesce(request_payload->>'sheetType','') not in ('historical_sale','historical_expense','opening')`,
+  [id, seller, guest.sub]);
+  return guest;
+}
+
+const mime = new Map(Object.entries({ '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css',
+  '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.wasm': 'application/wasm',
+  '.webmanifest': 'application/manifest+json', '.json': 'application/json' }));
+const json = (payload, status = 200, headers = {}) => Response.json(payload, { status,
+  headers: { ...headers, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
+const rejected = (status = 403) => json({ error: 'Действие недоступно в демоверсии.' }, status);
+
+async function asset(request, root, pathname) {
+  if (!['GET', 'HEAD'].includes(request.method)) return rejected(405);
+  const path = resolve(root, '.' + (pathname === '/' ? '/index.html' : pathname));
+  if (!path.startsWith(root + sep)) return rejected(404);
+  try {
+    return new Response(request.method === 'HEAD' ? null : await readFile(path), { headers: {
+      'Content-Type': mime.get(extname(path)) ?? 'application/octet-stream', 'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'no-referrer', 'Content-Security-Policy': "frame-ancestors 'none'; connect-src 'self'; base-uri 'none'",
+    } });
+  } catch { return rejected(404); }
+}
+
+const teamOrigin = new URL(demoTeamUrl).origin;
+const soloOrigin = new URL(demoSoloUrl).origin;
+const teamRoot = resolve('work/demo/team'), soloRoot = resolve('work/demo/solo');
+async function team(request, pathname) {
+  if (!pathname.startsWith('/api/')) return asset(request, teamRoot, pathname);
+  if (pathname === '/api/config' && request.method === 'GET') return json({ soloUrl: demoSoloUrl, turnstileSiteKey: '' });
+  if (request.method !== 'POST' || request.headers.get('Origin') !== teamOrigin) return rejected();
+  const guestId = /(?:^|;\s*)phonebooks_demo_guest=([a-f0-9-]{36})(?:;|$)/.exec(request.headers.get('Cookie') ?? '')?.[1];
+  let session = guests.get(guestId);
+  try {
+    const body = await readBody(request);
+    if (pathname === '/api/workspaces') {
+      let cookie;
+      if (!session) {
+        if (guests.size >= 12) return json({ error: 'Достигнут лимит локальных демосессий. Перезапустите стенд.' }, 429);
+        const token = randomUUID();
+        session = seedGuest(token.replaceAll('-', '').slice(0, 16)).catch(error => { guests.delete(token); throw error; });
+        guests.set(token, session);
+        cookie = 'phonebooks_demo_guest=' + token + '; HttpOnly; SameSite=Strict; Path=/';
+      }
+      const [row] = await asUser(db, await session, 'select public.phonebooks_team_overview($1) as value', [null]);
+      return json(row.value, 200, cookie ? { 'Set-Cookie': cookie } : {});
+    }
+    if (!session) return rejected(401);
+    const [operation, parameters] = pathname.startsWith('/api/cloud/') ? cloudRoute(pathname, body) : teamRoute(pathname, body);
+    const fields = routes.get(operation);
+    if (!fields) return rejected();
+    const sql = 'select public.phonebooks_team_' + operation + '(' + fields.map((_, index) => '$' + (index + 1)).join(',') + ') as value';
+    const [row] = await asUser(db, await session, sql, fields.map(key => parameters[key]));
+    return json(row.value);
+  } catch (error) {
+    const status = Number.isInteger(error.status) ? error.status : /^PT[45]\d\d$/.test(error.code) ? Number(error.code.slice(2)) : 500;
+    if (status === 500) console.error('Demo request failed', error.code ?? error.name);
+    return json({ error: status === 409 ? 'Данные изменились, обновите страницу.' : 'Действие не выполнено в демоверсии.' }, status);
+  }
+}
+
+function listen(origin, host, handler) {
+  const url = new URL(origin);
+  const server = createServer(nodeHandler(origin, (request) => {
+    if (request.headers.get('Host') !== url.host) return rejected();
+    return handler(request, new URL(request.url).pathname);
+  }));
+  return server.listen(Number(url.port), host);
+}
+
+const soloServer = listen(soloOrigin, '127.0.0.1', (request, path) => asset(request, soloRoot, path));
+const teamServer = listen(teamOrigin, '127.0.0.1', team);
+console.log('Demo Solo ' + demoSoloUrl + '  Demo Team ' + demoTeamUrl);
+for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => {
+  for (const server of [teamServer, soloServer]) { server.close(); server.closeAllConnections(); }
+  await db.close();
+});

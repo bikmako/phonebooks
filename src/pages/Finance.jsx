@@ -31,6 +31,7 @@ import { deleteTransfer } from "../domain/transfers.js";
 import { useStore } from "../hooks/useStore.jsx";
 import { FinanceChart } from "../product/FinanceChart.jsx";
 import { AnalyticsPanel } from '../product/AnalyticsPanel.jsx';
+import { isDemo } from '../demo/mode.js';
 import { prepareSoloAnalytics, soloAnalytics } from '../domain/analytics.js';
 import { Metrics, PeriodSelect, SectionTitle } from "../product/ui.jsx";
 import { getAccountBalances, getStats } from "../utils/calculations.js";
@@ -112,7 +113,7 @@ function SoloFinanceAnalytics({ onNavigate, onClose }) {
   const { data } = useStore();
   const source = React.useMemo(() => prepareSoloAnalytics(data), [data]);
   const localReport = React.useCallback((period, asOf) => soloAnalytics(source, period, asOf), [source]);
-  return <AnalyticsPanel allowed={analyticsSections} preferencesKey="solo" localReport={localReport} canExport onClose={onClose}
+  return <AnalyticsPanel allowed={analyticsSections} preferencesKey="solo" localReport={localReport} canExport={!isDemo} onClose={onClose}
     onProduct={id => {
       if (id.startsWith('phone:')) onNavigate('purchase', id.slice(6));
       else if (id.startsWith('accessory:')) onNavigate('accessories', id.slice(10));
@@ -229,7 +230,7 @@ function FinanceOverview({ initialTab: s, onAnalytics }) {
         <button type="button" onClick={onAnalytics}>Расширенная аналитика</button><FinanceSheetExport filter={range} /></div>
       <Metrics items={[
         { label: "Выручка", value: formatPreciseMoney(y.revenue), Icon: Coins },
-        { label: "Расходы с себестоимостью", value: formatPreciseMoney(roundMoney(y.cogs + y.opex + y.writeOff)), Icon: Receipt },
+        { label: "Расходы с себестоимостью", value: formatPreciseMoney(roundMoney(y.cogs + y.expensesTotal)), Icon: Receipt },
         { label: "Чистая прибыль", value: formatPreciseMoney(y.netProfit), Icon: ChartNoAxesCombined },
       ]} />
       <section className="pb-finance-chart">

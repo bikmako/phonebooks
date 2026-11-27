@@ -1,6 +1,7 @@
 import React from 'react';
 import { projectInventory } from '../domain/inventory.js';
 import { exportTypes } from '../domain/spreadsheetExport.js';
+import { isDemo } from '../demo/mode.js';
 import { useStore } from '../hooks/useStore.jsx';
 import { readInventoryCatalog } from '../storage/inventoryStore.js';
 import { Modal } from '../components/ui.jsx';
@@ -32,6 +33,7 @@ export function SoloSpreadsheet({ currentFilter }) {
 }
 
 export function SpreadsheetExportDialog({ filter, onClose }) {
+  if (isDemo) return null;
   return <Modal open size="lg" title="Экспорт таблицы" onClose={onClose}>
     <SoloSpreadsheet currentFilter={filter} />
   </Modal>;
@@ -39,6 +41,7 @@ export function SpreadsheetExportDialog({ filter, onClose }) {
 
 export function FinanceSheetExport({ filter }) {
   const [open, setOpen] = React.useState(false);
+  if (isDemo) return null;
   return <><button className="pb-action pb-action-secondary" onClick={() => setOpen(true)}>Экспорт финансов</button>
     {open && <SpreadsheetExportDialog filter={{ kind: 'finance', ...filter }} onClose={() => setOpen(false)} />}
   </>;

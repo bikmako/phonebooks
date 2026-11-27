@@ -108,6 +108,7 @@ button.pb-metric:hover { box-shadow: inset 0 0 0 1px var(--pb-line); }
 .pb-status-good { background: var(--pb-good-bg); color: var(--pb-good); }
 .pb-status-warn { background: var(--pb-warn-bg); color: var(--pb-warn); }
 .pb-stack { display: grid; gap: 20px; min-width: 0; }
+.pb-demo-banner { display: flex; gap: 6px 12px; flex-wrap: wrap; margin-bottom: 16px; padding: 10px 12px; border: 1px solid var(--pb-line); border-left: 3px solid var(--pb-accent); border-radius: 8px; background: var(--pb-surface); font-size: 13px; }
 .pb-list { display: grid; gap: 0; padding: 0; margin: 0; list-style: none; }
 .pb-list > li, .pb-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 11px; align-items: center; text-align: start; background: transparent; color: inherit; border: 0; border-bottom: 1px solid var(--pb-line); padding: 10px 2px; width: 100%; min-width: 0; }
 .pb-row > * { min-width: 0; overflow-wrap: anywhere; }

@@ -55,6 +55,7 @@ import {
 import React from "react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 import { SpreadsheetExportDialog } from '../product/SoloSpreadsheet.jsx';
+import { isDemo } from '../demo/mode.js';
 export function SalesPage({
   formOpen: s,
   onOpenForm: t,
@@ -140,7 +141,7 @@ export function SalesPage({
       <div className="pb-actions pb-sales-toolbar">
         <PeriodSelect value={period} onChange={setPeriod} />
         <Button icon={<Plus className="h-4 w-4" />} onClick={t}>Продажа</Button>
-        <Button variant="secondary" onClick={() => setExporting(true)}>Экспорт продаж</Button>
+        {!isDemo && <Button variant="secondary" onClick={() => setExporting(true)}>Экспорт продаж</Button>}
       </div>
       {exporting && <SpreadsheetExportDialog filter={{ kind: 'sale', ...range, query: o,
         operationStatus: d === 'all' ? '' : d === 'completed' ? 'posted' : 'cancelled' }} onClose={() => setExporting(false)} />}

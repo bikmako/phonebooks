@@ -6,9 +6,16 @@ import { AccountForm, AuthLayout } from './AccountForm.jsx';
 import { Workspaces } from './Workspaces.jsx';
 import { clearCloudRequests, CloudWorkspace } from './CloudWorkspace.jsx';
 import { TeamPanel } from './TeamPanel.jsx';
+import { demoTeamUrl, isDemo } from '../src/demo/mode.js';
+import { DemoBanner } from '../src/demo/DemoBanner.jsx';
 import '../src/product/product.css';
 import './styles.css';
 import './auth.css';
+
+if (isDemo && location.origin !== new URL(demoTeamUrl).origin) {
+  document.getElementById('root').textContent = 'Откройте демоверсию по адресу ' + demoTeamUrl;
+  throw new Error('Demo origin required');
+}
 
 const callbackUrl = new URL(location.href);
 const callbackView = callbackUrl.searchParams.get('view');
@@ -189,7 +196,7 @@ function TeamApp() {
     {error && <p role="alert" className="notice error">{error}</p>}
   </>;
   if (!data || !ready) return <AuthLayout soloUrl={config?.soloUrl}>
-    {ready && config ? <AccountForm key={view} view={view} siteKey={config.turnstileSiteKey}
+    {ready && config && !isDemo ? <AccountForm key={view} view={view} siteKey={config.turnstileSiteKey}
       busy={busy} note={note} error={error} onSubmit={submitAuth} onView={changeView} />
       : <div className="pb-auth-view">
         {!ready ? <p className="pb-auth-feedback" role="status">Проверяем сессию…</p> : <>
@@ -224,13 +231,14 @@ function TeamApp() {
       </button>
       <button className="pb-icon-button" onClick={() => navigate('settings')} aria-label="Аккаунт"><Settings size={19} /></button>
     </>}>
+    {isDemo && <DemoBanner />}
     {notices}
     {active === 'settings' && <>
       <PageTitle title="Настройки" />
       <div className="pb-panel" aria-label="Сессия">
         <h2>Аккаунт</h2>
         <p>{data.account.email}</p>
-        <div className="account-nav">
+        {!isDemo && <div className="account-nav">
             <button className="secondary" disabled={busy} onClick={() => run(async () => {
               await api('auth/logout-others', {});
               setNote('Другие сессии завершены.');
@@ -241,12 +249,12 @@ function TeamApp() {
               clearWorkspace();
               setView('login');
             })}>Выйти</button>
-        </div>
+        </div>}
       </div>
     </>}
     {active === 'team' && <PageTitle title="Команда" description={data.selected?.name} />}
     <div hidden={active !== 'team'} className="pb-team-admin">
-      <Workspaces key={accountId} data={data} busy={busy} inviteLink={inviteLink} actions={actions} />
+      {!isDemo && <Workspaces key={accountId} data={data} busy={busy} inviteLink={inviteLink} actions={actions} />}
       {data.selected && <TeamPanel key={'team:' + accountId + ':' + data.selected.id}
         workspace={data.selected} actor={accountId} api={api} onChanged={() => void loadWorkspaces().catch(() => {})} />}
     </div>

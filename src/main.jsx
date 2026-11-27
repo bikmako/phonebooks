@@ -8,6 +8,13 @@ import "./styles/app.css";
 import "./product/product.css";
 import "./product/solo.css";
 import { startUpdates } from "./updates/service.js";
+import { demoSoloUrl, isDemo } from './demo/mode.js';
+
+if (isDemo && location.origin !== new URL(demoSoloUrl).origin) {
+  document.getElementById('boot')?.remove();
+  document.getElementById('root').textContent = 'Откройте демоверсию по адресу ' + demoSoloUrl;
+  throw new Error('Demo origin required');
+}
 
 // Убираем splash с первого экрана сразу после первого кадра (как в готовой сборке).
 requestAnimationFrame(() => {

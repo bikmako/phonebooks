@@ -206,12 +206,13 @@ export function validateSnapshot(snapshot) {
     for (const entry of db[name]) {
       if (!object(entry) || typeof entry.key !== 'string' || keys.has(entry.key) || !('value' in entry)) fail(`Неверная запись ${name}`);
       keys.add(entry.key);
-      if (name === 'state') validateState(entry.value);
+      if (name === 'state' && validateState(entry.value).demoData) fail('Демонстрационная копия');
       if (name === 'backups') {
         const backup = entry.value;
         if (!object(backup) || backup.id !== entry.key || typeof backup.payload !== 'string') fail('Неверная точка восстановления');
         date(backup.at, 'backups.at');
         const data = validateState(JSON.parse(backup.payload), { legacy: true });
+        if (data.demoData) fail('Демонстрационная точка восстановления');
         number(backup.phones, 'backups.phones'); number(backup.sales, 'backups.sales'); text(backup.reason, 'backups.reason');
         if (backup.phones !== data.phones.length || backup.sales !== data.sales.length) fail('Счётчики точки восстановления не соответствуют данным');
       }
@@ -245,6 +246,7 @@ export function parseImportFile(source) {
     }
     if ('data' in file && (file.app !== 'PhoneBooks' || file.version !== 1)) fail('Неизвестный старый формат');
     const data = validateState('data' in file ? file.data : file, { legacy: true });
+    if (data.demoData) fail('Демонстрационная копия');
     return { data, snapshot: null, legacy: true, error: null };
   } catch (error) { return { data: null, snapshot: null, error: `Копия не принята: ${error.message}` }; }
 }

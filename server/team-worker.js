@@ -135,7 +135,7 @@ async function withSession(env, request, cookies, operation) {
   return operation(await refreshSession(env, request, cookies));
 }
 
-async function readBody(request, limit = AUTH_LIMIT) {
+export async function readBody(request, limit = AUTH_LIMIT) {
   if (!request.headers.get("Content-Type")?.toLowerCase().startsWith("application/json")) {
     throw new HttpError(415, "Необходим JSON.");
   }
@@ -297,7 +297,7 @@ const workspaceRoutes = {
   "/api/invitations/revoke": ["revoke_invitation", ["p_workspace_id", "p_invitation_id"]],
 };
 
-function cloudRoute(path, body) {
+export function cloudRoute(path, body) {
   const { p_workspace, p_actor, p_cursor, p_request, p_command, p_position } = body;
   if (typeof p_workspace !== "string" || typeof p_actor !== "string") throw new HttpError(400, "Проверьте параметры пространства.");
   if (path === "/api/cloud/feed" && p_position && typeof p_position === "object" && !Array.isArray(p_position)) {
@@ -312,7 +312,7 @@ function cloudRoute(path, body) {
   throw new HttpError(400, "Проверьте параметры операции.");
 }
 
-function teamRoute(path, body) {
+export function teamRoute(path, body) {
   const { p_workspace, p_actor, p_action, p_input, p_member, p_kind, p_from, p_to, p_offset, p_product, p_query } = body;
   if (typeof p_workspace !== "string" || typeof p_actor !== "string") throw new HttpError(400, "Проверьте параметры пространства.");
   const scope = { p_workspace, p_actor };

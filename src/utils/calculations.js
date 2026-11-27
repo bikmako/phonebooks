@@ -190,13 +190,19 @@ export function getStats(state, t) {
         .reduce((u, N) => u + N.qty * N.unitCost, 0),
     ),
     warehouse = warehouseEvents(state).filter(operation => inPeriod(operation.date, t)),
-    warehouseSales = new Set(warehouse.filter(operation => ['sale','historical_sale'].includes(operation.type)).map(operation => operation.groupId ?? operation.id)),
+    warehouseSales = warehouse.filter(operation => ['sale','historical_sale'].includes(operation.type)),
+    receipts = new Set([
+      ...n.map(sale => 'sale:' + sale.id),
+      ...l.map(sale => sale.groupId ? 'sale:' + sale.groupId : 'acc_sale:' + sale.id),
+      ...warehouseSales.map(operation => operation.groupId ?? operation.id),
+    ]),
     A = roundMoney(i + d + warehouse.reduce((sum, operation) => sum + operation.revenueMinor, 0) / 100),
     L = roundMoney(o + x + warehouse.reduce((sum, operation) => sum + operation.costMinor, 0) / 100),
     O = roundMoney(A - L),
     m = roundMoney(r.reduce((u, N) => u + N.amount, 0)),
     sheetExpenses = warehouse.filter(operation => ['expense','historical_expense'].includes(operation.type)),
-    f = roundMoney(O - m - p - warehouse.reduce((sum, operation) => sum + operation.expenseMinor / 100, 0)),
+    expensesTotal = roundMoney(m + p + warehouse.reduce((sum, operation) => sum + operation.expenseMinor / 100, 0)),
+    f = roundMoney(O - expensesTotal),
     C = {};
   for (const u of r)
     C[u.category] = roundMoney((C[u.category] ?? 0) + u.amount);
@@ -229,13 +235,13 @@ export function getStats(state, t) {
     cogs: L,
     grossProfit: O,
     opex: roundMoney(m + sheetExpenses.reduce((sum, operation) => sum + operation.expenseMinor / 100, 0)),
+    expensesTotal,
     netProfit: f,
     purchases: y,
-    salesCount: n.length + l.length + warehouseSales.size,
+    salesCount: receipts.size,
     purchasesCount: c.length + warehouse.filter(operation => operation.type === "purchase").length,
     expensesCount: r.length + sheetExpenses.length,
-    averageCheck:
-      n.length + l.length + warehouseSales.size ? roundMoney(A / (n.length + l.length + warehouseSales.size)) : 0,
+    averageCheck: receipts.size ? roundMoney((i + d + warehouseSales.reduce((sum, row) => sum + row.revenueMinor, 0) / 100) / receipts.size) : 0,
     averageMargin: j.length
       ? Math.round((j.reduce((u, N) => u + N, 0) / j.length) * 100)
       : 0,
