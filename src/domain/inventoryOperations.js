@@ -121,7 +121,7 @@ export function projectInventoryOperations(state) {
       tradeMode: operation.type, returnMinor: correction ? operation.amountMinor : 0, reason: operation.reason ?? null,
       ...(operation.originalLine ? { originalLine: operation.originalLine } : {}),
     });
-    if (operation.type === 'historical_sale') operations.at(-1).sheetType = operation.type;
+    if (['historical_sale', 'opening'].includes(operation.type)) operations.at(-1).sheetType = operation.type;
   }
   return operations;
 }

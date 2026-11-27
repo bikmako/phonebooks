@@ -127,6 +127,7 @@ const rpcArgs = {
   phonebooks_team_search_history: ["p_workspace", "p_actor", "p_product", "p_kind", "p_from", "p_to", "p_offset", "p_query"],
   phonebooks_team_operation_history: ["p_workspace", "p_actor", "p_product", "p_kind", "p_from", "p_to", "p_offset"],
   phonebooks_team_stats: ["p_workspace", "p_actor", "p_member", "p_from", "p_to"],
+  phonebooks_team_analytics: ["p_workspace", "p_actor", "p_kind", "p_from", "p_to"],
 };
 async function signedRpc(claims, operation, body) {
   if (!Object.hasOwn(rpcArgs, operation)) throw new Error("Unexpected RPC");

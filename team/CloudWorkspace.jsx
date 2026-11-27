@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Plus } from 'lucide-react';
 import { WarehouseSearch } from '../src/product/WarehouseSearch.jsx';
 import { TradePanel, tradeLabels } from '../src/product/TradePanel.jsx';
@@ -13,6 +13,7 @@ import { TeamSpreadsheet } from './TeamSpreadsheet.jsx';
 import { Modal } from '../src/components/ui.jsx';
 import { SoloTransfer } from './SoloTransfer.jsx';
 import { readCloudFeed } from './cloudFeed.js';
+import { AnalyticsPanel } from '../src/product/AnalyticsPanel.jsx';
 
 const productCommands = ['purchase', 'sale', 'repair', 'repair_start', 'stock_adjustment'];
 const accountCommands = ['purchase', 'sale', 'repair', 'expense', 'deposit'];
@@ -93,6 +94,11 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
   const [chosenType, setType] = useState('');
   const [selection, setSelection] = useState(null);
   const [productId, setProductId] = useState('');
+  const nextProduct = useRef('');
+  const [analytics, setAnalytics] = useState(false);
+  const fetchAnalytics = useCallback((kind, range) => api('team/analytics', {
+    p_workspace: workspace.id, p_actor: actor, p_kind: kind, p_from: range.from, p_to: range.to,
+  }), [api, workspace.id, actor]);
   const [tradeOpen, setTradeOpen] = useState('');
   const [tradeData, setTradeData] = useState(null);
   const [holdsData, setHoldsData] = useState(null);
@@ -312,17 +318,18 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
     if (allowed.includes('purchase')) start('purchase');
   }, [addRequest, data]);
   const previousRoute = useRef(route);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (previousRoute.current === route) return;
     previousRoute.current = route;
+    setAnalytics(false);
     setEditor('');
     setMessage('');
     setTradeOpen(false);
     setTradeData(null);
     if (!type) {
-      setProductId('');
+      setProductId(nextProduct.current);
+      nextProduct.current = '';
       setSelection(null);
-      setType('');
     }
   }, [route, type]);
   const contextTitle = {
@@ -344,6 +351,13 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
     && (editor !== 'product' || currentProduct);
   const saveCatalogue = command => send({ id: crypto.randomUUID(), command });
   const stockDetail = ['purchase', 'repairs', 'search'].includes(route) && mayReadStock && currentProduct && !type && !editing;
+  const analyticsSections = [
+    ...(permissions.includes('analytics.company') ? ['finance'] : []),
+    ...(mayReadStock && permissions.includes('analytics.categories') ? ['categories'] : []),
+    ...(mayReadStock && permissions.includes('analytics.aging') ? ['aging'] : []),
+  ];
+  const analyticsAvailable = route === 'finance' && !type && analyticsSections.length > 0;
+  const analyticsOpen = analyticsAvailable && analytics;
   function clearNotice() {
     setMessage('');
     setFailure('');
@@ -369,7 +383,12 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
       <button disabled={!available || sending} onClick={() => send(pending)}>Проверить операцию</button>
     </p>}
     {data && <>
-      {!type && ['dashboard', 'sales', 'finance'].includes(route) && <CloudReports data={data}
+      {analyticsOpen && <AnalyticsPanel allowed={analyticsSections} preferencesKey={actor + ':' + workspace.id}
+        revision={permissionKey + ':' + data.cursor} fetchReport={fetchAnalytics} online={available}
+        canExport={permissions.includes('data.export')} onClose={() => setAnalytics(false)}
+        onProduct={id => { nextProduct.current = id; navigate('purchase'); }} />}
+      {analyticsAvailable && !analytics && <button type="button" className="secondary" onClick={() => setAnalytics(true)}>Расширенная аналитика</button>}
+      {!analyticsOpen && !type && ['dashboard', 'sales', 'finance'].includes(route) && <CloudReports data={data}
         workspaceId={workspace.id} actor={actor} api={api} route={route} online={available} navigate={navigate} period={period} setPeriod={setPeriod} />}
       {route === 'search' && !stockDetail && <WarehouseSearch products={products} maySearchStock={mayReadStock}
         onProduct={item => setProductId(item.id)} history={mayReadHistory ? query => <TeamHistory key={query} {...historyProps}
@@ -407,7 +426,7 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
         onCategories={route === 'purchase' && allowed.includes('save_category') ? () => setEditor('category') : undefined}
         onBulk={route === 'purchase' && canBulk && data.products.length ? () => setEditor('bulk') : undefined}
         onExport={permissions.includes('data.export') ? setSheetFilter : undefined} />}
-      {!type && !stockDetail && route !== 'purchase' && <div className="pb-actions">
+      {!analyticsOpen && !type && !stockDetail && route !== 'purchase' && <div className="pb-actions">
         {actions.filter(kind => allowed.includes(kind)).map(kind =>
           <button key={kind} onClick={() => start(kind)} disabled={!available || !!pending}><Plus size={17} />{contextTitle[kind]}</button>)}
       </div>}
@@ -450,7 +469,7 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
           </button>
         </fieldset>
       </form>}
-      {!type && !stockDetail && mayReadHistory && ['dashboard', 'sales', 'repairs', 'finance', 'history'].includes(route) && <>
+      {!analyticsOpen && !type && !stockDetail && mayReadHistory && ['dashboard', 'sales', 'repairs', 'finance', 'history'].includes(route) && <>
         {['repairs', 'history'].includes(route) && <PeriodSelect value={period} onChange={setPeriod} />}
         <TeamHistory key={route + ':' + period} {...historyProps} period={period}
           title={route === 'sales' ? 'Операции продаж' : route === 'repairs' ? 'История ремонта' : route === 'finance' && mayReadCash ? 'Движение по счетам' : 'Последние операции'}
@@ -458,7 +477,7 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
           kind={route === 'sales' ? 'sale' : route === 'repairs' ? 'repair' : route === 'finance' && mayReadCash ? 'cash' : null}
           fallback={data.operations} />
       </>}
-      {!type && !stockDetail && permissions.includes('data.export') && ['sales','finance','history','team'].includes(route) &&
+      {!analyticsOpen && !type && !stockDetail && permissions.includes('data.export') && ['sales','finance','history','team'].includes(route) &&
         <button type="button" className="secondary" onClick={() => setSheetFilter({
           kind: ({ sales: 'sale', finance: 'finance', history: 'history', team: 'employees' })[route],
         })}>Экспорт за период</button>}

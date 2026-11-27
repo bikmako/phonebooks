@@ -316,6 +316,9 @@ function teamRoute(path, body) {
   const { p_workspace, p_actor, p_action, p_input, p_member, p_kind, p_from, p_to, p_offset, p_product, p_query } = body;
   if (typeof p_workspace !== "string" || typeof p_actor !== "string") throw new HttpError(400, "Проверьте параметры пространства.");
   const scope = { p_workspace, p_actor };
+  if (path === "/api/team/analytics" && [p_kind, p_from, p_to].every(value => typeof value === "string")) {
+    return ["analytics", { ...scope, p_kind, p_from, p_to }];
+  }
   if (path === "/api/team/trade" && (p_product === null || typeof p_product === "string")) return ["trade_context", { ...scope, p_product }];
   if (path === "/api/team/members") return ["members", scope];
   if (path === "/api/team/manage" && typeof p_action === "string" && p_input && typeof p_input === "object" && !Array.isArray(p_input)) {

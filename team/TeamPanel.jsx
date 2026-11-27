@@ -13,6 +13,7 @@ const actions = {
 };
 const metrics = {
   returns: 'Возвраты и компенсации', reservations: 'Созданные бронирования', purchases: 'Закупки', purchaseMinor: 'Сумма закупок', sales: 'Продажи', revenueMinor: 'Выручка',
+  purchasedUnits: 'Закуплено, шт.', soldUnits: 'Продано, шт.', averageMinor: 'Средний чек', operations: 'Всего операций',
   grossMinor: 'Валовая прибыль', netMinor: 'Чистая прибыль предприятия', expenses: 'Расходные операции',
   expensesMinor: 'Сумма расходов', repairs: 'Ремонты', cashMinor: 'Текущая касса', stockMinor: 'Текущая стоимость склада',
 };
@@ -251,7 +252,7 @@ export function TeamPanel({ workspace, actor, api, onChanged }) {
         <button disabled={busy || !online}>Показать статистику</button>
       </form>
       {stats && <dl className="metric-list">{Object.entries(metrics).filter(([key]) => Object.hasOwn(stats, key)).map(([key,label]) =>
-        <div key={key}><dt>{label}</dt><dd>{key.endsWith('Minor') ? money(stats[key]) : stats[key]}</dd></div>)}</dl>}
+        <div key={key}><dt>{label}</dt><dd>{stats[key] == null ? '—' : key.endsWith('Minor') ? money(stats[key]) : stats[key]}</dd></div>)}</dl>}
     </details>}
     {may('team.audit.read') && <details>
       <summary>Журнал действий</summary>

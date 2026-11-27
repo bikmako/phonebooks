@@ -19,6 +19,7 @@ const labels = {
   grossMinor: 'Валовая прибыль, ₽', netMinor: 'Чистая прибыль, ₽', stockMinor: 'Стоимость остатков, ₽',
   purchaseMinor: 'Сумма закупок, ₽', purchases: 'Закупки', sales: 'Продажи', expenses: 'Расходы (число)',
   repairs: 'Ремонты', returns: 'Возвраты', reservations: 'Бронирования',
+  purchasedUnits: 'Закуплено, шт.', soldUnits: 'Продано, шт.', averageMinor: 'Средний чек, ₽', operations: 'Операции (число)',
 };
 const kinds = { purchase: 'Закупка', sale: 'Продажа', expense: 'Расход', repair: 'Ремонт', repair_start: 'Начало ремонта',
   customer_return: 'Возврат покупателя', supplier_return: 'Возврат поставщику', reservation: 'Бронь',

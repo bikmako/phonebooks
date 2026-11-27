@@ -30,6 +30,8 @@ import { deleteExpense } from "../domain/expenses.js";
 import { deleteTransfer } from "../domain/transfers.js";
 import { useStore } from "../hooks/useStore.jsx";
 import { FinanceChart } from "../product/FinanceChart.jsx";
+import { AnalyticsPanel } from '../product/AnalyticsPanel.jsx';
+import { prepareSoloAnalytics, soloAnalytics } from '../domain/analytics.js';
 import { Metrics, PeriodSelect, SectionTitle } from "../product/ui.jsx";
 import { getAccountBalances, getStats } from "../utils/calculations.js";
 import { getChartData } from "../utils/chartData.js";
@@ -98,7 +100,27 @@ export const EXPENSE_PRESETS = [
     amount: 0,
   },
 ];
-export function FinancePage({ initialTab: s }) {
+const analyticsSections = ['finance', 'categories', 'aging'];
+
+export function FinancePage({ initialTab, onNavigate }) {
+  const [analytics, setAnalytics] = React.useState(false);
+  return analytics ? <SoloFinanceAnalytics onNavigate={onNavigate} onClose={() => setAnalytics(false)} /> :
+    <FinanceOverview initialTab={initialTab} onAnalytics={() => setAnalytics(true)} />;
+}
+
+function SoloFinanceAnalytics({ onNavigate, onClose }) {
+  const { data } = useStore();
+  const source = React.useMemo(() => prepareSoloAnalytics(data), [data]);
+  const localReport = React.useCallback((period, asOf) => soloAnalytics(source, period, asOf), [source]);
+  return <AnalyticsPanel allowed={analyticsSections} preferencesKey="solo" localReport={localReport} canExport onClose={onClose}
+    onProduct={id => {
+      if (id.startsWith('phone:')) onNavigate('purchase', id.slice(6));
+      else if (id.startsWith('accessory:')) onNavigate('accessories', id.slice(10));
+      else onNavigate('catalog', id);
+    }} />;
+}
+
+function FinanceOverview({ initialTab: s, onAnalytics }) {
   const { data: t, mutate: n, notify: a, period, setPeriod } = useStore(),
     [c, r] = React.useState(s ?? "accounts"),
     [i, o] = React.useState(null),
@@ -204,7 +226,7 @@ export function FinancePage({ initialTab: s }) {
   return (
     <div className="space-y-4">
       <div className="pb-actions"><PeriodSelect value={period} onChange={setPeriod} />
-        <FinanceSheetExport filter={range} /></div>
+        <button type="button" onClick={onAnalytics}>Расширенная аналитика</button><FinanceSheetExport filter={range} /></div>
       <Metrics items={[
         { label: "Выручка", value: formatPreciseMoney(y.revenue), Icon: Coins },
         { label: "Расходы с себестоимостью", value: formatPreciseMoney(roundMoney(y.cogs + y.opex + y.writeOff)), Icon: Receipt },

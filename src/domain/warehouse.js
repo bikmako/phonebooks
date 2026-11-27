@@ -31,7 +31,7 @@ function takeLots(item, count, eligible = () => true) {
     if (!eligible(lot) || units === 0) continue;
     const quantity = Math.min(units, lot.quantity);
     const costMinor = portion(lot.costMinor, quantity, lot.quantity);
-    allocations.push({ sourceId: lot.sourceId, quantity, costMinor });
+    allocations.push({ sourceId: lot.sourceId, quantity, costMinor, receivedOn: lot.receivedOn });
     lot.quantity -= quantity;
     lot.costMinor -= costMinor;
     units -= quantity;
@@ -44,7 +44,7 @@ const totalCost = allocations => safe(allocations.reduce((sum, item) => sum + it
 
 function addLot(item, event, quantity, costMinor, sourceId = event.id, index = 0) {
   item.lots.push({ id: index ? event.id + ':' + index : event.id, sourceId, productId: event.productId,
-    quantity, costMinor, date: event.date, createdAt: event.createdAt });
+    quantity, costMinor, date: event.date, receivedOn: event.type === 'opening' ? null : event.date, createdAt: event.createdAt });
 }
 
 function restoreLots(item, event, original, skipped) {

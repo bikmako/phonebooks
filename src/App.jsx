@@ -92,7 +92,7 @@ export function App() {
             />
           );
         case "finance":
-          return <FinancePage />;
+          return <FinancePage onNavigate={w} />;
         case "history":
           return <HistoryPage />;
         case "settings":

@@ -1,13 +1,16 @@
 import React from 'react';
 import { formatPreciseMoney } from '../utils/format.js';
 
-export function FinanceChart({ data, series }) {
-  const marks = data.flatMap(row => series.map(({ key }) => row[key] ?? 0));
-  if (!marks.some(Boolean)) return <p className="pb-empty">За этот период нет движения по выбранным показателям.</p>;
+export function FinanceChart({ data, series, formatValue = formatPreciseMoney }) {
+  const marks = data.flatMap(row => series.map(({ key }) => row[key]).filter(Number.isFinite));
+  if (!marks.length) return <p className="pb-empty">Для выбранных показателей недостаточно данных.</p>;
+  if (!marks.some(Boolean) && data.every(row => series.every(({ key }) => Number.isFinite(row[key])))) {
+    return <p className="pb-empty">За этот период нет движения по выбранным показателям.</p>;
+  }
   const high = Math.max(0, ...marks);
   const low = Math.min(0, ...marks);
   const plot = 160;
-  const y = value => 12 + plot * (high - value) / (high - low);
+  const y = value => 12 + plot * (high - value) / (high - low || 1);
   const slot = 600 / data.length;
   const width = Math.min(22, slot / (series.length + 1));
   const ticks = [...new Set([high, 0, low])].sort((a, b) => b - a);
@@ -21,7 +24,8 @@ export function FinanceChart({ data, series }) {
         const center = 73 + slot * (index + .5);
         return <g key={row.key}>
           {series.map(({ key }, offset) => {
-            const value = row[key] ?? 0;
+            const value = row[key];
+            if (!Number.isFinite(value)) return null;
             return <rect className={'pb-chart-series-' + offset} key={key} x={center + width * (offset - series.length / 2)}
               y={Math.min(y(value), y(0))} width={Math.max(1, width - 2)} height={Math.abs(y(value) - y(0))} rx="2" />;
           })}
@@ -35,7 +39,7 @@ export function FinanceChart({ data, series }) {
       <div className="pb-chart-table"><table>
         <thead><tr><th scope="col">Дата</th>{series.map(({ key, label }) => <th scope="col" key={key}>{label}</th>)}</tr></thead>
         <tbody>{data.map(row => <tr key={row.key}><th scope="row">{row.fullLabel ?? row.label}</th>
-          {series.map(({ key }) => <td key={key}>{formatPreciseMoney(row[key] ?? 0)}</td>)}</tr>)}</tbody>
+          {series.map(({ key }) => <td key={key}>{row[key] == null ? '—' : formatValue(row[key])}</td>)}</tr>)}</tbody>
       </table></div>
     </details>
   </figure>;

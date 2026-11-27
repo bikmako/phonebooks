@@ -206,7 +206,8 @@ function TeamApp() {
     if (section === 'purchase') return permissions.includes('stock.read');
     if (section === 'sales') return permissions.some(permission => ['trade.sale', 'finance.history.read', 'analytics.company', 'analytics.self'].includes(permission));
     if (section === 'repairs') return permissions.includes('stock.read') || permissions.includes('finance.history.read');
-    if (section === 'finance') return permissions.some(permission => ['finance.cash.read', 'finance.history.read', 'finance.deposit', 'analytics.company', 'analytics.self'].includes(permission));
+    if (section === 'finance') return permissions.some(permission => ['finance.cash.read', 'finance.history.read', 'finance.deposit', 'analytics.company', 'analytics.self'].includes(permission)) ||
+      permissions.includes('stock.read') && permissions.some(permission => ['analytics.categories', 'analytics.aging'].includes(permission));
     if (section === 'search') return permissions.includes('stock.read') || permissions.includes('finance.history.read');
     if (section === 'history') return permissions.includes('finance.history.read');
     return true;

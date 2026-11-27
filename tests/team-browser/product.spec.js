@@ -51,13 +51,51 @@ async function checkLayout(page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(await page.evaluate(() => innerWidth));
 }
 
-async function capture(page, testInfo, title) {
-  const dir = process.env.PHONEBOOKS_STAGE7_SCREENSHOTS;
+async function capture(page, testInfo, title, dir = process.env.PHONEBOOKS_STAGE7_SCREENSHOTS) {
   if (!dir || testInfo.project.name === 'team-firefox') return;
   const suffix = testInfo.project.name === 'team-iphone-webkit' ? 'iphone' : 'desktop';
   await mkdir(dir, { recursive: true });
   await page.screenshot({ path: resolve(dir, title + '-' + suffix + '.png'), animations: 'disabled', fullPage: suffix === 'desktop' });
 }
+
+async function checkAnalytics(page, info, mode) {
+  const dir = process.env.PHONEBOOKS_ANALYTICS_SCREENSHOTS;
+  await page.getByRole('button', { name: 'Расширенная аналитика' }).click();
+  await expect(page.getByRole('heading', { name: 'Расширенная аналитика' })).toBeVisible();
+  await expect(page.getByText('Текущая стоимость остатков')).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Выручка за выбранный период' })).toBeVisible();
+  await checkLayout(page);
+  await capture(page, info, mode + '-finance', dir);
+  await page.getByLabel('Показатель', { exact: true }).selectOption({ label: 'Расходы' });
+  await expect(page.getByRole('img', { name: 'Расходы за выбранный период' })).toBeVisible();
+  for (const format of ['Excel', 'CSV']) {
+    const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Скачать ' + format }).click()]);
+    expect(download.suggestedFilename()).toBe('phonebooks-analytics.' + (format === 'Excel' ? 'xlsx' : 'csv'));
+  }
+  await page.getByRole('button', { name: 'Категории', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Продажи и запасы по категориям' })).toContainText('Смартфоны');
+  await capture(page, info, mode + '-categories', dir);
+  await page.getByRole('button', { name: 'Залежавшиеся товары' }).click();
+  await page.getByLabel('Порог, дней').fill('7');
+  await expect(page.getByText('Заморожено в товарах')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '8–14 дней' })).toBeVisible();
+  await checkLayout(page);
+  await capture(page, info, mode + '-aging', dir);
+  await page.getByLabel('Поиск товара').fill('iPhone');
+  await expect(page.getByRole('button', { name: 'Кабель', exact: true })).toHaveCount(0);
+  const item = page.getByRole('region', { name: '8–14 дней' }).getByRole('button', { name: /iPhone/ }).first();
+  const name = await item.innerText();
+  await item.click();
+  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+}
+
+test('Solo advanced analytics and file export work offline', async ({ page, context }, info) => {
+  await seedSolo(page, productFixture());
+  await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
+  await page.getByRole('navigation', { name: 'Основная навигация' }).getByRole('button', { name: 'Финансы', exact: true }).click();
+  await context.setOffline(true);
+  await checkAnalytics(page, info, 'solo');
+});
 
 test('Solo product navigation, device details and finance', async ({ page }, info) => {
   const browserErrors = [];
@@ -168,6 +206,8 @@ test('Team product navigation, repair, transaction history and period cash flow'
   await expect(page.getByRole('heading', { name: 'Касса и счета' })).toBeVisible();
   await checkLayout(page);
   await capture(page, info, 'team-finance');
+  await checkAnalytics(page, info, 'team');
+  await nav.getByRole('button', { name: 'Финансы', exact: true }).click();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Касса и счета' })).toBeVisible();
   await page.getByRole('button', { name: 'Рабочие пространства', exact: true }).click();
