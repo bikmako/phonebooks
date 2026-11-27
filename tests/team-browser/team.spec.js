@@ -121,7 +121,8 @@ for (const [mode, format] of [['Solo', 'csv'], ['Team', 'xlsx']]) {
     expect(Number(sale[headers.indexOf('Выручка, ₽')])).toBe(1400);
     expect(Number(sale[headers.indexOf('Движение кассы, ₽')])).toBe(0);
     if (mode === 'Team') {
-      await panel.getByRole('button', { name: 'Импорт', exact: true }).click();
+      await page.reload();
+      await page.getByText('Импорт и экспорт Excel/CSV', { exact: true }).click();
       page.once('dialog', dialog => dialog.accept());
       await panel.getByRole('button', { name: 'Отменить последний импорт' }).click();
       await expect(panel.getByText('Состояние до импорта восстановлено.')).toBeVisible();

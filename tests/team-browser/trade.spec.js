@@ -81,7 +81,7 @@ test('legacy Solo phone and accessory forms open trade, return a phone and prote
   await expect(heading(dialog, 'Активные бронирования')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
-  await button(page, 'Аксессуары').click();
+  await page.goto('http://localhost:4397/#/accessories');
   const item = page.getByRole('article', { name: state.accessoryItems[0].name });
   await button(item, 'Возвраты и бронирования').click();
   await button(dialog, 'Забронировать').click();
