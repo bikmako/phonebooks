@@ -339,8 +339,8 @@ export function AccessoriesPage({ initialProduct } = {}) {
                   <Button size="sm" variant="ghost" aria-label="Изменить" title="Изменить" icon={<Pencil aria-hidden="true" />} onClick={() => v({ open: !0, item: u })}>
                     <span className="accessories-action-label">Изменить</span>
                   </Button>
+                  <Button size="sm" variant="ghost" className="accessories-trade-action" onClick={() => setTrade(u.id)}>Возвраты и бронирования</Button>
                 </div>
-                <Button size="sm" variant="ghost" onClick={() => setTrade(u.id)}>Возвраты и бронирования</Button>
               </article>
             );
           })}

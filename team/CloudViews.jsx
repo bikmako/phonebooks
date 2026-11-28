@@ -31,7 +31,7 @@ export function TeamStock({ products, categories, repairs, onOpen, onCreate, onC
     : a.name.localeCompare(b.name, 'ru'));
 
   return <section aria-label={repairs ? 'Устройства в ремонте' : 'Товары и остатки'}>
-    {!repairs && <div className="pb-tabs" aria-label="Категории товаров">
+    {!repairs && <div className="pb-tabs pb-stock-sections" aria-label="Категории товаров">
       {[['', 'Все товары'], ...['smartphones', 'accessories'].flatMap(id => {
         const item = categories.find(category => category.id === id);
         return item ? [[item.id, item.name]] : [];
@@ -55,7 +55,7 @@ export function TeamStock({ products, categories, repairs, onOpen, onCreate, onC
         <option value="name">По названию</option><option value="quantity">По остатку</option>
       </select>
     </div>
-    {(onCreate || onCategories || onBulk || onExport) && <div className="pb-actions pb-stock-actions pb-warehouse-actions" role="group" aria-label={repairs ? 'Действия ремонта' : 'Действия склада'}>
+    {(onCreate || onCategories || onBulk || onExport) && <div className="pb-actions pb-stock-actions pb-warehouse-actions" role="group" aria-label={repairs ? 'Экспорт ремонта' : 'Действия склада'}>
       {onCreate && <button onClick={onCreate}><Plus size={17} />Добавить товар</button>}
       {onCategories && <button className="secondary" onClick={onCategories}>Категории товаров</button>}
       {onBulk && <button className="secondary" onClick={onBulk}>Массовое редактирование</button>}

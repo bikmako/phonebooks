@@ -71,10 +71,12 @@ export function AppShell({ route, navigate, mode, switchUrl, onSwitch, identity,
     </aside>
     <div className="pb-main">
       <header className="pb-topbar">
-        <div className="pb-mobile-brand"><Wordmark /></div>
-        <div className="pb-top-tools">{tools}<span className="pb-mode">{mode}</span></div>
+        <div className="pb-frame pb-topbar-inner">
+          <div className="pb-mobile-brand"><Wordmark /></div>
+          <div className="pb-top-tools">{tools}<span className="pb-mode">{mode}</span></div>
+        </div>
       </header>
-      <main className="pb-content" id="main-content">{children}</main>
+      <main className="pb-frame pb-content" id="main-content">{children}</main>
     </div>
     {more && <div className="pb-more-layer">
       <button type="button" className="pb-more-backdrop" aria-label="Закрыть меню" onClick={() => setMore(false)} />

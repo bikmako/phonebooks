@@ -7,6 +7,16 @@ import { addDays, formatShortDate, getPeriod, parseDate, toISODate, today } from
 import { formatMinorMoney as formatMinor } from '../src/utils/format.js';
 export { formatMinor };
 
+export function CashAccounts({ accounts }) {
+  const visible = accounts.filter(account => !account.archived && Object.hasOwn(account, 'balanceMinor'));
+  return <div aria-label="Касса и счета">
+    <SectionTitle>Касса и счета</SectionTitle>
+    {visible.length ? <dl className="metric-list">{visible.map(account =>
+      <div key={account.id}><dt>{account.name}</dt><dd>{formatMinor(account.balanceMinor)}</dd></div>)}</dl>
+      : <p className="pb-empty">Нет активных счетов.</p>}
+  </div>;
+}
+
 function reportRanges(period) {
   const range = getPeriod(period);
   if (period === 'day') return [{ from: range.from, to: range.to }];
@@ -74,7 +84,6 @@ export function CloudReports({ data, workspaceId, actor, api, route, online, nav
 
   const current = loaded?.key === reportKey ? loaded : null;
   const stats = current?.metrics;
-  const accounts = data.accounts.filter(account => !account.archived && Object.hasOwn(account, 'balanceMinor'));
   const products = data.products.filter(item => !item.archived && item.quantity > 0);
   const metrics = [
     ['revenueMinor', 'Выручка', Coins], ['netMinor', 'Чистая прибыль', ChartNoAxesCombined],
@@ -108,11 +117,6 @@ export function CloudReports({ data, workspaceId, actor, api, route, online, nav
         { key: 'income', label: 'Выручка' },
         ...(Object.hasOwn(stats, 'grossMinor') || Object.hasOwn(stats, 'netMinor') ? [{ key: 'profit', label: Object.hasOwn(stats, 'netMinor') ? 'Чистая прибыль' : 'Валовая прибыль' }] : []),
       ]} /> : <p className="pb-empty" role="status">{current.chartError ? 'Не удалось загрузить график.' : 'Загружаем график…'}</p>}
-    </section>}
-    {chart && permissions.includes('finance.cash.read') && <section className="pb-report" aria-label="Касса и счета">
-      <SectionTitle>Касса и счета</SectionTitle>
-      {accounts.length ? <dl className="metric-list">{accounts.map(account => <div key={account.id}><dt>{account.name}</dt><dd>{formatMinor(account.balanceMinor)}</dd></div>)}</dl>
-        : <p className="pb-empty">Нет активных счетов.</p>}
     </section>}
   </>;
 }

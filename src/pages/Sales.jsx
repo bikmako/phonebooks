@@ -260,7 +260,7 @@ export function SalesPage({
                       <tr
                         className={cx(
                           "group transition-colors hover:bg-slate-50/60",
-                          M && "opacity-60",
+                          M && "pb-sale-cancelled",
                         )}
                         key={u.id}
                       >
@@ -330,7 +330,7 @@ export function SalesPage({
                           )}
                         </td>
                         <td className="px-5 py-3 text-right">
-                          <div className="flex justify-end gap-1 opacity-70 transition-opacity group-hover:opacity-100">
+                          <div className="flex justify-end gap-1">
                             {M ? (
                               <button
                                 onClick={() => j(u)}
@@ -374,7 +374,7 @@ export function SalesPage({
                   <div
                     className={cx(
                       "rounded-xl border border-slate-100 bg-white p-3",
-                      R && "opacity-70",
+                      R && "pb-sale-cancelled",
                     )}
                     key={u.id}
                   >
@@ -486,7 +486,7 @@ export function SalesPage({
                 <li
                   className={cx(
                     "card-pad flex items-start justify-between gap-3 py-3",
-                    E && "opacity-60",
+                    E && "pb-sale-cancelled",
                   )}
                   key={u.id}
                 >

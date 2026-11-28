@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { ThemeToggle } from '../src/hooks/useTheme.jsx';
 
 let turnstileScript;
 function loadTurnstile() {
@@ -75,6 +76,7 @@ const secondaryLinks = {
 
 export function AuthLayout({ soloUrl, children }) {
   return <main className="pb-auth">
+    <ThemeToggle className="pb-auth-theme" />
     <div className="pb-auth-content">
       <p className="pb-auth-logo">PhoneBooks<span aria-hidden="true" /></p>
       {children}

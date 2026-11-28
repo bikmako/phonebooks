@@ -90,7 +90,7 @@ export function PhoneDetails({ phone: initialPhone, onClose, onEdit, onSell, onD
       </li>)}</ul> : <p className="pb-empty">Завершённых ремонтов пока нет.</p>}
     </section>}
     {!phoneUnavailable(phone) && <>
-      <div className="pb-actions pb-device-actions">
+      <div className="pb-actions pb-warehouse-actions pb-device-actions" role="group" aria-label="Действия устройства">
         {phone.status === 'repair' ? <button className="pb-action" onClick={() => setRepairDialog({})}><Wrench size={17} />Завершить ремонт</button>
           : <>
             <button className="pb-action" disabled={held > 0} onClick={() => onSell(phone.id)}>Продать</button>

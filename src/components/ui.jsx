@@ -144,34 +144,23 @@ export function SegmentedTabs({
   options: s,
   value: t,
   onChange: n,
-  size: a = "md",
   className: c,
   fullWidth: r,
 }) {
   return (
     <div
       className={cx(
-        "inline-flex items-center gap-1 rounded-xl bg-slate-100 p-1",
-        r && "no-scrollbar w-full overflow-x-auto",
+        "pb-tabs pb-segmented",
+        r && "pb-segmented-wide",
         c,
       )}
       role="tablist"
     >
       {s.map((i) => (
         <button
-          role="tab"
+          type="button" role="tab"
           aria-selected={t === i.value}
           onClick={() => n(i.value)}
-          className={cx(
-            "flex items-center justify-center gap-1.5 rounded-lg font-medium transition-all duration-150",
-            r ? "min-w-0 flex-1" : "shrink-0",
-            a === "sm"
-              ? "h-8 px-2.5 text-[12.5px]"
-              : "h-9 px-2 text-[12px] sm:px-3 sm:text-[13px]",
-            t === i.value
-              ? "bg-gradient-to-r from-brand-600 to-indigo-500 text-white shadow-md shadow-brand-600/25"
-              : "text-ink-500 hover:text-ink-700 active:scale-[.98]",
-          )}
           key={i.value}
         >
           {i.icon}
@@ -258,12 +247,10 @@ export function Modal({
     !s)
   )
     return null;
-  const v =
-    i === "sm" ? "sm:max-w-md" : i === "lg" ? "sm:max-w-2xl" : "sm:max-w-lg";
   return createPortal(
-    <div ref={overlay} className="modal-overlay">
+    <div ref={overlay} className={cx("modal-overlay", !o && "modal-overlay-centered")}>
       <div
-        className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] animate-fade-in"
+        className="modal-backdrop"
         onClick={t}
       />
       <div
@@ -271,52 +258,41 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={x}
-        className={cx(
-          "relative w-full bg-white shadow-float animate-slide-up sm:animate-pop",
-          v,
-          "sm:rounded-2xl",
-          o ? "rounded-t-3xl" : "rounded-t-2xl",
-          "modal-panel flex flex-col overflow-hidden",
-        )}
-        style={{
-          paddingBottom: "0px",
-        }}
+        className="modal-panel"
+        data-size={i}
       >
         {o && (
-          <div className="modal-fixed mx-auto mt-2.5 h-1 w-10 rounded-full bg-slate-200/80 sm:hidden" />
+          <div className="modal-fixed modal-handle" />
         )}
-        <div className="modal-fixed flex items-start justify-between gap-4 px-5 pb-3 pt-4 sm:pt-5">
+        <div className="modal-fixed modal-header">
           <div className="min-w-0">
             <h2
               id={x}
-              className="text-[17px] font-semibold leading-tight text-ink-900"
+              className="modal-title"
             >
               {n}
             </h2>
             {a && (
-              <p className="mt-1 text-[13px] leading-snug text-ink-500">{a}</p>
+              <p className="modal-description">{a}</p>
             )}
           </div>
           {!l && (
             <button
-              onClick={t}
+              type="button" onClick={t}
               aria-label="Закрыть"
-              className="btn-icon -mr-1 flex shrink-0 items-center justify-center text-ink-400 transition-colors hover:bg-slate-100 hover:text-ink-700"
+              className="pb-icon-button"
             >
-              <X className="h-5 w-5" />
+              <X size={20} aria-hidden="true" />
             </button>
           )}
         </div>
-        <div className="modal-content px-5 pb-4">
+        <div className="modal-content">
           <div data-update-notice-slot />
           {c}
         </div>
         {r && (
           <div
-            className="modal-fixed modal-footer border-t border-slate-100 bg-white px-5 pt-3"
-            style={{
-              paddingBottom: "max(16px, env(safe-area-inset-bottom))",
-            }}
+            className="modal-fixed modal-footer"
           >
             {r}
           </div>

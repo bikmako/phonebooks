@@ -30,7 +30,7 @@ export function AppLayout({ route, hideTitle, onNavigate, onQuickAction, childre
     enabled={enabled} switchUrl={teamUrl} onSwitch={switchMode} onAdd={onQuickAction} tools={<><button className="pb-icon-button" onClick={() => onNavigate('search')} aria-label="Глобальный поиск"><Search size={19} /></button><ThemeToggle /></>}>
     {isDemo ? <DemoBanner /> : <UpdateNotice />}
     {saveState === 'error' && <p className="pb-empty" role="alert">Не удалось сохранить изменения.</p>}
-    {!hideTitle && <div className="pb-layout-heading"><PageTitle title={dashboard ? <><span className="pb-overview-wordmark">PhoneBooks</span><span className="pb-overview-label">Обзор</span></> : routeName(route)}
+    {!hideTitle && <div className="pb-layout-heading" data-compact={route === 'accessories' || undefined}><PageTitle title={dashboard ? <><span className="pb-overview-wordmark">PhoneBooks</span><span className="pb-overview-label">Обзор</span></> : routeName(route)}
       eyebrow={dashboard ? 'Обзор' : undefined} description={dashboard ? 'Учёт скупки, продаж и ремонтов' : undefined}
       action={<button className="pb-action pb-desktop-add" type="button" onClick={onQuickAction}><Plus size={17} />Новая операция</button>} /></div>}
     <div key={route}>

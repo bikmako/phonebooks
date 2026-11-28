@@ -226,7 +226,7 @@ function FinanceOverview({ initialTab: s, onAnalytics }) {
     };
   return (
     <div className="space-y-4">
-      <Card className="overflow-hidden">
+      <Card className="pb-finance-primary overflow-hidden">
         <div className="pb-balance px-4 py-4 sm:px-5">
           <p className="text-[11.5px] font-medium">Всего денег</p>
           <p className="mt-1 text-[26px] font-bold tabular-nums leading-tight">
@@ -384,23 +384,15 @@ function FinanceOverview({ initialTab: s, onAnalytics }) {
               <div
                 className={cx(
                   "relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-4 shadow-card transition-shadow hover:shadow-lg",
-                  k.archived && "opacity-60",
+                  k.archived && "pb-account-archived",
                 )}
                 key={k.id}
               >
-                <div
-                  className="absolute right-0 top-0 h-16 w-16 -translate-y-6 translate-x-6 rounded-full"
-                  style={{
-                    background: `${k.color}18`,
-                  }}
-                />
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2.5">
                     <span
-                      className="flex h-9 w-9 items-center justify-center rounded-xl text-white"
-                      style={{
-                        background: k.color,
-                      }}
+                      className="pb-account-icon flex h-9 w-9 items-center justify-center rounded-xl"
+                      style={{ borderInlineStart: `3px solid ${k.color}` }}
                     >
                       {k.type === "cash" ? (
                         <Wallet className="h-4.5 w-4.5" />

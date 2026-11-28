@@ -254,7 +254,7 @@ export function HistoryPage() {
                     label: "Свой период",
                   },
                 ].map((g) => (
-                  <button
+                  <button type="button" aria-pressed={i === g.id}
                     onClick={() => o(g.id)}
                     className={cx(
                       "h-9 rounded-lg px-3 text-[12px] font-medium transition-colors",
@@ -296,16 +296,10 @@ export function HistoryPage() {
               )}
             </div>
           )}
-          <div className="no-scrollbar -mx-1 mt-3 flex gap-1.5 overflow-x-auto px-1">
+          <div className="pb-tabs pb-history-filters mt-3" aria-label="Тип операции">
             {HISTORY_FILTERS.map((g) => (
-              <button
+              <button type="button" aria-pressed={n === g.id}
                 onClick={() => a(g.id)}
-                className={cx(
-                  "h-9 shrink-0 rounded-full px-3.5 text-[12.5px] font-medium transition-colors",
-                  n === g.id
-                    ? "bg-brand-600 text-white"
-                    : "bg-slate-100 text-ink-600 active:bg-slate-200",
-                )}
                 key={g.id}
               >
                 {g.label}

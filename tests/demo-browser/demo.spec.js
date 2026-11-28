@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { demoSoloUrl, demoTeamUrl } from '../../src/demo/mode.js';
+import { interfaceMatrix, soloRoutes, teamRoutes } from '../support/interface-layout.js';
 
 async function capture(page, info, name) {
   const dir = process.env.PHONEBOOKS_RELEASE_SHOTS;
@@ -17,12 +18,15 @@ async function layout(page, route) {
   await expect(page.locator('main')).toHaveCSS('font-family', /Manrope/);
 }
 
-const soloRoutes = ['dashboard', 'purchase', 'accessories', 'catalog', 'sales', 'repairs', 'finance', 'history', 'search', 'settings'];
-const teamRoutes = ['dashboard', 'purchase', 'sales', 'repairs', 'finance', 'history', 'search', 'team', 'settings'];
-
 for (const mode of ['solo', 'team']) {
   const solo = mode === 'solo';
   const url = solo ? demoSoloUrl : demoTeamUrl;
+  test(mode + ' demo interface and contrast at six widths in both themes', async ({ page }) => {
+    test.slow();
+    await page.goto(url);
+    await expect(page.getByRole('note').getByText('Демоверсия')).toBeVisible();
+    await interfaceMatrix(page, { url, solo });
+  });
   test(mode + ' guest demo, financial reports and 320 px routes', async ({ page }, info) => {
     const errors = [], external = [];
     page.on('pageerror', error => errors.push(error.message));

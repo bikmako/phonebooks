@@ -4,6 +4,7 @@ import { expect, test } from '@playwright/test';
 import { buildExportFile } from '../../src/storage/backupFormat.js';
 import { addDays, today, toISODate } from '../../src/utils/format.js';
 import { realisticSnapshot } from '../fixtures/realistic.js';
+import { interfaceMatrix } from '../support/interface-layout.js';
 
 const solo = 'http://localhost:4397/';
 test.beforeEach(async ({ page }, info) => {
@@ -97,6 +98,12 @@ test('Solo advanced analytics and file export work offline', async ({ page, cont
   await checkAnalytics(page, info, 'solo');
 });
 
+test('Solo interface and contrast at six widths in both themes', async ({ page }) => {
+  test.slow();
+  await seedSolo(page, productFixture());
+  await interfaceMatrix(page, { url: solo, solo: true });
+});
+
 test('Solo product navigation, device details and finance', async ({ page }, info) => {
   const browserErrors = [];
   page.on('pageerror', error => browserErrors.push(error.message));
@@ -146,6 +153,7 @@ test('Solo product navigation, device details and finance', async ({ page }, inf
 });
 
 test('Team product navigation, repair, transaction history and period cash flow', async ({ page }, info) => {
+  test.slow();
   const browserErrors = [];
   page.on('pageerror', error => browserErrors.push(error.message));
   const address = crypto.randomUUID() + '@phonebooks.test';
@@ -214,4 +222,11 @@ test('Team product navigation, repair, transaction history and period cash flow'
   await expect(page.getByRole('heading', { name: 'Приглашения сотрудников' })).toBeVisible();
   await capture(page, info, 'team-management');
   expect(browserErrors).toEqual([]);
+  const theme = page.getByRole('button', { name: 'Как в системе. Переключить' });
+  await theme.click();
+  await page.getByRole('button', { name: 'Светлая тема. Переключить' }).click();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Тёмная тема. Переключить' })).toBeVisible();
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'dark');
+  await interfaceMatrix(page, { url: new URL('/', page.url()).href, solo: false });
 });

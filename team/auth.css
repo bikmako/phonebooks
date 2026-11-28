@@ -1,10 +1,10 @@
 .pb-auth {
-  --auth-bg: #f7f6f2;
-  --auth-surface: #fff;
-  --auth-ink: #191919;
-  --auth-accent: #ebd66b;
-  --auth-line: #deddd7;
-  --auth-muted: #595852;
+  --auth-bg: var(--pb-bg);
+  --auth-surface: var(--pb-surface);
+  --auth-ink: var(--pb-ink);
+  --auth-accent: var(--pb-accent);
+  --auth-line: var(--pb-line);
+  --auth-muted: var(--pb-muted);
   display: grid;
   min-height: 100dvh;
   place-items: center;
@@ -14,6 +14,7 @@
   background: var(--auth-bg);
 }
 .pb-auth-content { width: min(100%, 380px); min-width: 0; }
+.pb-auth-theme { position: absolute; inset: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) auto auto; }
 .pb-auth-logo {
   display: flex;
   justify-content: center;
@@ -51,14 +52,14 @@
   padding: 10px 14px;
   border: 1px solid var(--auth-ink);
   border-radius: 10px;
-  color: var(--auth-surface);
-  background: var(--auth-ink);
+  color: var(--pb-on-primary);
+  background: var(--pb-primary);
   font-size: 15px;
   font-weight: 600;
 }
 .pb-auth-view form > .pb-auth-primary { margin-top: 4px; }
-.pb-auth .pb-auth-primary:hover:not(:disabled) { background: #30302e; filter: none; }
-.pb-auth :is(button, a, input):focus-visible { outline: 2px solid #8a711d; outline-offset: 3px; }
+.pb-auth .pb-auth-primary:hover:not(:disabled) { background: var(--pb-primary); filter: none; }
+.pb-auth :is(button, a, input):focus-visible { outline: 2px solid var(--pb-focus); outline-offset: 3px; }
 .pb-auth-links { display: flex; justify-content: center; flex-wrap: wrap; gap: 2px 9px; margin-top: 13px; }
 .pb-auth-links button, .pb-auth-solo {
   min-height: 44px;
@@ -87,7 +88,7 @@
   font-size: 13px;
   font-weight: 500;
 }
-.pb-auth-error { color: #852e27; border-inline-start-color: #a74942; }
+.pb-auth-error { color: var(--pb-loss); border-inline-start-color: var(--pb-loss); }
 .pb-auth-progress {
   position: absolute;
   width: 1px;
@@ -99,14 +100,13 @@
 .pb-auth-spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid #ffffff62;
-  border-top-color: var(--auth-surface);
+  border: 2px solid currentColor;
+  border-top-color: var(--pb-on-primary);
   border-radius: 50%;
 }
 @media (prefers-reduced-motion: no-preference) {
   .pb-auth-view { animation: pb-auth-enter .18s ease-out both; }
   .pb-auth-spinner { animation: pb-auth-spin .75s linear infinite; }
-  .pb-auth :is(button, input, a) { transition: background-color .15s, border-color .15s, color .15s; }
 }
 @keyframes pb-auth-enter {
   from { opacity: 0; transform: translateY(4px); }

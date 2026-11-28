@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Plus, Search, Settings, UsersRound } from 'lucide-react';
 import { AppShell, PageTitle } from '../src/product/ui.jsx';
+import { initTheme, ThemeToggle } from '../src/hooks/useTheme.jsx';
 import { AccountForm, AuthLayout } from './AccountForm.jsx';
 import { Workspaces } from './Workspaces.jsx';
 import { clearCloudRequests, CloudWorkspace } from './CloudWorkspace.jsx';
@@ -225,6 +226,7 @@ function TeamApp() {
   return <AppShell route={active} navigate={navigate} mode="Team" identity={data.selected?.name ?? data.account.email}
     enabled={enabled} switchUrl={config.soloUrl} onAdd={add}
     tools={<>
+      <ThemeToggle />
       {enabled.includes('search') && <button className="pb-icon-button" onClick={() => navigate('search')} aria-label="Глобальный поиск"><Search size={19} /></button>}
       <button className="pb-icon-button" onClick={() => navigate('team')} aria-label="Рабочие пространства"><UsersRound size={19} />
         {data.incoming.length > 0 && <span className="pb-invite-dot" />}
@@ -265,4 +267,5 @@ function TeamApp() {
   </AppShell>;
 }
 
+initTheme();
 createRoot(document.getElementById('root')).render(<TeamApp />);

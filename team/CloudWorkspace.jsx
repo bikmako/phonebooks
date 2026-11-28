@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight, Plus } from 'lucide-react';
 import { WarehouseSearch } from '../src/product/WarehouseSearch.jsx';
 import { TradePanel, tradeLabels } from '../src/product/TradePanel.jsx';
 import { PageTitle, PeriodSelect, routeName, Status } from '../src/product/ui.jsx';
-import { CloudReports } from './CloudReports.jsx';
+import { CashAccounts, CloudReports } from './CloudReports.jsx';
 import { TeamProduct, TeamStock } from './CloudViews.jsx';
 import { parseMinor as money } from '../src/domain/warehouse.js';
 import { AttributeFields, priceInput, readAttributes } from '../src/product/WarehouseFields.jsx';
@@ -251,8 +251,9 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
   const permissions = data?.permissions ?? [];
   const allowed = Object.keys(writePermissions).filter(kind => writePermissions[kind].every(permission => permissions.includes(permission)));
   const actions = {
-    purchase: ['purchase', 'stock_adjustment'], sales: ['sale'], repairs: ['repair_start', 'repair'], finance: ['deposit', 'expense'],
+    purchase: ['purchase', 'stock_adjustment'], sales: ['sale'], repairs: ['repair_start', 'repair'], finance: ['expense', 'deposit'],
   }[route] ?? [];
+  const availableActions = actions.filter(kind => allowed.includes(kind));
   const type = allowed.includes(chosenType) && actions.includes(chosenType) ? chosenType : '';
   const available = online && connection === 'connected';
   const needsProduct = productCommands.includes(type);
@@ -375,6 +376,14 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
       eyebrow={route === 'dashboard' ? 'Обзор' : undefined} description={route === 'dashboard' ? workspace.name : undefined}
       action={route === 'dashboard' && onAdd && <button className="pb-desktop-add" type="button" onClick={onAdd}><Plus size={17} />Добавить товар</button>}
     />}
+    {data && !analyticsOpen && !type && route === 'finance' && (mayReadCash || availableActions.length > 0) &&
+      <section className="pb-finance-primary pb-panel" aria-label="Баланс и действия">
+        {mayReadCash && <CashAccounts accounts={data.accounts} />}
+        {availableActions.length > 0 && <div className="pb-actions pb-finance-actions" role="group" aria-label="Быстрые действия">
+          {availableActions.map(kind =>
+            <button key={kind} className="secondary" onClick={() => start(kind)} disabled={!available || !!pending}><Plus size={17} />{contextTitle[kind]}</button>)}
+        </div>}
+      </section>}
     {(!available || !stockDetail || !tradeOpen) &&
       <div className="pb-connection" aria-live="polite"><Status tone={available ? 'good' : 'warn'}>{connectionStatus}</Status></div>}
     {message && <p className="notice" aria-live="polite">{message}</p>}
@@ -387,11 +396,7 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
         revision={permissionKey + ':' + data.cursor} fetchReport={fetchAnalytics} online={available}
         canExport={permissions.includes('data.export')} onClose={() => setAnalytics(false)}
         onProduct={id => { nextProduct.current = id; navigate('purchase'); }} />}
-      {!analyticsOpen && !type && !stockDetail && route === 'finance' && <div className="pb-actions pb-finance-actions" role="group" aria-label="Быстрые действия">
-        {actions.filter(kind => allowed.includes(kind)).map(kind =>
-          <button key={kind} className="secondary" onClick={() => start(kind)} disabled={!available || !!pending}><Plus size={17} />{contextTitle[kind]}</button>)}
-        {analyticsAvailable && !analytics && <button type="button" className="secondary" onClick={() => setAnalytics(true)}>Расширенная аналитика</button>}
-      </div>}
+      {analyticsAvailable && !analyticsOpen && <button type="button" className="secondary pb-team-analytics" onClick={() => setAnalytics(true)}>Расширенная аналитика</button>}
       {!analyticsOpen && !type && ['dashboard', 'sales', 'finance'].includes(route) && <CloudReports data={data}
         workspaceId={workspace.id} actor={actor} api={api} route={route} online={available} navigate={navigate} period={period} setPeriod={setPeriod} />}
       {route === 'search' && !stockDetail && <WarehouseSearch products={products} maySearchStock={mayReadStock}
@@ -423,6 +428,12 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
           ...(!currentProduct.inRepair && currentProduct.tracking === 'unit' && currentProduct.quantity === 1 && currentProduct.reserved === 0 ? ['repair_start'] : []),
           ...(currentProduct.inRepair ? ['repair'] : ['stock_adjustment', ...(currentProduct.tracking === 'quantity' || !currentProduct.purchased && !currentProduct.quantity ? ['purchase'] : [])]),
         ].includes(kind))} onOperation={kind => start(kind, currentProduct)} />}
+      {!type && !stockDetail && route === 'repairs' && (availableActions.length > 0 || mayReadHistory) &&
+        <div className="pb-actions pb-repair-actions" role="group" aria-label="Действия ремонта">
+          {availableActions.map(kind =>
+            <button key={kind} onClick={() => start(kind)} disabled={!available || !!pending}><Plus size={17} />{contextTitle[kind]}</button>)}
+          {mayReadHistory && <PeriodSelect value={period} onChange={setPeriod} />}
+        </div>}
       {!type && !stockDetail && !editing && mayReadStock && ['purchase', 'repairs'].includes(route) && <TeamStock key={route}
         products={products} categories={data.categories} repairs={route === 'repairs'} onOpen={setProductId}
         onReserve={route === 'purchase' && available && allowed.includes('reserve') ? id => { setProductId(id); showTrade('reserve'); } : undefined}
@@ -430,8 +441,8 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
         onCategories={route === 'purchase' && allowed.includes('save_category') ? () => setEditor('category') : undefined}
         onBulk={route === 'purchase' && canBulk && data.products.length ? () => setEditor('bulk') : undefined}
         onExport={permissions.includes('data.export') ? setSheetFilter : undefined} />}
-      {!analyticsOpen && !type && !stockDetail && !['purchase', 'finance'].includes(route) && <div className="pb-actions">
-        {actions.filter(kind => allowed.includes(kind)).map(kind =>
+      {!analyticsOpen && !type && !stockDetail && route === 'sales' && availableActions.length > 0 && <div className="pb-actions">
+        {availableActions.map(kind =>
           <button key={kind} onClick={() => start(kind)} disabled={!available || !!pending}><Plus size={17} />{contextTitle[kind]}</button>)}
       </div>}
       {type && <form className="pb-command pb-panel" onSubmit={submit} key={type}>
@@ -474,7 +485,7 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
         </fieldset>
       </form>}
       {!analyticsOpen && !type && !stockDetail && mayReadHistory && ['dashboard', 'sales', 'repairs', 'finance', 'history'].includes(route) && <>
-        {['repairs', 'history'].includes(route) && <PeriodSelect value={period} onChange={setPeriod} />}
+        {route === 'history' && <PeriodSelect value={period} onChange={setPeriod} />}
         <TeamHistory key={route + ':' + period} {...historyProps} period={period}
           title={route === 'sales' ? 'Операции продаж' : route === 'repairs' ? 'История ремонта' : route === 'finance' && mayReadCash ? 'Движение по счетам' : 'Последние операции'}
           latest={route === 'dashboard'} onHistory={route === 'dashboard' ? () => navigate('history') : undefined}

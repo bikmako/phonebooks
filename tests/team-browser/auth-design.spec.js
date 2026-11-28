@@ -1,6 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
+import { contrast } from '../support/interface-layout.js';
 
 test('auth screens, feedback, local type and responsive layout', async ({ page }, info) => {
   const mobile = info.project.name === 'team-iphone-webkit';
@@ -29,7 +30,7 @@ test('auth screens, feedback, local type and responsive layout', async ({ page }
   const input = page.getByLabel('Электронная почта');
   const submit = page.getByRole('button', { name: 'Войти', exact: true });
   await expect(form).toHaveCSS('width', mobile ? '370px' : '380px');
-  await expect(page.locator('main')).toHaveCSS('background-color', 'rgb(247, 246, 242)');
+  await expect(page.locator('main')).toHaveCSS('background-color', 'rgb(247, 245, 241)');
   await expect(page.locator('.pb-auth-logo')).toHaveCSS('font-size', '34px');
   await expect(input).toHaveCSS('font-size', '15px');
   await expect(submit).toHaveCSS('border-radius', '10px');
@@ -88,4 +89,9 @@ test('auth screens, feedback, local type and responsive layout', async ({ page }
   await page.setViewportSize({ width: 320, height: 568 });
   await expect(page.locator('main form')).toHaveCSS('width', '300px');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.getByRole('button', { name: 'Как в системе. Переключить' }).click();
+  await page.getByRole('button', { name: 'Светлая тема. Переключить' }).click();
+  await expect(page.locator('main')).toHaveCSS('background-color', 'rgb(25, 24, 22)');
+  await contrast(page.locator('main'), 'Team / новый пароль / dark / 320');
 });

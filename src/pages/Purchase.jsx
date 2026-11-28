@@ -97,6 +97,9 @@ export function PurchasePage({ formOpen, onOpenForm, onCloseForm, onSell, repair
         {filters.map(({ id, label }) => <button type="button" key={id} aria-pressed={status === id}
           onClick={() => { setStatus(id); setLimit(25); }}>{!repairMode && id === 'repair' ? 'В ремонте' : label} ({data.phones.filter(item => matchesStatus(item, id)).length})</button>)}
       </div>
+      {!repairMode && <div className="pb-actions pb-stock-actions" role="group" aria-label="Действия склада">
+        <button className="pb-action" onClick={onOpenForm}><Plus size={17} />Добавить устройство</button>
+      </div>}
       {status === 'history' && <SectionTitle>История ремонта</SectionTitle>}
       {items.length ? <ul className="pb-list">{items.slice(0, limit).map(item => {
         const Icon = item.status === 'repair' ? Wrench : Smartphone;
@@ -117,8 +120,5 @@ export function PurchasePage({ formOpen, onOpenForm, onCloseForm, onSell, repair
       {items.length > limit && <button type="button" className="pb-action pb-action-secondary pb-back" onClick={() => setLimit(limit + 25)}>Показать ещё</button>}
     </section>
     {repairMode && <WarehouseActivity repairs query={query} onOpen={onOpenWarehouse} />}
-    {!repairMode && <div className="pb-actions">
-      <button className="pb-action" onClick={onOpenForm}><Plus size={17} />Добавить устройство</button>
-    </div>}
   </div>;
 }
