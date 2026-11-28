@@ -5,9 +5,9 @@ export const soloRoutes = ['dashboard', 'purchase', 'accessories', 'catalog', 's
 export const teamRoutes = ['dashboard', 'purchase', 'sales', 'repairs', 'finance', 'history', 'search', 'team', 'settings'];
 
 export async function contrast(scope, view) {
-  const failures = await scope.evaluate(async root => {
-    // WebKit can expose one frame from the preceding route during style invalidation.
-    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  // During a route change engines can briefly expose styles from the preceding frame.
+  // Sample until the styles settle without relying on animation callbacks in background WebKit.
+  await expect.poll(() => scope.evaluate(root => {
     const readColor = value => {
       const [r, g, b, a = 1] = (value.match(/[\d.]+/g) ?? []).map(Number);
       return [r, g, b, a];
@@ -62,8 +62,7 @@ export async function contrast(scope, view) {
       }
     }
     return failures.slice(0, 15);
-  });
-  expect(failures, view).toEqual([]);
+  }), { message: view }).toEqual([]);
 }
 
 async function controlAlignment(group, selector = 'button') {

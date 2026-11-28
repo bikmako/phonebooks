@@ -9,7 +9,8 @@ async function settings(page) {
   await expect(page.getByRole('button', { name: 'Скачать полную копию', exact: true })).toBeEnabled();
 }
 async function openPhone(page) {
-  await page.locator('main').getByText(model).filter({ visible: true }).first().click();
+  await page.getByRole('region', { name: 'Смартфоны на складе' })
+    .getByRole('button').filter({ has: page.getByText(model, { exact: true }) }).click();
   const finance = page.getByRole('region', { name: 'Финансовая информация' });
   await expect(finance).toBeVisible();
   await expect(page.getByRole('region', { name: 'Карточка устройства' }).getByRole('button', { name: 'Закрыть', exact: true })).toBeInViewport({ ratio: 1 });
