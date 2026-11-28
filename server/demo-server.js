@@ -2,8 +2,6 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { openAsBlob } from 'node:fs';
-import { PGlite } from '@electric-sql/pglite';
 import { cloudRoute, readBody, teamRoute } from './team-worker.js';
 import { nodeHandler } from './node-http.js';
 import { asUser, seedSession, seedUser, teamDatabase, testImportKey } from '../tests/support/team-database.js';
@@ -13,11 +11,7 @@ import { prepareSoloTransfer } from '../src/domain/soloTransfer.js';
 
 const hostedOrigin = publicDemoOrigin(process.env.PHONEBOOKS_DEMO_ORIGIN);
 const { solo: demoSoloUrl, team: demoTeamUrl } = demoUrls(hostedOrigin);
-const db = hostedOrigin ? await PGlite.create({
-  initialMemory: 128 * 1024 * 1024,
-  loadDataDir: await openAsBlob(new URL('../work/demo/team-template.tar.gz', import.meta.url)),
-  postgresqlconf: ['shared_buffers=16MB', 'work_mem=2MB', 'maintenance_work_mem=8MB'],
-}) : await teamDatabase();
+const db = hostedOrigin ? await (await import('./demo-postgres.js')).hostedDemoDatabase() : await teamDatabase();
 const importKey = await testImportKey(db);
 const guests = new Map();
 const sessionMinutes = 45;

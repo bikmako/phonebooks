@@ -37,6 +37,7 @@
     "@playwright/test": "1.65.0",
     "@vitejs/plugin-react": "4.7.0",
     "bwip-js": "4.7.0",
+    "embedded-postgres": "17.12.0-beta.19",
     "fake-indexeddb": "6.2.8",
     "vite": "6.4.6"
   }

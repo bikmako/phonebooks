@@ -2,8 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 
-export async function teamDatabase(options) {
-  const db = new PGlite(options);
+export async function teamDatabase(db = new PGlite()) {
   try {
     await db.exec(`
       create role anon;
