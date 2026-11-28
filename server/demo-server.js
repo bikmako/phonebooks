@@ -11,7 +11,10 @@ import { prepareSoloTransfer } from '../src/domain/soloTransfer.js';
 
 const hostedOrigin = publicDemoOrigin(process.env.PHONEBOOKS_DEMO_ORIGIN);
 const { solo: demoSoloUrl, team: demoTeamUrl } = demoUrls(hostedOrigin);
-const db = await teamDatabase();
+const db = await teamDatabase(hostedOrigin ? {
+  initialMemory: 128 * 1024 * 1024,
+  postgresqlconf: ['shared_buffers=16MB', 'work_mem=2MB', 'maintenance_work_mem=8MB'],
+} : undefined);
 const importKey = await testImportKey(db);
 const guests = new Map();
 const sessionMinutes = 45;
