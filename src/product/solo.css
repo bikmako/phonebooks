@@ -17,6 +17,8 @@ body, html.dark body { background: var(--pb-bg); color: var(--pb-ink); }
   background: var(--pb-primary); color: var(--pb-on-primary); border-radius: 8px; box-shadow: none; transform: none;
 }
 .btn-secondary { background: var(--pb-surface); border-radius: 8px; }
+.modal-footer :is(.btn-primary, .btn-secondary, .btn-danger, .pb-action) { min-height: var(--pb-control-height); padding: var(--pb-control-padding); border-radius: var(--pb-control-radius); line-height: 1.25; }
+.modal-footer :is(.btn-primary, .btn-secondary, .btn-danger, .pb-action) svg { flex-shrink: 0; }
 .bg-white, .dark .bg-white, .bg-white\/95, .dark .bg-white\/95 { background-color: var(--pb-surface); }
 [class*="bg-gradient-to-"] { background-image: none; background-color: var(--pb-primary); }
 [class*="backdrop-blur"] { backdrop-filter: none; -webkit-backdrop-filter: none; }
@@ -42,6 +44,9 @@ body, html.dark body { background: var(--pb-bg); color: var(--pb-ink); }
 .pb-finance-flow > div { display: flex; justify-content: space-between; gap: 14px; padding: 8px 2px; border-bottom: 1px solid var(--pb-line); }
 .pb-finance-flow dt { font-size: 13px; }
 .pb-finance-flow dd { font-weight: 800; text-align: end; }
+.pb-history-date { background: var(--pb-panel); border-color: var(--pb-line); }
+.pb-history-entry + .pb-history-entry { border-top: 1px solid var(--pb-line); }
+.pb-history-entry:hover { background: var(--pb-panel); }
 @media (min-width: 900px) {
   .pb-heading .pb-desktop-add { display: inline-flex; }
 }
@@ -76,6 +81,10 @@ html:not(.dark) :is(.border-brand-100, .border-brand-200, .border-emerald-200) {
 .pb-catalog { max-width: 700px; }
 .pb-catalog .pb-toolbar, .pb-catalog .pb-actions { margin-top: 12px; }
 .pb-catalog .pb-toolbar > select { flex: 0 1 auto; width: auto; max-width: 100%; }
+@media (max-width: 420px) {
+  .pb-catalog .pb-toolbar > select { flex: 1 1 110px; }
+  .pb-finance-tools > .pb-period { flex: 1 0 100%; }
+}
 .pb-catalog-form, .pb-catalog-form label { display: grid; gap: 6px; min-width: 0; }
 .pb-catalog-form { gap: 12px; margin-top: 12px; }
 .pb-catalog-form button { justify-self: start; }

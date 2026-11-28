@@ -44,7 +44,32 @@ for (const mode of ['solo', 'team']) {
     await page.goto(url + '#/purchase');
     await expect(page.getByText(/iPhone/).first()).toBeVisible();
     await capture(page, info, mode + '-stock');
+    await page.setViewportSize({ width: 320, height: 720 });
+    await page.goto(url + '#/' + (solo ? 'catalog' : 'purchase'));
+    const stockActions = page.getByRole('group', { name: 'Действия склада' });
+    await expect(stockActions.getByRole('button', { name: 'Добавить товар' })).toBeVisible();
+    const stockLayout = await stockActions.evaluate(group => {
+      const search = group.previousElementSibling;
+      const list = group.nextElementSibling;
+      return search.classList.contains('pb-toolbar') && list.classList.contains('pb-list') &&
+        group.getBoundingClientRect().bottom <= list.getBoundingClientRect().top;
+    });
+    expect(stockLayout).toBe(true);
+    await layout(page, 'stock actions');
     await page.goto(url + '#/finance');
+    const quick = page.getByRole('group', { name: 'Быстрые действия' });
+    await expect(quick).toBeVisible();
+    const actionSizes = await quick.getByRole('button').evaluateAll(buttons => buttons.map(button => ({
+      height: button.getBoundingClientRect().height, radius: getComputedStyle(button).borderRadius,
+    })));
+    expect(new Set(actionSizes.map(size => size.height)).size).toBe(1);
+    expect(new Set(actionSizes.map(size => size.radius)).size).toBe(1);
+    const actionsAbove = await quick.evaluate(group => {
+      const metrics = group.closest('main').querySelector('.pb-metrics');
+      return metrics && group.getBoundingClientRect().bottom <= metrics.getBoundingClientRect().top;
+    });
+    expect(actionsAbove).toBe(true);
+    await page.setViewportSize({ width: info.project.name === 'iphone-webkit' ? 390 : 1280, height: 850 });
     await page.getByRole('button', { name: 'Расширенная аналитика' }).click();
     await expect(page.getByRole('img', { name: 'Выручка за выбранный период' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Скачать Excel' })).toHaveCount(0);

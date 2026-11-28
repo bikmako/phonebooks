@@ -222,8 +222,7 @@ export function CatalogPage({ initialProduct }) {
         })} />}
     {!form && <>
       <SectionTitle>Каталог товаров</SectionTitle>
-      {!isDemo && <button className="pb-action pb-action-secondary" onClick={() => setShowSheets(true)}>Экспорт склада</button>}
-      <div className="pb-toolbar">
+      <div className="pb-toolbar pb-stock-toolbar">
         <input className="input" type="search" aria-label="Поиск в каталоге" placeholder="Название или характеристика"
           value={query} onChange={event => setQuery(event.target.value)} />
         <select className="input" aria-label="Категория товара" value={filter} onChange={event => setFilter(event.target.value)}>
@@ -237,6 +236,13 @@ export function CatalogPage({ initialProduct }) {
           <option value="name">По названию</option><option value="quantity">По остатку</option>
         </select>
       </div>
+      <div className="pb-actions pb-warehouse-actions pb-stock-actions" role="group" aria-label="Действия склада">
+        <button className="pb-action" onClick={() => open('product')}><Plus size={16} />Добавить товар</button>
+        <button className="pb-action pb-action-secondary" onClick={() => open('category')}>Новая категория</button>
+        {saved.categories.some(item => item.id === filter) && <button className="pb-action pb-action-secondary"
+          onClick={() => open('category', null, filter)}>Изменить категорию</button>}
+        {catalog.products.some(item => item.status !== 'archived') && <button className="pb-action pb-action-secondary" onClick={() => open('bulk')}>Массовое редактирование</button>}
+        </div>
       {visible.length ? <ul className="pb-list">{visible.map(item => <li key={item.id} className="pb-trade-stock-row">
         <button className="pb-row" type="button" onClick={() => open('detail', item)}>
           <span className="pb-row-icon"><Package size={18} /></span>
@@ -247,13 +253,6 @@ export function CatalogPage({ initialProduct }) {
         {item.quantity > item.reservedQuantity && !item.inRepair && <button type="button" className="pb-stock-reserve pb-action pb-action-secondary"
           aria-label={'Забронировать ' + item.name} onClick={() => open('reserve', item)}>Забронировать</button>}
       </li>)}</ul> : <p className="pb-empty">Карточки товаров пока не найдены.</p>}
-      <div className="pb-actions pb-warehouse-actions">
-        <button className="pb-action" onClick={() => open('product')}><Plus size={16} />Добавить товар</button>
-        <button className="pb-action pb-action-secondary" onClick={() => open('category')}>Новая категория</button>
-        {saved.categories.some(item => item.id === filter) && <button className="pb-action pb-action-secondary"
-          onClick={() => open('category', null, filter)}>Изменить категорию</button>}
-        {catalog.products.some(item => item.status !== 'archived') && <button className="pb-action pb-action-secondary" onClick={() => open('bulk')}>Массовое редактирование</button>}
-      </div>
     </>}
   </section>;
 }

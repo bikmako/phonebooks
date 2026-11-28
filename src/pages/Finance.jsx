@@ -226,41 +226,22 @@ function FinanceOverview({ initialTab: s, onAnalytics }) {
     };
   return (
     <div className="space-y-4">
-      <div className="pb-actions"><PeriodSelect value={period} onChange={setPeriod} />
-        <button type="button" onClick={onAnalytics}>Расширенная аналитика</button><FinanceSheetExport filter={range} /></div>
-      <Metrics items={[
-        { label: "Выручка", value: formatPreciseMoney(y.revenue), Icon: Coins },
-        { label: "Расходы с себестоимостью", value: formatPreciseMoney(roundMoney(y.cogs + y.expensesTotal)), Icon: Receipt },
-        { label: "Чистая прибыль", value: formatPreciseMoney(y.netProfit), Icon: ChartNoAxesCombined },
-      ]} />
-      <section className="pb-finance-chart">
-        <SectionTitle>Динамика</SectionTitle>
-        <FinanceChart data={timeline} series={[{ key: "income", label: "Выручка" }, { key: "profit", label: "Чистая прибыль" }]} />
-      </section>
-      <section>
-        <SectionTitle>Движение денежных средств</SectionTitle>
-        <dl className="pb-finance-flow">
-          <div><dt>Приходы</dt><dd>{formatPreciseMoney(roundMoney(flow.income))}</dd></div>
-          <div><dt>Расходы</dt><dd>{formatPreciseMoney(roundMoney(flow.outcome))}</dd></div>
-          <div><dt>Изменение остатков</dt><dd>{formatPreciseMoney(y.cashFlow)}</dd></div>
-        </dl>
-      </section>
       <Card className="overflow-hidden">
-        <div className="bg-gradient-to-br from-brand-600 to-brand-700 px-4 py-4 text-white sm:px-5">
-          <p className="text-[11.5px] font-medium text-white/60">Всего денег</p>
+        <div className="pb-balance px-4 py-4 sm:px-5">
+          <p className="text-[11.5px] font-medium">Всего денег</p>
           <p className="mt-1 text-[26px] font-bold tabular-nums leading-tight">
             {formatMoney(B)}
           </p>
-          <div className="mt-2 flex gap-4 text-[11.5px] text-white/70">
+          <div className="pb-balance-flow">
             <span>
               {"Приход "}
-              <b className="text-emerald-300">
+              <b className="pb-money-in">
                 +{formatCompactMoney(y.revenue + y.deposits)}
               </b>
             </span>
             <span>
               {"Расход "}
-              <b className="text-red-200">
+              <b className="pb-money-out">
                 −
                 {formatCompactMoney(
                   y.purchases + y.accPurchases + y.opex + y.withdrawals,
@@ -269,7 +250,7 @@ function FinanceOverview({ initialTab: s, onAnalytics }) {
             </span>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-4">
+        <div className="pb-actions pb-finance-actions p-3" role="group" aria-label="Быстрые действия">
           <QuickFinanceAction
             icon={<Receipt className="h-4 w-4" />}
             label="Расход"
@@ -294,6 +275,25 @@ function FinanceOverview({ initialTab: s, onAnalytics }) {
           />
         </div>
       </Card>
+      <div className="pb-actions pb-finance-tools"><PeriodSelect value={period} onChange={setPeriod} />
+        <button className="pb-action pb-action-secondary" type="button" onClick={onAnalytics}>Расширенная аналитика</button><FinanceSheetExport filter={range} /></div>
+      <Metrics items={[
+        { label: "Выручка", value: formatPreciseMoney(y.revenue), Icon: Coins },
+        { label: "Расходы с себестоимостью", value: formatPreciseMoney(roundMoney(y.cogs + y.expensesTotal)), Icon: Receipt },
+        { label: "Чистая прибыль", value: formatPreciseMoney(y.netProfit), Icon: ChartNoAxesCombined },
+      ]} />
+      <section className="pb-finance-chart">
+        <SectionTitle>Динамика</SectionTitle>
+        <FinanceChart data={timeline} series={[{ key: "income", label: "Выручка" }, { key: "profit", label: "Чистая прибыль" }]} />
+      </section>
+      <section>
+        <SectionTitle>Движение денежных средств</SectionTitle>
+        <dl className="pb-finance-flow">
+          <div><dt>Приходы</dt><dd>{formatPreciseMoney(roundMoney(flow.income))}</dd></div>
+          <div><dt>Расходы</dt><dd>{formatPreciseMoney(roundMoney(flow.outcome))}</dd></div>
+          <div><dt>Изменение остатков</dt><dd>{formatPreciseMoney(y.cashFlow)}</dd></div>
+        </dl>
+      </section>
       {(t.accessoryItems.length > 0 || y.accSalesCount > 0) && (
         <Card className="card-pad">
           <p className="text-[12px] font-semibold text-ink-500">

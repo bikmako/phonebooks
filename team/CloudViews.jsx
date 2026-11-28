@@ -38,7 +38,7 @@ export function TeamStock({ products, categories, repairs, onOpen, onCreate, onC
       })].map(([id, label]) =>
         <button key={id} type="button" aria-pressed={category === id} onClick={() => { setCategory(id); setLimit(30); }}>{label}</button>)}
     </div>}
-    <div className="pb-toolbar">
+    <div className="pb-toolbar pb-stock-toolbar">
       <label className="pb-search"><Search size={17} aria-hidden="true" /><input type="search" aria-label="Поиск товаров"
         placeholder="Название, IMEI или характеристика" value={query} onChange={event => { setQuery(event.target.value); setLimit(30); }} /></label>
       {!repairs && categories.some(item => !['smartphones', 'accessories'].includes(item.id)) &&
@@ -55,6 +55,12 @@ export function TeamStock({ products, categories, repairs, onOpen, onCreate, onC
         <option value="name">По названию</option><option value="quantity">По остатку</option>
       </select>
     </div>
+    {(onCreate || onCategories || onBulk || onExport) && <div className="pb-actions pb-stock-actions pb-warehouse-actions" role="group" aria-label={repairs ? 'Действия ремонта' : 'Действия склада'}>
+      {onCreate && <button onClick={onCreate}><Plus size={17} />Добавить товар</button>}
+      {onCategories && <button className="secondary" onClick={onCategories}>Категории товаров</button>}
+      {onBulk && <button className="secondary" onClick={onBulk}>Массовое редактирование</button>}
+      {onExport && <button className="secondary" onClick={() => onExport({ kind: 'stock', category, query, status: repairs ? 'repair' : status })}>Экспорт склада</button>}
+    </div>}
     {matches.length ? <ul className="pb-list pb-stock-rows">{matches.slice(0, limit).map(product => {
       const Icon = productIcon(product);
       const state = productStatus(product);
@@ -68,12 +74,6 @@ export function TeamStock({ products, categories, repairs, onOpen, onCreate, onC
         onClick={() => onReserve(product.id)}>Забронировать</button>}</li>;
     })}</ul> : <p className="pb-empty">{!active.length ? (repairs ? 'В ремонте пока нет устройств.' : 'Склад пуст.') : 'Товары с такими параметрами не найдены.'}</p>}
     {matches.length > limit && <button className="secondary" onClick={() => setLimit(limit + 30)}>Показать ещё</button>}
-    {(onCreate || onCategories || onBulk || onExport) && <div className="pb-actions pb-stock-actions pb-warehouse-actions">
-      {onCreate && <button onClick={onCreate}><Plus size={17} />Добавить товар</button>}
-      {onCategories && <button className="secondary" onClick={onCategories}>Категории товаров</button>}
-      {onBulk && <button className="secondary" onClick={onBulk}>Массовое редактирование</button>}
-      {onExport && <button className="secondary" onClick={() => onExport({ kind: 'stock', category, query, status: repairs ? 'repair' : status })}>Экспорт склада</button>}
-    </div>}
   </section>;
 }
 
