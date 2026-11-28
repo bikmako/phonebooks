@@ -36,7 +36,7 @@ PHONEBOOKS_USE_PUBLISHED_FIXTURE=1 node tools/prepare-device-test.js
 
 ### Отдельный HTTPS-стенд Demo на Render
 
-Создайте бесплатный Web Service `phonebooks-demo-staging` из ветки с адаптером Demo. Укажите `PHONEBOOKS_DEMO_ORIGIN=https://phonebooks-demo-staging.onrender.com` для сборки и запуска. Команда сборки `npm ci --include=dev && npm run build:demo`, запуска `npm run demo`, проверка здоровья `/healthz`, автоматический деплой выключен. Стенд открывает `/solo/` и `/team/` и перенаправляет корневой адрес в Solo.
+Создайте бесплатный Web Service `phonebooks-demo-staging` из ветки с адаптером Demo. Укажите `PHONEBOOKS_DEMO_ORIGIN=https://phonebooks-demo-staging.onrender.com` для сборки и запуска. Команда сборки `npm ci --include=dev && npm run build:demo`, запуска `node --wasm-num-compilation-tasks=1 --no-wasm-tier-up server/demo-server.js`, проверка здоровья `/healthz`, автоматический деплой выключен. Стенд открывает `/solo/` и `/team/` и перенаправляет корневой адрес в Solo.
 
 Solo хранит синтетические данные в отдельной IndexedDB. У Team собственная временная база в памяти и отдельное предприятие на гостя. Сессия длится 45 минут, одновременно доступно до 12 гостевых пространств, в каждом до 100 попыток проведения операций. Перезапуск Render сбрасывает состояние Team. Переменные Supabase и рабочие резервные копии для этого сервиса не требуются.
 
