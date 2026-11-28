@@ -32,9 +32,9 @@ export function TeamHistory({ api, scope, revision, permissionKey, online, produ
   return <div className="pb-history">
     {flow && <section>
       <SectionTitle>Движение денежных средств</SectionTitle>
-      <dl className="metric-list">
-        <div><dt>Приходы</dt><dd>{formatMinor(flow.inMinor)}</dd></div>
-        <div><dt>Расходы</dt><dd>{formatMinor(flow.outMinor)}</dd></div>
+      <dl className="pb-cash-summary">
+        <div><dt>Приходы</dt><dd className="pb-money-in">{formatMinor(flow.inMinor)}</dd></div>
+        <div><dt>Расходы</dt><dd className="pb-money-out">{formatMinor(flow.outMinor)}</dd></div>
         <div><dt>Изменение остатков</dt><dd>{formatMinor(flow.netMinor)}</dd></div>
       </dl>
     </section>}

@@ -387,7 +387,11 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
         revision={permissionKey + ':' + data.cursor} fetchReport={fetchAnalytics} online={available}
         canExport={permissions.includes('data.export')} onClose={() => setAnalytics(false)}
         onProduct={id => { nextProduct.current = id; navigate('purchase'); }} />}
-      {analyticsAvailable && !analytics && <button type="button" className="secondary" onClick={() => setAnalytics(true)}>Расширенная аналитика</button>}
+      {!analyticsOpen && !type && !stockDetail && route === 'finance' && <div className="pb-actions pb-finance-actions" role="group" aria-label="Быстрые действия">
+        {actions.filter(kind => allowed.includes(kind)).map(kind =>
+          <button key={kind} className="secondary" onClick={() => start(kind)} disabled={!available || !!pending}><Plus size={17} />{contextTitle[kind]}</button>)}
+        {analyticsAvailable && !analytics && <button type="button" className="secondary" onClick={() => setAnalytics(true)}>Расширенная аналитика</button>}
+      </div>}
       {!analyticsOpen && !type && ['dashboard', 'sales', 'finance'].includes(route) && <CloudReports data={data}
         workspaceId={workspace.id} actor={actor} api={api} route={route} online={available} navigate={navigate} period={period} setPeriod={setPeriod} />}
       {route === 'search' && !stockDetail && <WarehouseSearch products={products} maySearchStock={mayReadStock}
@@ -426,7 +430,7 @@ export function CloudWorkspace({ workspace, actor, api, onAccessChanged, route, 
         onCategories={route === 'purchase' && allowed.includes('save_category') ? () => setEditor('category') : undefined}
         onBulk={route === 'purchase' && canBulk && data.products.length ? () => setEditor('bulk') : undefined}
         onExport={permissions.includes('data.export') ? setSheetFilter : undefined} />}
-      {!analyticsOpen && !type && !stockDetail && route !== 'purchase' && <div className="pb-actions">
+      {!analyticsOpen && !type && !stockDetail && !['purchase', 'finance'].includes(route) && <div className="pb-actions">
         {actions.filter(kind => allowed.includes(kind)).map(kind =>
           <button key={kind} onClick={() => start(kind)} disabled={!available || !!pending}><Plus size={17} />{contextTitle[kind]}</button>)}
       </div>}
