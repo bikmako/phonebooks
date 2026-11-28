@@ -7,6 +7,7 @@
 import { AccountModal } from "../components/finance/AccountModal.jsx";
 import { CashOpModal } from "../components/finance/CashOpModal.jsx";
 import { ExpenseModal } from "../components/finance/ExpenseModal.jsx";
+import { FinanceSheetExport } from '../product/SoloSpreadsheet.jsx';
 import {
   ExpenseCategoryIcon,
   QuickFinanceAction,
@@ -28,7 +29,14 @@ import { deleteCashOp } from "../domain/cashOps.js";
 import { deleteExpense } from "../domain/expenses.js";
 import { deleteTransfer } from "../domain/transfers.js";
 import { useStore } from "../hooks/useStore.jsx";
+import { FinanceChart } from "../product/FinanceChart.jsx";
+import { AnalyticsPanel } from '../product/AnalyticsPanel.jsx';
+import { isDemo } from '../demo/mode.js';
+import { prepareSoloAnalytics, soloAnalytics } from '../domain/analytics.js';
+import { Metrics, PeriodSelect, SectionTitle } from "../product/ui.jsx";
 import { getAccountBalances, getStats } from "../utils/calculations.js";
+import { getChartData } from "../utils/chartData.js";
+import { getAllOperations } from "../utils/operations.js";
 import {
   ACCESSORY_CATEGORY_LABELS,
   EXPENSE_CATEGORY_SHORT,
@@ -38,15 +46,20 @@ import {
   formatCompactMoney,
   formatDate,
   formatMoney,
+  formatPreciseMoney,
   getPeriod,
+  inPeriod,
   plural,
+  roundMoney,
 } from "../utils/format.js";
 import {
   ArrowDownLeft,
   ArrowLeftRight,
   ArrowUpRight,
   Banknote,
+  ChartNoAxesCombined,
   ChevronDown,
+  Coins,
   Landmark,
   Pencil,
   Plus,
@@ -88,8 +101,28 @@ export const EXPENSE_PRESETS = [
     amount: 0,
   },
 ];
-export function FinancePage({ initialTab: s }) {
-  const { data: t, mutate: n, notify: a } = useStore(),
+const analyticsSections = ['finance', 'categories', 'aging'];
+
+export function FinancePage({ initialTab, onNavigate }) {
+  const [analytics, setAnalytics] = React.useState(false);
+  return analytics ? <SoloFinanceAnalytics onNavigate={onNavigate} onClose={() => setAnalytics(false)} /> :
+    <FinanceOverview initialTab={initialTab} onAnalytics={() => setAnalytics(true)} />;
+}
+
+function SoloFinanceAnalytics({ onNavigate, onClose }) {
+  const { data } = useStore();
+  const source = React.useMemo(() => prepareSoloAnalytics(data), [data]);
+  const localReport = React.useCallback((period, asOf) => soloAnalytics(source, period, asOf), [source]);
+  return <AnalyticsPanel allowed={analyticsSections} preferencesKey="solo" localReport={localReport} canExport={!isDemo} onClose={onClose}
+    onProduct={id => {
+      if (id.startsWith('phone:')) onNavigate('purchase', id.slice(6));
+      else if (id.startsWith('accessory:')) onNavigate('accessories', id.slice(10));
+      else onNavigate('catalog', id);
+    }} />;
+}
+
+function FinanceOverview({ initialTab: s, onAnalytics }) {
+  const { data: t, mutate: n, notify: a, period, setPeriod } = useStore(),
     [c, r] = React.useState(s ?? "accounts"),
     [i, o] = React.useState(null),
     [l, d] = React.useState(null),
@@ -101,8 +134,15 @@ export function FinancePage({ initialTab: s }) {
     [S, g] = React.useState(0),
     b = React.useMemo(() => getAccountBalances(t), [t]),
     B = b.reduce((k, F) => k + F.balance, 0),
-    y = React.useMemo(() => getStats(t, getPeriod("month")), [t]),
-    j = React.useMemo(() => getAccessoryStats(t, getPeriod("month")), [t]),
+    range = React.useMemo(() => getPeriod(period), [period]),
+    y = React.useMemo(() => getStats(t, range), [t, range]),
+    j = React.useMemo(() => getAccessoryStats(t, range), [t, range]),
+    timeline = React.useMemo(() => getChartData(t, period), [t, period]),
+    flow = React.useMemo(() => getAllOperations(t).filter(operation => inPeriod(operation.date, range)).reduce((totals, operation) => {
+      if (operation.moneyEffect > 0) totals.income += operation.moneyEffect;
+      if (operation.moneyEffect < 0) totals.outcome -= operation.moneyEffect;
+      return totals;
+    }, { income: 0, outcome: 0 }), [t, range]),
     u = React.useMemo(
       () =>
         [...t.expenses].sort((k, F) =>
@@ -186,22 +226,22 @@ export function FinancePage({ initialTab: s }) {
     };
   return (
     <div className="space-y-4">
-      <Card className="overflow-hidden">
-        <div className="bg-gradient-to-br from-brand-600 to-brand-700 px-4 py-4 text-white sm:px-5">
-          <p className="text-[11.5px] font-medium text-white/60">Всего денег</p>
+      <Card className="pb-finance-primary overflow-hidden">
+        <div className="pb-balance px-4 py-4 sm:px-5">
+          <p className="text-[11.5px] font-medium">Всего денег</p>
           <p className="mt-1 text-[26px] font-bold tabular-nums leading-tight">
             {formatMoney(B)}
           </p>
-          <div className="mt-2 flex gap-4 text-[11.5px] text-white/70">
+          <div className="pb-balance-flow">
             <span>
               {"Приход "}
-              <b className="text-emerald-300">
+              <b className="pb-money-in">
                 +{formatCompactMoney(y.revenue + y.deposits)}
               </b>
             </span>
             <span>
               {"Расход "}
-              <b className="text-red-200">
+              <b className="pb-money-out">
                 −
                 {formatCompactMoney(
                   y.purchases + y.accPurchases + y.opex + y.withdrawals,
@@ -210,7 +250,7 @@ export function FinancePage({ initialTab: s }) {
             </span>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-4">
+        <div className="pb-actions pb-finance-actions p-3" role="group" aria-label="Быстрые действия">
           <QuickFinanceAction
             icon={<Receipt className="h-4 w-4" />}
             label="Расход"
@@ -235,10 +275,29 @@ export function FinancePage({ initialTab: s }) {
           />
         </div>
       </Card>
+      <div className="pb-actions pb-finance-tools"><PeriodSelect value={period} onChange={setPeriod} />
+        <button className="pb-action pb-action-secondary" type="button" onClick={onAnalytics}>Расширенная аналитика</button><FinanceSheetExport filter={range} /></div>
+      <Metrics items={[
+        { label: "Выручка", value: formatPreciseMoney(y.revenue), Icon: Coins },
+        { label: "Расходы с себестоимостью", value: formatPreciseMoney(roundMoney(y.cogs + y.expensesTotal)), Icon: Receipt },
+        { label: "Чистая прибыль", value: formatPreciseMoney(y.netProfit), Icon: ChartNoAxesCombined },
+      ]} />
+      <section className="pb-finance-chart">
+        <SectionTitle>Динамика</SectionTitle>
+        <FinanceChart data={timeline} series={[{ key: "income", label: "Выручка" }, { key: "profit", label: "Чистая прибыль" }]} />
+      </section>
+      <section>
+        <SectionTitle>Движение денежных средств</SectionTitle>
+        <dl className="pb-finance-flow">
+          <div><dt>Приходы</dt><dd>{formatPreciseMoney(roundMoney(flow.income))}</dd></div>
+          <div><dt>Расходы</dt><dd>{formatPreciseMoney(roundMoney(flow.outcome))}</dd></div>
+          <div><dt>Изменение остатков</dt><dd>{formatPreciseMoney(y.cashFlow)}</dd></div>
+        </dl>
+      </section>
       {(t.accessoryItems.length > 0 || y.accSalesCount > 0) && (
         <Card className="card-pad">
           <p className="text-[12px] font-semibold text-ink-500">
-            Аксессуары · за месяц
+            Аксессуары · {range.label.toLowerCase()}
           </p>
           <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12.5px] sm:grid-cols-4">
             <span className="text-ink-500">
@@ -325,23 +384,15 @@ export function FinancePage({ initialTab: s }) {
               <div
                 className={cx(
                   "relative overflow-hidden rounded-2xl border border-slate-200/70 bg-white p-4 shadow-card transition-shadow hover:shadow-lg",
-                  k.archived && "opacity-60",
+                  k.archived && "pb-account-archived",
                 )}
                 key={k.id}
               >
-                <div
-                  className="absolute right-0 top-0 h-16 w-16 -translate-y-6 translate-x-6 rounded-full"
-                  style={{
-                    background: `${k.color}18`,
-                  }}
-                />
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2.5">
                     <span
-                      className="flex h-9 w-9 items-center justify-center rounded-xl text-white"
-                      style={{
-                        background: k.color,
-                      }}
+                      className="pb-account-icon flex h-9 w-9 items-center justify-center rounded-xl"
+                      style={{ borderInlineStart: `3px solid ${k.color}` }}
                     >
                       {k.type === "cash" ? (
                         <Wallet className="h-4.5 w-4.5" />

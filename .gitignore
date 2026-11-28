@@ -81,6 +81,7 @@ out
 # Nuxt.js build / generate output
 .nuxt
 dist
+dist-team/
 .output
 
 # Gatsby files
@@ -153,3 +154,5 @@ test-results/
 playwright-report/
 public/scanner-assets/
 work/
+
+team/public/scanner-assets/

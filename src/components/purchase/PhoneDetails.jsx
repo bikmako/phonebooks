@@ -1,230 +1,111 @@
-/**
- * Восстановленный модуль PhoneBooks.
- *
- * Восстановлено из production-бандла PhoneBooks. Логика и разметка сохранены без изменений;
- * локальные имена переменных в теле функций оставлены как в бандле.
- */
-import { setPhoneStatus } from "../../domain/phones.js";
-import { useStore } from "../../hooks/useStore.jsx";
-import { findCompletedSale, getStockAge, getPhoneTotalCost, getRepairTotal } from "../../utils/calculations.js";
-import {
-  PHONE_CONDITIONS,
-  PHONE_STATUS_LABELS,
-  PHONE_STATUS_TONES,
-} from "../../utils/constants.js";
-import { formatAmount, formatDate, formatMoney } from "../../utils/format.js";
-import { Button, Chip, cx } from "../ui.jsx";
-import { DetailRow, DetailStat } from "./PhoneDetailParts.jsx";
-import { RepairModal } from "./RepairModal.jsx";
-import React from "react";
-import { createPortal } from "react-dom";
-import { PackageCheck, Smartphone, Tag, Wrench, X } from "lucide-react";
-import { Fragment, jsx, jsxs } from "react/jsx-runtime";
-export function PhoneDetails({
-  phone: initialPhone,
-  onClose: t,
-  onEdit: n,
-  onSell: a,
-  onDelete: c,
-}) {
-  var x;
-  const { data: r, mutate: i, notify: o } = useStore(),
-    s = r.phones.find(phone => phone.id === initialPhone.id) ?? initialPhone,
-    [repairDialog, setRepairDialog] = React.useState(null),
-    l = findCompletedSale(r, s.id),
-    d = (v) => {
-      i((w) => setPhoneStatus(w, s.id, v)).ok &&
-        (o({
-          title: `Статус: ${PHONE_STATUS_LABELS[v].toLowerCase()}`,
-          tone: "success",
-        }),
-        t());
-    };
-  return createPortal(
-    <Fragment>
-    <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center sm:p-4">
-      <div
-        className="absolute inset-0 bg-slate-900/40 animate-fade-in"
-        onClick={t}
-      />
-      <div className="relative flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-white animate-slide-up sm:max-w-md sm:rounded-2xl sm:animate-pop">
-        <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
-          <div className="min-w-0">
-            <p className="truncate text-[16px] font-semibold text-ink-900">
-              {s.model}
-              {" · "}
-              {s.storage}
-            </p>
-            <p className="mt-0.5 text-[12px] text-ink-500">
-              {s.color}
-              {" · "}
-              {PHONE_CONDITIONS[s.condition]}
-            </p>
-          </div>
-          <button
-            onClick={t}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-ink-400 active:bg-slate-100"
-            aria-label="Закрыть"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-5 py-4">
-          <div className="mb-4 flex items-center gap-2">
-            <Chip tone={PHONE_STATUS_TONES[s.status]}>
-              {PHONE_STATUS_LABELS[s.status]}
-            </Chip>
-            <span className="text-[11.5px] text-ink-400">
-              {getStockAge(s, l == null ? void 0 : l.date)}
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-2.5">
-            <DetailStat
-              label="Закупка"
-              value={`${formatAmount(s.purchasePrice)} ₽`}
-            />
-            <DetailStat
-              label="План продажи"
-              value={s.plannedPrice ? `${formatAmount(s.plannedPrice)} ₽` : "—"}
-              tone="green"
-            />
-            <DetailStat
-              label="Дата закупки"
-              value={formatDate(s.purchaseDate)}
-            />
-            <DetailStat
-              label="Потенциальная прибыль"
-              value={
-                s.plannedPrice
-                  ? `${s.plannedPrice >= getPhoneTotalCost(s) ? "+" : ""}${formatAmount(s.plannedPrice - getPhoneTotalCost(s))} ₽`
-                  : "—"
-              }
-              tone="green"
-            />
-          </div>
-          <section aria-label="Финансовая информация" className="mt-4 space-y-2 rounded-xl bg-slate-50 p-3.5 text-[12.5px]">
-            <p className="font-semibold text-ink-900">Финансовая информация</p>
-            <DetailRow label="Закупка" value={`${formatAmount(s.purchasePrice)} ₽`} />
-            <DetailRow label="Ремонт" value={`${formatAmount(getRepairTotal(s))} ₽`} />
-            <DetailRow label="Себестоимость" value={`${formatAmount(getPhoneTotalCost(s))} ₽`} />
-          </section>
-          {!!s.repairs?.length && <section aria-label="История ремонтов" className="mt-3 text-[12.5px]">
-            <p className="mb-2 font-semibold text-ink-900">История ремонтов</p>
-            <div className="divide-y divide-slate-100">
-              {s.repairs.map((repair, index) => <div key={repair.id} className="py-2">
-                <div className="flex flex-wrap justify-between gap-1"><span>{formatDate(repair.date)}</span><strong>{formatAmount(repair.amount)} ₽</strong></div>
-                {repair.accountId && <p className="text-ink-500">{r.accounts.find(account => account.id === repair.accountId)?.name ?? "—"}</p>}
-                {repair.comment && <p className="text-ink-500" style={{ overflowWrap: "anywhere" }}>{repair.comment}</p>}
-                <div className="flex gap-4">
-                  <button className="min-h-[44px] text-brand-700" aria-label={`Исправить ремонт ${index + 1}`} onClick={() => setRepairDialog({ repair })}>Исправить</button>
-                  <button className="min-h-[44px] text-red-500" aria-label={`Удалить ремонт ${index + 1}`} onClick={() => setRepairDialog({ repair, deleting: true })}>Удалить</button>
-                </div>
-              </div>)}
-            </div>
-          </section>}
-          <div className="mt-4 space-y-2 rounded-xl bg-slate-50 p-3.5 text-[12.5px]">
-            <DetailRow label="IMEI" value={s.imei || "—"} mono={!0} />
-            <DetailRow label="Комплектация" value={s.kit} />
-            <DetailRow
-              label="Продавец"
-              value={`${s.supplierName}${s.supplierPhone ? ` · ${s.supplierPhone}` : ""}`}
-            />
-            <DetailRow
-              label="Счёт закупки"
-              value={
-                ((x = r.accounts.find((v) => v.id === s.purchaseAccountId)) ==
-                null
-                  ? void 0
-                  : x.name) ?? "—"
-              }
-            />
-            {s.purchaseComment && (
-              <DetailRow label="Комментарий" value={s.purchaseComment} />
-            )}
-          </div>
-          {l && (
-            <div className="mt-3 rounded-xl bg-emerald-50 p-3.5 text-[12.5px] text-emerald-800">
-              <p className="font-semibold">
-                {"Продан "}
-                {formatDate(l.date)}
-              </p>
-              <p className="mt-0.5">
-                {"Покупатель: "}
-                {l.buyerName}
-                {" · "}
-                {formatMoney(l.price - l.discount)}
-              </p>
-            </div>
-          )}
-          {s.status !== "sold" && (
-            <div className="mt-4">
-              <p className="label">Статус</p>
-              <div className="grid grid-cols-3 gap-2">
-                {["in_stock", "reserved", "repair"].map((v) => (
-                  <button
-                    onClick={() => d(v)}
-                    disabled={s.status === "repair" && v !== "repair"}
-                    className={cx(
-                      "flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border text-[12px] font-medium transition-colors active:scale-[.98]",
-                      s.status === v
-                        ? "border-brand-300 bg-brand-50 text-brand-700"
-                        : "border-slate-200 bg-white text-ink-600",
-                    )}
-                    key={v}
-                  >
-                    {v === "reserved" && <Tag className="h-4 w-4" />}
-                    {v === "repair" && <Wrench className="h-4 w-4" />}
-                    {v === "in_stock" && <PackageCheck className="h-4 w-4" />}
-                    {PHONE_STATUS_LABELS[v]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-        <div
-          className="border-t border-slate-100 px-5 pt-3"
-          style={{
-            paddingBottom: "max(16px, env(safe-area-inset-bottom))",
-          }}
-        >
-          {s.status !== "sold" ? (
-            <Fragment>
-              <div className="flex gap-2">
-                <Button
-                  variant="secondary"
-                  className="flex-1"
-                  onClick={() => n(s)}
-                >
-                  Изменить
-                </Button>
-                {s.status === "repair" ? <Button className="flex-[1.4]" icon={<Wrench className="h-4 w-4" />} onClick={() => setRepairDialog({})}>
-                  Завершить ремонт
-                </Button> : <Button
-                  className="flex-[1.4]"
-                  icon={<Smartphone className="h-4 w-4" />}
-                  onClick={() => a(s.id)}
-                >
-                  Продать
-                </Button>}
-              </div>
-              <button
-                onClick={() => c(s)}
-                className="mt-2 w-full py-2 text-[12px] font-medium text-red-500 active:opacity-70"
-              >
-                Удалить
-              </button>
-            </Fragment>
-          ) : (
-            <p className="pb-1 text-center text-[12px] text-ink-400">
-              Проданный телефон не редактируется. Чтобы исправить — отмените
-              продажу в разделе «Продажи».
-            </p>
-          )}
-        </div>
-      </div>
+import React, { useState } from 'react';
+import { ArrowLeft, Pencil, Smartphone, Wrench } from 'lucide-react';
+import { setPhoneStatus } from '../../domain/phones.js';
+import { legacyHeld, phoneUnavailable } from '../../domain/legacyTradeState.js';
+import { useStore } from '../../hooks/useStore.jsx';
+import { PageTitle, SectionTitle, Status } from '../../product/ui.jsx';
+import { LegacyTradeDialog } from '../../product/LegacyTradeDialog.jsx';
+import { findCompletedSale, getPhoneRepairs, getPhoneTotalCost, getRepairTotal, getSaleProfit, getSaleRevenue } from '../../utils/calculations.js';
+import { PHONE_CONDITIONS, PHONE_STATUS_LABELS } from '../../utils/constants.js';
+import { formatDate, formatPreciseMoney } from '../../utils/format.js';
+import { getAllOperations } from '../../utils/operations.js';
+import { RepairModal } from './RepairModal.jsx';
+
+const tabs = [['info', 'Информация'], ['operations', 'Операции'], ['repairs', 'Ремонты']];
+
+export function PhoneDetails({ phone: initialPhone, onClose, onEdit, onSell, onDelete }) {
+  const { data, mutatePersisted, notify } = useStore();
+  const phone = data.phones.find(item => item.id === initialPhone.id) ?? initialPhone;
+  const [tab, setTab] = useState('info');
+  const [repairDialog, setRepairDialog] = useState(null);
+  const [changing, setChanging] = useState(false);
+  const [trade, setTrade] = useState(false);
+  const held = legacyHeld(data, 'phone:' + phone.id);
+  const sale = findCompletedSale(data, phone.id);
+  const repairs = getPhoneRepairs(phone);
+  const cost = getPhoneTotalCost(phone);
+  const listedPrice = sale ? getSaleRevenue(sale) : phone.plannedPrice;
+  const profit = sale ? getSaleProfit(sale, data.phones) : listedPrice - cost;
+  const caption = [phone.storage, phone.color, PHONE_CONDITIONS[phone.condition]].filter(value => value && value !== '—').join(' · ');
+  const account = id => data.accounts.find(item => item.id === id)?.name ?? '—';
+
+  async function changeStatus(status) {
+    setChanging(true);
+    const result = await mutatePersisted(state => setPhoneStatus(state, phone.id, status));
+    setChanging(false);
+    if (result.ok) {
+      notify({ title: 'Статус: ' + PHONE_STATUS_LABELS[status].toLowerCase(), tone: 'success' });
+      onClose();
+    }
+  }
+
+  return <section className="pb-phone-detail" aria-label="Карточка устройства">
+    <button className="pb-action pb-action-secondary pb-back" aria-label="Закрыть" onClick={onClose}><ArrowLeft size={17} />К списку</button>
+    <PageTitle title={phone.model} eyebrow="Устройство" />
+    <p className="pb-device-caption">{caption}</p>
+    <Status tone={phone.status === 'in_stock' ? 'good' : ['repair', 'reserved'].includes(phone.status) ? 'warn' : 'neutral'}>
+      {phone.status === 'repair' ? 'В ремонте' : PHONE_STATUS_LABELS[phone.status]}
+    </Status>
+    <div className="pb-tabs pb-device-tabs" aria-label="Разделы карточки">
+      {tabs.map(([id, label]) => <button type="button" key={id} aria-pressed={tab === id} onClick={() => setTab(id)}>{label}</button>)}
     </div>
-    {repairDialog && <RepairModal phone={s} {...repairDialog} onClose={() => setRepairDialog(null)} />}
-    </Fragment>, document.body
-  );
+    {tab === 'info' && <>
+      <section aria-label="Финансовая информация">
+        <SectionTitle>Стоимость устройства</SectionTitle>
+        <dl className="pb-finance-flow">
+          <div><dt>Закупка</dt><dd>{formatPreciseMoney(phone.purchasePrice)}</dd></div>
+          <div><dt>Ремонт</dt><dd>{formatPreciseMoney(getRepairTotal(phone))}</dd></div>
+          <div><dt>Себестоимость</dt><dd>{formatPreciseMoney(cost)}</dd></div>
+          <div><dt>{sale ? 'Фактическая цена продажи' : 'Планируемая цена продажи'}</dt><dd>{listedPrice || sale ? formatPreciseMoney(listedPrice) : '—'}</dd></div>
+          <div><dt>{sale ? 'Прибыль' : 'Потенциальная прибыль'}</dt><dd className={profit >= 0 ? 'pb-positive' : 'pb-negative'}>
+            {listedPrice || sale ? formatPreciseMoney(profit) : '—'}
+          </dd></div>
+        </dl>
+      </section>
+      <dl className="pb-finance-flow">
+        <div><dt>IMEI</dt><dd>{phone.imei || '—'}</dd></div>
+        <div><dt>Комплектация</dt><dd>{phone.kit}</dd></div>
+        <div><dt>Продавец</dt><dd>{[phone.supplierName, phone.supplierPhone].filter(Boolean).join(' · ')}</dd></div>
+        <div><dt>Дата закупки</dt><dd>{formatDate(phone.purchaseDate)}</dd></div>
+        <div><dt>Счёт закупки</dt><dd>{account(phone.purchaseAccountId)}</dd></div>
+        {phone.purchaseComment && <div><dt>Комментарий</dt><dd>{phone.purchaseComment}</dd></div>}
+      </dl>
+    </>}
+    {tab === 'operations' && <ul className="pb-list">{getAllOperations(data).filter(item => item.meta?.phoneId === phone.id).map(item =>
+      <li key={item.id}><span className="pb-row-icon"><Smartphone size={17} /></span>
+        <span><strong>{item.title}</strong><small>{formatDate(item.date)} · {item.meta?.account}{item.status === 'cancelled' ? ' · отменена' : ''}</small></span>
+        {item.moneyEffect !== 0 && <strong>{formatPreciseMoney(item.moneyEffect)}</strong>}</li>
+    )}</ul>}
+    {tab === 'repairs' && <section aria-label="История ремонтов">
+      <SectionTitle>История ремонтов</SectionTitle>
+      {repairs.length ? <ul className="pb-list">{repairs.map((repair, index) => <li key={repair.id}>
+        <span className="pb-row-icon"><Wrench size={17} /></span>
+        <div><strong>{formatDate(repair.date)}</strong><small>{[repair.comment, repair.accountId && account(repair.accountId)].filter(Boolean).join(' · ')}</small>
+          <div className="pb-actions">
+            <button className="pb-text-button" aria-label={'Исправить ремонт ' + (index + 1)} onClick={() => setRepairDialog({ repair })}>Исправить</button>
+            <button className="pb-text-button pb-negative" aria-label={'Удалить ремонт ' + (index + 1)} onClick={() => setRepairDialog({ repair, deleting: true })}>Удалить</button>
+          </div>
+        </div>
+        <strong>{formatPreciseMoney(repair.amount)}</strong>
+      </li>)}</ul> : <p className="pb-empty">Завершённых ремонтов пока нет.</p>}
+    </section>}
+    {!phoneUnavailable(phone) && <>
+      <div className="pb-actions pb-warehouse-actions pb-device-actions" role="group" aria-label="Действия устройства">
+        {phone.status === 'repair' ? <button className="pb-action" onClick={() => setRepairDialog({})}><Wrench size={17} />Завершить ремонт</button>
+          : <>
+            <button className="pb-action" disabled={held > 0} onClick={() => onSell(phone.id)}>Продать</button>
+            <button className="pb-action pb-action-secondary" disabled={changing || held > 0} onClick={() => changeStatus('repair')}><Wrench size={17} />Передать в ремонт</button>
+          </>}
+        <button className="pb-action pb-action-secondary" onClick={() => onEdit(phone)}><Pencil size={17} />Изменить</button>
+        <button className="pb-text-button pb-negative" onClick={() => onDelete(phone)}>Удалить</button>
+      </div>
+      {phone.status !== 'repair' && !held && <div className="pb-actions">
+        {['in_stock', 'reserved'].filter(status => status !== phone.status).map(status => <button className="pb-text-button" key={status}
+          disabled={changing} onClick={() => changeStatus(status)}>{status === 'reserved' ? 'Перевести в резерв' : 'Вернуть на склад'}</button>)}
+      </div>}
+    </>}
+    <button type="button" className="pb-action pb-action-secondary" onClick={() => setTrade(true)}>Возвраты и бронирования</button>
+    {trade && <LegacyTradeDialog productId={'phone:' + phone.id} onClose={() => setTrade(false)} />}
+    {repairDialog && <RepairModal phone={phone} {...repairDialog} onClose={() => setRepairDialog(null)} />}
+  </section>;
 }

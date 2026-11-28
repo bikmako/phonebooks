@@ -2,7 +2,8 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { execFileSync, execSync } from 'node:child_process';
 import { buildServiceWorker } from './build-service-worker.js';
 const root = path.resolve('work/update-fixtures');
 fs.mkdirSync(root, { recursive: true });
@@ -17,18 +18,39 @@ for (const label of ['a', 'b', 'c', 'd']) {
   fs.writeFileSync(path.join(dir, 'release-fixture.txt'), label);
   buildServiceWorker(dir, template);
 }
-// Test a real pre-change build, not a mocked service worker. Pin the existing
-// branch's original commit, so tests remain reproducible after committing.
-const legacy = path.join(root, 'legacy-source');
-fs.rmSync(legacy, { recursive: true, force: true });
-fs.mkdirSync(legacy);
-const archive = path.join(root, 'legacy.tar');
-execFileSync('git', ['archive', '--output', archive, '832972e5407a6a08894f1df5e475cb7a5cf02ac1']);
-execFileSync('tar', ['-xf', archive, '-C', legacy]);
-fs.symlinkSync(path.resolve('node_modules'), path.join(legacy, 'node_modules'), 'dir');
-execFileSync('npm', ['run', 'build', '--', '--base', '/phonebooks/'], { cwd: legacy, stdio: 'inherit' });
-fs.rmSync(path.join(root, 'legacy'), { recursive: true, force: true });
-fs.cpSync(path.join(legacy, 'dist'), path.join(root, 'legacy'), { recursive: true });
+// Keep the regular CI fixture reproducible. The optional fixture uses the
+// verified published bytes, and is served only on this loopback test host.
+const oldApp = path.join(root, 'legacy');
+fs.rmSync(oldApp, { recursive: true, force: true });
+if (process.env.PHONEBOOKS_USE_PUBLISHED_FIXTURE === '1') {
+  const published = path.resolve('work/published-fixture');
+  const worker = fs.readFileSync(path.join(published, 'sw.js'));
+  const digest = bytes => createHash('sha256').update(bytes).digest('hex');
+  if (digest(worker) !== '481cfe99db85863948ac494dcad9a86a2ea5d9f41bb023d6dfe6131d3ac41061') {
+    throw new Error('Published fixture does not match the reviewed service worker');
+  }
+  const revisions = JSON.parse(/^const REVISIONS = (.+);$/m.exec(worker.toString())[1]);
+  fs.mkdirSync(oldApp);
+  fs.writeFileSync(path.join(oldApp, 'sw.js'), worker);
+  for (const [key, hashes] of Object.entries(revisions)) {
+    const relative = key.slice(2);
+    const bytes = fs.readFileSync(path.join(published, relative));
+    if (!hashes.includes(digest(bytes))) throw new Error('Published fixture has changed: ' + relative);
+    const dest = path.join(oldApp, relative);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.writeFileSync(dest, bytes);
+  }
+} else {
+  const legacy = path.join(root, 'legacy-source');
+  fs.rmSync(legacy, { recursive: true, force: true });
+  fs.mkdirSync(legacy);
+  const archive = path.join(root, 'legacy.tar');
+  execFileSync('git', ['archive', '--output', archive, '832972e5407a6a08894f1df5e475cb7a5cf02ac1']);
+  execFileSync('tar', ['-xf', archive, '-C', legacy]);
+  fs.symlinkSync(path.resolve('node_modules'), path.join(legacy, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
+  execSync('npm run build -- --base /phonebooks/', { cwd: legacy, stdio: 'inherit' });
+  fs.cpSync(path.join(legacy, 'dist'), oldApp, { recursive: true });
+}
 let release = 'a', failure = null, requests = [];
 const mime = { '.js': 'text/javascript', '.html': 'text/html', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.wasm': 'application/wasm', '.woff2': 'font/woff2', '.png': 'image/png', '.svg': 'image/svg+xml' };
 http.createServer((req, res) => {

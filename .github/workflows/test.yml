@@ -5,6 +5,29 @@ on:
 permissions:
   contents: read
 jobs:
+  team-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      database:
+        image: postgres:17
+        env:
+          POSTGRES_DB: phonebooks_ci
+          POSTGRES_USER: phonebooks_ci
+          POSTGRES_PASSWORD: phonebooks_ci_fixture
+        options: >-
+          --health-cmd "pg_isready -U phonebooks_ci -d phonebooks_ci"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node --test tests/postgres/team-concurrency.test.js
+        env:
+          PHONEBOOKS_TEST_POSTGRES_CONTAINER: ${{ job.services.database.id }}
   test:
     runs-on: ubuntu-latest
     # The complete first run took ~28 min including browser/OS dependencies.
@@ -21,7 +44,20 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium firefox webkit
       - run: npm test
+      - run: npm run test:team
+      - run: npm run test:demo
       - run: npm run test:updates
+      - name: Prepare acceptance archives
+        env:
+          PHONEBOOKS_TEST_COMMIT: ${{ github.event.pull_request.head.sha }}
+        run: node tools/package-release.js
+      - name: Upload acceptance archives
+        uses: actions/upload-artifact@v4
+        with:
+          name: phonebooks-acceptance-builds
+          path: work/release/
+          if-no-files-found: error
+          retention-days: 7
       - name: Prepare iPhone device test packages
         env:
           PHONEBOOKS_TEST_COMMIT: ${{ github.event.pull_request.head.sha }}

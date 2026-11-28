@@ -36,7 +36,8 @@ export function saveAccount(state, t) {
       ) ||
       state.cashOps.some((d) => d.accountId === a.id) ||
       state.accessoryBatches.some((d) => d.accountId === a.id) ||
-      state.accessorySales.some((d) => d.accountId === a.id);
+      state.accessorySales.some((d) => d.accountId === a.id) ||
+      state.warehouse?.some(operation => operation.accountId === a.id);
     assert(
       !l,
       "По счёту уже есть операции. Измените остаток через «Пополнение» или «Снятие» — так история сохранится.",

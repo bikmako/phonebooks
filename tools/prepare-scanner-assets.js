@@ -3,11 +3,12 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+const output = process.argv.includes('--team') ? 'team/public/scanner-assets' : 'public/scanner-assets';
 // Include dependency versions in URLs so service-worker caches never mix OCR runtimes.
 const version = name => JSON.parse(readFileSync(resolve(root, 'node_modules', name, 'package.json'))).version;
 // Only this ignored, generated directory is replaced; never retain outdated runtimes.
-rmSync(resolve(root, 'public/scanner-assets'), { recursive: true, force: true });
-const dir = resolve(root, `public/scanner-assets/tesseract-${version('tesseract.js')}-core-${version('tesseract.js-core')}-eng-${version('@tesseract.js-data/eng')}-accurate-v2`);
+rmSync(resolve(root, output), { recursive: true, force: true });
+const dir = resolve(root, output, `tesseract-${version('tesseract.js')}-core-${version('tesseract.js-core')}-eng-${version('@tesseract.js-data/eng')}-accurate-v2`);
 mkdirSync(dir, { recursive: true });
 const files = {
   'tesseract.js/dist/worker.min.js': 'worker.min.js',
@@ -20,7 +21,7 @@ for (const suffix of ['lstm', 'simd-lstm']) {
   files[`tesseract.js-core/tesseract-core-${suffix}.wasm.js`] = `tesseract-core-${suffix}.wasm.js`;
 }
 for (const [source, target] of Object.entries(files)) copyFileSync(resolve(root, 'node_modules', source), resolve(dir, target));
-const barcodeDir = resolve(root, `public/scanner-assets/zxing-${version('zxing-wasm')}`);
+const barcodeDir = resolve(root, output, `zxing-${version('zxing-wasm')}`);
 mkdirSync(barcodeDir, { recursive: true });
 copyFileSync(resolve(root, 'node_modules/zxing-wasm/dist/reader/zxing_reader.wasm'), resolve(barcodeDir, 'zxing_reader.wasm'));
 copyFileSync(resolve(root, 'node_modules/zxing-wasm/LICENSE'), resolve(barcodeDir, 'LICENSE'));

@@ -9,10 +9,12 @@ import { QuickActionSheet } from "./components/QuickActionSheet.jsx";
 import { cx } from "./components/ui.jsx";
 import { useStore } from "./hooks/useStore.jsx";
 import { AccessoriesPage } from "./pages/Accessories.jsx";
+import { CatalogPage } from "./pages/Catalog.jsx";
 import { DashboardPage } from "./pages/Dashboard.jsx";
 import { FinancePage } from "./pages/Finance.jsx";
 import { HistoryPage } from "./pages/History.jsx";
 import { PurchasePage } from "./pages/Purchase.jsx";
+import { SoloWarehouseSearch } from "./pages/WarehouseSearch.jsx";
 import { SalesPage } from "./pages/Sales.jsx";
 import { SettingsPage } from "./pages/Settings.jsx";
 import { navigateTo, parseHashRoute } from "./utils/router.js";
@@ -38,8 +40,8 @@ export function App() {
       a.action === "purchase" &&
         (l(!0), window.history.replaceState(null, "", `#/${a.route}`));
     }, [a]));
-  const w = React.useCallback((m) => {
-      (navigateTo(m),
+  const w = React.useCallback((m, product) => {
+      (navigateTo(m, product),
         window.scrollTo({
           top: 0,
           behavior: "smooth",
@@ -54,8 +56,13 @@ export function App() {
     O = React.useMemo(() => {
       switch (a.route) {
         case "purchase":
+        case "repairs":
           return (
             <PurchasePage
+              key={a.route + ':' + (a.phoneId ?? '')}
+              initialProduct={a.phoneId}
+              onOpenWarehouse={id => w('catalog', id)}
+              repairMode={a.route === "repairs"}
               formOpen={o}
               onOpenForm={() => l(!0)}
               onCloseForm={() => l(!1)}
@@ -64,13 +71,18 @@ export function App() {
               }}
             />
           );
+        case "catalog":
+          return <CatalogPage key={a.phoneId} initialProduct={a.phoneId} />;
+        case 'search':
+          return <SoloWarehouseSearch onNavigate={w} />;
         case "accessories":
-          return <AccessoriesPage />;
+          return <AccessoriesPage key={a.phoneId} initialProduct={a.phoneId} />;
         case "sales":
           return (
             <SalesPage
               formOpen={d}
               presetPhoneId={v}
+              onOpenWarehouse={id => w('catalog', id)}
               onOpenForm={() => {
                 (p(void 0), x(!0));
               }}
@@ -80,7 +92,7 @@ export function App() {
             />
           );
         case "finance":
-          return <FinancePage />;
+          return <FinancePage onNavigate={w} />;
         case "history":
           return <HistoryPage />;
         case "settings":
@@ -94,10 +106,10 @@ export function App() {
             />
           );
       }
-    }, [a.route, o, d, v]);
+    }, [a.route, a.phoneId, o, d, v]);
   return s ? (
     <Fragment>
-      <AppLayout route={a.route} onNavigate={w} onQuickAction={() => i(!0)}>
+      <AppLayout route={a.route} hideTitle={a.route === "purchase" && o} onNavigate={w} onQuickAction={() => i(!0)}>
         {O}
       </AppLayout>
       <QuickActionSheet

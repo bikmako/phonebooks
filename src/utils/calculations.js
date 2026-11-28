@@ -4,6 +4,8 @@
  * Восстановлено из production-бандла PhoneBooks. Логика и разметка сохранены без изменений;
  * локальные имена переменных в теле функций оставлены как в бандле.
  */
+import { warehouseEvents } from "../domain/warehouse.js";
+import { legacyCorrections, legacyPhoneCost, phoneUnavailable } from '../domain/legacyTradeState.js';
 import { daysBetween, inPeriod, roundMoney, today } from "./format.js";
 // Repairs are the single source for both cost and account debits.
 export const getPhoneRepairs = phone => phone.repairs ?? [];
@@ -51,6 +53,12 @@ export function getAccountBalances(state, t) {
           ),
         )),
         i++);
+    for (const operation of warehouseEvents(state)) {
+      if (operation.accountId !== n.id) continue;
+      if (operation.cashMinor > 0) c += operation.cashMinor / 100;
+      else r -= operation.cashMinor / 100;
+      i++;
+    }
     const o = roundMoney(n.openingBalance + c - r);
     return {
       account: n,
@@ -87,6 +95,8 @@ export function getAccountDelta(state, t) {
         0,
         a.items.reduce((c, r) => c + r.qty * r.unitPrice, 0) - a.discount,
       ));
+  for (const operation of warehouseEvents(state))
+    if (operation.accountId === t) n += operation.cashMinor / 100;
   return roundMoney(n);
 }
 export function getTotalMoney(state, t) {
@@ -102,14 +112,15 @@ export function getSaleRevenue(s) {
 export function getSaleProfit(s, t) {
   if (s.status !== "completed") return 0;
   const n = t.find((a) => a.id === s.phoneId);
-  return n ? roundMoney(getSaleRevenue(s) - getPhoneTotalCost(n)) : 0;
+  return n ? roundMoney(getSaleRevenue(s) - (legacyPhoneCost(s, n) ?? 0) / 100) : 0;
 }
 export function getSaleMargin(s, t) {
   const n = getSaleRevenue(s);
   return n <= 0 ? 0 : Math.round((getSaleProfit(s, t) / n) * 100);
 }
 export function findCompletedSale(state, t) {
-  return state.sales.find((n) => n.phoneId === t && n.status === "completed");
+  return state.sales.find((n) => n.phoneId === t && n.status === "completed" &&
+    !legacyCorrections(state, 'sale:' + n.id).some(row => row.units));
 }
 export function getStockAge(s, t) {
   const n = t ?? today(),
@@ -126,7 +137,7 @@ export function getStockAge(s, t) {
   return t ? `${c(Math.max(0, a))} · продан` : a <= 0 ? "сегодня" : c(a);
 }
 export function getPhonesInStock(state) {
-  return state.phones.filter((t) => t.status !== "sold");
+  return state.phones.filter(t => !phoneUnavailable(t));
 }
 export function getStockValue(state) {
   return roundMoney(
@@ -144,7 +155,7 @@ export function getStats(state, t) {
     o = roundMoney(
       n.reduce((u, N) => {
         const E = a.get(N.phoneId);
-        return u + (E ? getPhoneTotalCost(E) : 0);
+        return u + (legacyPhoneCost(N, E) ?? 0) / 100;
       }, 0),
     ),
     l = state.accessorySales.filter(
@@ -178,11 +189,20 @@ export function getStats(state, t) {
         .filter((u) => u.kind === "purchase" && inPeriod(u.date, t))
         .reduce((u, N) => u + N.qty * N.unitCost, 0),
     ),
-    A = roundMoney(i + d),
-    L = roundMoney(o + x),
+    warehouse = warehouseEvents(state).filter(operation => inPeriod(operation.date, t)),
+    warehouseSales = warehouse.filter(operation => ['sale','historical_sale'].includes(operation.type)),
+    receipts = new Set([
+      ...n.map(sale => 'sale:' + sale.id),
+      ...l.map(sale => sale.groupId ? 'sale:' + sale.groupId : 'acc_sale:' + sale.id),
+      ...warehouseSales.map(operation => operation.groupId ?? operation.id),
+    ]),
+    A = roundMoney(i + d + warehouse.reduce((sum, operation) => sum + operation.revenueMinor, 0) / 100),
+    L = roundMoney(o + x + warehouse.reduce((sum, operation) => sum + operation.costMinor, 0) / 100),
     O = roundMoney(A - L),
     m = roundMoney(r.reduce((u, N) => u + N.amount, 0)),
-    f = roundMoney(O - m - p),
+    sheetExpenses = warehouse.filter(operation => ['expense','historical_expense'].includes(operation.type)),
+    expensesTotal = roundMoney(m + p + warehouse.reduce((sum, operation) => sum + operation.expenseMinor / 100, 0)),
+    f = roundMoney(O - expensesTotal),
     C = {};
   for (const u of r)
     C[u.category] = roundMoney((C[u.category] ?? 0) + u.amount);
@@ -214,14 +234,14 @@ export function getStats(state, t) {
     revenue: A,
     cogs: L,
     grossProfit: O,
-    opex: m,
+    opex: roundMoney(m + sheetExpenses.reduce((sum, operation) => sum + operation.expenseMinor / 100, 0)),
+    expensesTotal,
     netProfit: f,
     purchases: y,
-    salesCount: n.length + l.length,
-    purchasesCount: c.length,
-    expensesCount: r.length,
-    averageCheck:
-      n.length + l.length ? roundMoney(A / (n.length + l.length)) : 0,
+    salesCount: receipts.size,
+    purchasesCount: c.length + warehouse.filter(operation => operation.type === "purchase").length,
+    expensesCount: r.length + sheetExpenses.length,
+    averageCheck: receipts.size ? roundMoney((i + d + warehouseSales.reduce((sum, row) => sum + row.revenueMinor, 0) / 100) / receipts.size) : 0,
     averageMargin: j.length
       ? Math.round((j.reduce((u, N) => u + N, 0) / j.length) * 100)
       : 0,
@@ -230,7 +250,7 @@ export function getStats(state, t) {
     withdrawals: g,
     transfersIn: b,
     transfersOut: B,
-    cashFlow: roundMoney(A - y - w - m - getRepairs(state).filter(repair => inPeriod(repair.date, t)).reduce((sum, repair) => sum + repair.amount, 0) + S - g),
+    cashFlow: roundMoney(A - y - w - m + warehouse.reduce((sum, operation) => sum + (operation.cashMinor - operation.revenueMinor) / 100, 0) - getRepairs(state).filter(repair => inPeriod(repair.date, t)).reduce((sum, repair) => sum + repair.amount, 0) + S - g),
     phoneRevenue: i,
     phoneCogs: o,
     accRevenue: d,

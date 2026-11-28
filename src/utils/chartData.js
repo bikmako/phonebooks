@@ -4,6 +4,8 @@
  * Восстановлено из production-бандла PhoneBooks. Логика и разметка сохранены без изменений;
  * локальные имена переменных в теле функций оставлены как в бандле.
  */
+import { warehouseEvents } from "../domain/warehouse.js";
+import { legacyPhoneCost } from '../domain/legacyTradeState.js';
 import { getSaleProfit, getSaleRevenue, getPhoneTotalCost } from "./calculations.js";
 import {
   addDays,
@@ -93,7 +95,7 @@ export function getChartData(state, t, n = today()) {
   for (const d of state.sales) {
     if (d.status !== "completed" || !inPeriod(d.date, a)) continue;
     const x = state.phones.find((v) => v.id === d.phoneId);
-    (o(d.date, getSaleRevenue(d), 0), x && o(d.date, 0, getPhoneTotalCost(x)));
+    o(d.date, getSaleRevenue(d), (legacyPhoneCost(d, x) ?? 0) / 100);
   }
   for (const d of state.accessorySales) {
     if (d.status !== "completed" || !inPeriod(d.date, a)) continue;
@@ -109,6 +111,9 @@ export function getChartData(state, t, n = today()) {
       inPeriod(d.date, a) &&
       o(d.date, 0, d.qty * d.unitCost);
   for (const d of state.expenses) inPeriod(d.date, a) && o(d.date, 0, d.amount);
+  for (const operation of warehouseEvents(state))
+    if (inPeriod(operation.date, a) && (operation.revenueMinor || operation.costMinor || operation.expenseMinor))
+      o(operation.date, operation.revenueMinor / 100, (operation.costMinor + operation.expenseMinor) / 100);
   const l = Array.from(r.values()).sort((d, x) => d.key.localeCompare(x.key));
   if (t === "all" && l.length > 12) {
     const d = new Map();

@@ -209,18 +209,29 @@ test('other tabs prevent activation and are never reloaded', async ({ page, cont
 
 test('focus checks are throttled; periodic checks discover a release', async ({ page, request }) => {
   await page.clock.install();
+  await page.addInitScript(() => {
+    // WebKit can request sw.js independently of the application on navigation.
+    const update = ServiceWorkerRegistration.prototype.update;
+    window.phonebooksUpdateCalls = 0;
+    ServiceWorkerRegistration.prototype.update = function (...args) {
+      window.phonebooksUpdateCalls++;
+      return update.apply(this, args);
+    };
+  });
   await page.reload(); await controlled(page);
   await release(request, 'b');
   await page.clock.setSystemTime(Date.now() + 61000);
   await check(page, 'focus');
   await expect(notice(page)).toBeVisible();
+  const callsBeforeBurst = await page.evaluate(() => window.phonebooksUpdateCalls);
+  expect(callsBeforeBurst).toBeGreaterThan(0);
   await notice(page).getByRole('button', { name: 'Позже' }).click();
   for (let index = 0; index < 12; index++) await check(page, 'focus');
-  const requests = await (await request.get('http://127.0.0.1:4175/__test/requests')).json();
-  expect(requests.filter(url => url === 'sw.js').length).toBeLessThanOrEqual(2);
+  expect(await page.evaluate(() => window.phonebooksUpdateCalls)).toBe(callsBeforeBurst);
   await release(request, 'c');
   await page.clock.fastForward(15 * 60 * 1000 + 1000);
   await expect(notice(page)).toBeVisible();
+  expect(await page.evaluate(() => window.phonebooksUpdateCalls)).toBe(callsBeforeBurst + 1);
 });
 
 test('update banner fits safe viewport and moves inside open dialog', async ({ page, request }) => {
@@ -314,7 +325,7 @@ test('unsaved repair confirmation can be cancelled without losing fields or data
   await seed(page); await ready(page, request);
   await page.goto('./#/purchase');
   const phone = page.locator('main').getByText('iPhone 14').filter({ visible: true }).first();
-  await phone.click(); await page.getByRole('button', { name: 'Ремонт', exact: true }).click();
+  await phone.click(); await page.getByRole('button', { name: 'Передать в ремонт', exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).state[0].phones[2].status).toBe('repair');
   await phone.click(); await page.getByRole('button', { name: 'Завершить ремонт', exact: true }).click();
   const amount = page.locator('#repair-amount'); await amount.fill('1234');

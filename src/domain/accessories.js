@@ -6,6 +6,7 @@
  */
 import { inPeriod, roundMoney, today } from "../utils/format.js";
 import { createSale } from "./sales.js";
+import { legacyCorrections, legacyHeld } from './legacyTradeState.js';
 import {
   assert,
   assertNonNegative,
@@ -82,6 +83,7 @@ export function saveAccessoryItem(state, t) {
   );
 }
 export function deleteAccessoryItem(state, t) {
+  assert(!(state.legacyTrade ?? []).some(row => row.productId === 'accessory:' + t), 'У товара есть бронь или возврат.');
   const n = state.accessoryItems.find((r) => r.id === t);
   assert(n, "Товар не найден");
   const a = getAccessoryStock(state, t);
@@ -264,7 +266,7 @@ export function adjustAccessoryStock(state, t) {
   }
   const r = Math.abs(a);
   assert(
-    c >= r,
+    c - legacyHeld(state, 'accessory:' + n.id) >= r,
     `«${n.name}»: недостаточно остатка (есть ${c} шт., нужно ${r} шт.)`,
     "delta",
   );
@@ -335,6 +337,8 @@ export function buildAccessorySale(state, t) {
       `«${o.name}»: количество должно быть целым числом больше нуля`,
       "items",
     );
+    assert(l <= getAccessoryStock(state, o.id) - legacyHeld(state, 'accessory:' + o.id, t.reservationId),
+      `«${o.name}»: часть остатка забронирована`, 'items');
     const d =
       i.unitPrice === void 0 || i.unitPrice === ""
         ? o.salePrice
@@ -421,6 +425,7 @@ export function createCombinedSale(state, t) {
   );
 }
 export function cancelAccessorySale(state, t) {
+  assert(!legacyCorrections(state, 'acc_sale:' + t).length, 'Продажа связана с возвратом.');
   const n = state.accessorySales.find((r) => r.id === t);
   (assert(n, "Продажа не найдена"),
     assert(n.status === "completed", "Продажа уже отменена"));

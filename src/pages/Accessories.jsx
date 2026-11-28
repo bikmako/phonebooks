@@ -47,16 +47,18 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import React from "react";
+import { LegacyTradeDialog } from '../product/LegacyTradeDialog.jsx';
 
-export function AccessoriesPage() {
+export function AccessoriesPage({ initialProduct } = {}) {
+  const [trade, setTrade] = React.useState(null);
   const { data: s, period: t } = useStore(),
     [n, a] = React.useState(""),
     [c, r] = React.useState("all"),
     [i, o] = React.useState("all"),
     [l, d] = React.useState("low"),
-    [x, v] = React.useState({
-      open: !1,
-      item: null,
+    [x, v] = React.useState(() => {
+      const item = s.accessoryItems.find(item => item.id === initialProduct);
+      return { open: Boolean(item), item: item ?? null };
     }),
     [p, w] = React.useState(!1),
     [A, L] = React.useState(void 0),
@@ -337,6 +339,7 @@ export function AccessoriesPage() {
                   <Button size="sm" variant="ghost" aria-label="Изменить" title="Изменить" icon={<Pencil aria-hidden="true" />} onClick={() => v({ open: !0, item: u })}>
                     <span className="accessories-action-label">Изменить</span>
                   </Button>
+                  <Button size="sm" variant="ghost" className="accessories-trade-action" onClick={() => setTrade(u.id)}>Возвраты и бронирования</Button>
                 </div>
               </article>
             );
@@ -369,6 +372,7 @@ export function AccessoriesPage() {
       <AccessoryPurchaseModal open={p} presetItemId={A} onClose={() => w(!1)} />
       <AccessoryAdjustModal open={!!O} item={O} onClose={() => m(null)} />
       <AccessoryBatchHistoryModal open={!!f} item={f} onClose={() => C(null)} />
+      {trade && <LegacyTradeDialog productId={'accessory:' + trade} onClose={() => setTrade(null)} />}
     </PageTransition>
   );
 }

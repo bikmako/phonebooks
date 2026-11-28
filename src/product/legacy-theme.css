@@ -1,0 +1,58 @@
+/* Compatibility styles for the Solo screens restored from the 1.x bundle. */
+:root {
+  --canvas: var(--pb-bg);
+  --surface: var(--pb-surface);
+  --ink-900: var(--pb-ink);
+  --ink-700: var(--pb-ink);
+  --ink-500: var(--pb-muted);
+  --ink-400: var(--pb-muted);
+  --brand: var(--pb-focus);
+  --grid: var(--pb-line);
+  --shadow-card: none;
+  --shadow-float: var(--pb-shadow);
+}
+.card, .card:hover {
+  background: var(--pb-surface); border-color: var(--pb-line);
+  border-radius: var(--pb-radius); box-shadow: none; transform: none;
+}
+:is(.btn-primary, .btn-success, .btn-secondary, .btn-ghost, .btn-danger, .btn) {
+  min-height: var(--pb-control-height); height: auto; padding: var(--pb-control-padding);
+  border-radius: var(--pb-control-radius); gap: 8px; line-height: 1.25; box-shadow: none; transform: none;
+  max-width: 100%; white-space: normal;
+}
+:is(.btn-primary, .btn-success, .btn-secondary, .btn-ghost, .btn-danger, .btn) > svg { flex-shrink: 0; }
+:is(.btn-primary, .btn-success, .btn-primary:hover, .btn-success:hover) { background: var(--pb-primary); color: var(--pb-on-primary); }
+:is(.btn-secondary, .btn-secondary:hover) { background: var(--pb-surface); color: var(--pb-ink); border-color: var(--pb-line); }
+:is(.btn-ghost, .btn-ghost:hover) { color: var(--pb-ink); }
+.btn-ghost:hover { background: var(--pb-panel); }
+:is(.btn-danger, .btn-danger:hover) { background: var(--pb-loss-bg); color: var(--pb-loss); border: 1px solid currentColor; }
+:is(.input, .textarea) {
+  min-height: var(--pb-control-height); border-radius: var(--pb-control-radius);
+  color: var(--pb-ink); background: var(--pb-surface); border-color: var(--pb-line);
+}
+:is(.input, .textarea):focus { border-color: var(--pb-focus); box-shadow: none; }
+:is(.input, .textarea)::placeholder { color: var(--pb-muted); opacity: 1; }
+:is(.text-ink-900, .text-ink-700, .text-ink-600) { color: var(--pb-ink); }
+:is(.text-ink-500, .text-ink-400, .text-ink-300) { color: var(--pb-muted); }
+:is(.text-emerald-500, .text-emerald-600, .text-emerald-700, .text-emerald-800) { color: var(--pb-good); }
+:is(.text-red-500, .text-red-600, .text-red-700) { color: var(--pb-loss); }
+:is(.text-amber-600, .text-amber-700, .text-amber-800, .text-brand-500, .text-brand-600, .text-brand-700) { color: var(--pb-warn); }
+:is(.text-violet-700) { color: var(--pb-ink); }
+:is(.bg-white, .bg-white\/95) { background-color: var(--pb-surface); }
+:is(.bg-slate-50, .bg-slate-100, .bg-slate-200, [class*="bg-slate-50/"], .bg-violet-50, .bg-brand-50\/50, .bg-brand-50\/70) { background-color: var(--pb-panel); }
+:is(.bg-brand-50, .bg-amber-50) { background-color: var(--pb-warn-bg); }
+.bg-red-50 { background-color: var(--pb-loss-bg); }
+.bg-red-300 { background-color: var(--pb-loss); }
+.bg-emerald-50 { background-color: var(--pb-good-bg); }
+:is(.bg-brand-600, .chip-active, .bg-gradient-to-br, .bg-gradient-to-r) { background: var(--pb-primary); color: var(--pb-on-primary); box-shadow: none; }
+:is(.border-slate-50, .border-slate-100, .border-slate-200, .border-slate-200\/70, .border-slate-300,
+  .border-brand-200, .border-brand-300, .border-emerald-200, .border-emerald-300, .border-amber-200, .border-amber-300,
+  .border-red-200, .border-red-300) { border-color: var(--pb-line); }
+:is(.border-brand-500, .border-brand-600) { border-color: var(--pb-focus); }
+:is(.hover\:bg-slate-50, .hover\:bg-slate-50\/60, .hover\:bg-slate-100, .hover\:bg-brand-50, .hover\:bg-brand-100):hover,
+:is(.active\:bg-slate-50, .active\:bg-slate-100, .active\:bg-slate-200, .active\:bg-brand-50):active { background-color: var(--pb-panel); }
+.hover\:bg-emerald-50:hover { background-color: var(--pb-good-bg); }
+.hover\:bg-red-50:hover, .active\:bg-red-50:active { background-color: var(--pb-loss-bg); }
+.hover\:text-brand-600:hover, .active\:text-brand-600:active { color: var(--pb-warn); }
+.hover\:text-emerald-600:hover { color: var(--pb-good); }
+.hover\:text-red-500:hover, .active\:text-red-500:active { color: var(--pb-loss); }

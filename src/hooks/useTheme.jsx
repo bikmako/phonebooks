@@ -1,148 +1,94 @@
-/**
- * Тема оформления и переключатели темы.
- *
- * Восстановлено из production-бандла PhoneBooks. Логика и разметка сохранены без изменений;
- * локальные имена переменных в теле функций оставлены как в бандле.
- */
-import { cx } from "../components/ui.jsx";
 import { Monitor, Moon, Sun } from "lucide-react";
-import React from "react";
-import { jsx, jsxs } from "react/jsx-runtime";
-export function PageTransition({ children: s, className: t }) {
-  return <div className={cx("animate-fade-up", t)}>{s}</div>;
-}
+import { useSyncExternalStore } from "react";
+import { cx } from "../components/ui.jsx";
+
 export const THEME_KEY = "phonebooks.theme";
+const themeEvent = "phonebooks:theme";
+const preferences = [
+  { id: "system", label: "Системная", title: "Как в системе", icon: Monitor },
+  { id: "light", label: "Светлая", title: "Светлая тема", icon: Sun },
+  { id: "dark", label: "Тёмная", title: "Тёмная тема", icon: Moon },
+];
+
+export function PageTransition({ children, className }) {
+  return <div className={cx("animate-fade-up", className)}>{children}</div>;
+}
+
 export function getTheme() {
   try {
-    const s = localStorage.getItem(THEME_KEY);
-    return s === "light" || s === "dark" ? s : "system";
+    const value = localStorage.getItem(THEME_KEY);
+    return value === "light" || value === "dark" ? value : "system";
   } catch {
     return "system";
   }
 }
+
 export function isSystemDark() {
-  return (
-    typeof window < "u" &&
-    window.matchMedia("(prefers-color-scheme: dark)").matches
-  );
+  return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
-export function resolveTheme(s) {
-  return s === "system" ? (isSystemDark() ? "dark" : "light") : s;
+
+export function resolveTheme(value) {
+  return value === "system" ? (isSystemDark() ? "dark" : "light") : value;
 }
-export function applyTheme(s) {
-  const t = resolveTheme(s),
-    n = document.documentElement;
-  (n.classList.toggle("dark", t === "dark"), (n.style.colorScheme = t));
-  const a = document.querySelector('meta[name="theme-color"]');
-  a && a.setAttribute("content", t === "dark" ? "#0b1220" : "#f5f7fb");
+
+export function applyTheme(value) {
+  const root = document.documentElement;
+  root.classList.toggle("dark", resolveTheme(value) === "dark");
+  const bg = getComputedStyle(root).getPropertyValue("--pb-bg").trim();
+  if (bg) document.querySelector('meta[name="theme-color"]')?.setAttribute("content", bg);
 }
-export function setThemePreference(s) {
+
+export function setThemePreference(value) {
   try {
-    s === "system"
-      ? localStorage.removeItem(THEME_KEY)
-      : localStorage.setItem(THEME_KEY, s);
+    if (value === "system") localStorage.removeItem(THEME_KEY);
+    else localStorage.setItem(THEME_KEY, value);
   } catch {}
-  applyTheme(s);
+  applyTheme(value);
+  window.dispatchEvent(new Event(themeEvent));
 }
+
+function onThemeStorage(event) {
+  if (!event.key || event.key === THEME_KEY) applyTheme(getTheme());
+}
+
 export function initTheme() {
-  (applyTheme(getTheme()),
-    window
-      .matchMedia("(prefers-color-scheme: dark)")
-      .addEventListener("change", () => {
-        getTheme() === "system" && applyTheme("system");
-      }));
+  applyTheme(getTheme());
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    if (getTheme() === "system") applyTheme("system");
+  });
+  window.addEventListener("storage", onThemeStorage);
 }
-export function ThemeToggle({ className: s }) {
-  const [t, n] = React.useState(() => getTheme());
-  React.useEffect(() => {
-    applyTheme(t);
-    const i = window.matchMedia("(prefers-color-scheme: dark)"),
-      o = () => {
-        t === "system" && applyTheme("system");
-      };
-    return (
-      i.addEventListener("change", o),
-      () => i.removeEventListener("change", o)
-    );
-  }, [t]);
-  const a = t === "light" ? "dark" : t === "dark" ? "system" : "light",
-    c = t === "light" ? Sun : t === "dark" ? Moon : Monitor,
-    r =
-      t === "light"
-        ? "Светлая тема"
-        : t === "dark"
-          ? "Тёмная тема"
-          : "Как в системе";
+
+function subscribe(callback) {
+  window.addEventListener(themeEvent, callback);
+  window.addEventListener("storage", callback);
+  return () => {
+    window.removeEventListener(themeEvent, callback);
+    window.removeEventListener("storage", callback);
+  };
+}
+
+export function ThemeToggle({ className }) {
+  const value = useSyncExternalStore(subscribe, getTheme);
+  const index = preferences.findIndex(option => option.id === value);
+  const { icon: Icon, title } = preferences[index];
   return (
-    <button
-      type="button"
-      onClick={() => {
-        (setThemePreference(a), n(a));
-      }}
-      aria-label={`${r}. Переключить`}
-      title={r}
-      className={cx(
-        "btn-icon relative flex items-center justify-center text-ink-500 transition-colors active:bg-slate-100",
-        s,
-      )}
-    >
-      {jsx(c, {
-        className: "h-[19px] w-[19px]",
-      })}
+    <button type="button" onClick={() => setThemePreference(preferences[(index + 1) % preferences.length].id)}
+      aria-label={title + ". Переключить"} title={title} className={cx("pb-icon-button", className)}>
+      <Icon size={19} aria-hidden="true" />
     </button>
   );
 }
+
 export function ThemePicker() {
-  const [s, t] = React.useState(() => getTheme()),
-    n = [
-      {
-        id: "light",
-        label: "Светлая",
-        icon: Sun,
-      },
-      {
-        id: "dark",
-        label: "Тёмная",
-        icon: Moon,
-      },
-      {
-        id: "system",
-        label: "Системная",
-        icon: Monitor,
-      },
-    ];
+  const value = useSyncExternalStore(subscribe, getTheme);
   return (
-    <div
-      className="grid grid-cols-3 gap-2"
-      role="radiogroup"
-      aria-label="Тема оформления"
-    >
-      {n.map((a) => {
-        const c = a.icon,
-          r = s === a.id;
-        return (
-          <button
-            type="button"
-            role="radio"
-            aria-checked={r}
-            onClick={() => {
-              (setThemePreference(a.id), t(a.id));
-            }}
-            className={cx(
-              "flex min-h-[52px] flex-col items-center justify-center gap-1.5 rounded-xl border text-[12px] font-medium transition-all",
-              r
-                ? "border-brand-500 bg-brand-50 text-brand-700"
-                : "border-slate-200 bg-white text-ink-500 active:bg-slate-50",
-            )}
-            key={a.id}
-          >
-            {jsx(c, {
-              className: cx("h-4.5 w-4.5", r && "text-brand-600"),
-            })}
-            {a.label}
-          </button>
-        );
-      })}
+    <div className="pb-tabs" role="radiogroup" aria-label="Тема оформления">
+      {preferences.map(({ id, label, icon: Icon }) => (
+        <button key={id} type="button" role="radio" aria-checked={value === id} onClick={() => setThemePreference(id)}>
+          <Icon size={16} aria-hidden="true" />{label}
+        </button>
+      ))}
     </div>
   );
 }

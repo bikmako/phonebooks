@@ -18,6 +18,9 @@ import {
 } from "../storage/db.js";
 import { captureSnapshot, prepareImport, exportFullBackup, recoverInterruptedImport } from "../storage/fullBackup.js";
 import { createInitialState } from "../storage/initialState.js";
+import { isDemo } from '../demo/mode.js';
+import { createDemoState } from '../demo/seed.js';
+const blankState = () => isDemo ? { ...createDemoState(), demoData: true } : createInitialState();
 import React from "react";
 import { jsx } from "react/jsx-runtime";
 export const StoreContext = React.createContext(null);
@@ -84,14 +87,14 @@ export function StoreProvider({ children: s }) {
     return (
       (async () => {
         try {
-        await recoverInterruptedImport();
-        const _ = (await loadState()) ?? (await migrateLegacyState());
+        if (!isDemo) await recoverInterruptedImport();
+        const _ = (await loadState()) ?? (!isDemo && await migrateLegacyState());
         if (!Q) {
           if (_) {
             const k = normalizeState(_);
             ((C.current = k), n(k));
           } else {
-            const k = createInitialState();
+            const k = blankState();
             ((C.current = k), n(k), await persistState(k));
           }
           (l(await getLastSaved()),
@@ -205,7 +208,7 @@ export function StoreProvider({ children: s }) {
       try {
         await j(); await writeQueue.current;
         await createBackup(C.current, "manual");
-        const next = createInitialState(); await persistState(next);
+        const next = blankState(); await persistState(next);
         C.current = next; n(next); await y();
       } catch (error) { b({ title: "Очистка остановлена", description: error.message, tone: "error" }); }
       finally { transferBusy.current = false; }
@@ -224,23 +227,24 @@ export function StoreProvider({ children: s }) {
   }, []);
   // Financial repair dialogs report success only after the whole state commits.
   // The existing database lease also rejects writes from stale browser tabs.
-  const mutatePersisted = React.useCallback(async change => {
+  const mutatePersisted = React.useCallback(async (change, backupReason) => {
     if (transferBusy.current) return { ok: false, error: new DomainError("Другая операция ещё выполняется") };
     transferBusy.current = true;
     try {
       await j(); await writeQueue.current.catch(() => {});
       if (g.current) throw new Error("Сначала сохраните текущие изменения");
-      const next = change(C.current);
+      const next = await change(C.current);
       i("saving");
-      await (writeQueue.current = writeQueue.current.catch(() => {}).then(() => persistState(next)));
+      await (writeQueue.current = writeQueue.current.catch(() => {}).then(() => persistState(next, backupReason)));
       C.current = next; n(next); l(new Date().toISOString()); i("saved"); x(null);
+      if (backupReason) await y();
       return { ok: true };
     } catch (error) {
       if (!(error instanceof DomainError)) { i("error"); x(error.message); }
       b({ title: "Не удалось выполнить", description: error.message, tone: "error" });
       return { ok: false, error };
     } finally { transferBusy.current = false; }
-  }, [j, b]);
+  }, [j, b, y]);
   const finishImport = React.useCallback(async (plan, options) => {
     const next = await plan.commit(options);
     acceptPersistedState(next);

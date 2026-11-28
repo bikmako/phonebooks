@@ -11,6 +11,7 @@ import {
   MODEL_SUGGESTIONS,
   PAYMENT_METHODS,
   PHONE_CONDITIONS,
+  PHONE_STATUS_LABELS,
   STORAGE_OPTIONS,
 } from "../../utils/constants.js";
 import {
@@ -34,7 +35,7 @@ import React from "react";
 import { jsx, jsxs } from "react/jsx-runtime";
 export function PurchaseForm({ phone: s, onDone: t, onCancel: n }) {
   const [scannerOpen, setScannerOpen] = React.useState(false);
-  const { data: a, mutate: c, notify: r } = useStore(),
+  const { data: a, mutatePersisted: c, notify: r } = useStore(),
     i = a.accounts.filter((j) => !j.archived),
     o = React.useRef(!1),
     [l, d] = React.useState(() => {
@@ -124,10 +125,10 @@ export function PurchaseForm({ phone: s, onDone: t, onCancel: n }) {
       const j = Array.from(new Set(a.phones.map((u) => u.model)));
       return Array.from(new Set([...j, ...MODEL_SUGGESTIONS])).slice(0, 30);
     }, [a.phones]),
-    y = () => {
+    y = async () => {
       var u;
       m(!0);
-      const j = c((N) => (s ? updatePhone(N, l) : createPhone(N, l)));
+      const j = await c((N) => (s ? updatePhone(N, l) : createPhone(N, l)));
       (m(!1),
         j.ok
           ? (s || clearDraft(PURCHASE_DRAFT_KEY), t())
@@ -152,41 +153,6 @@ export function PurchaseForm({ phone: s, onDone: t, onCancel: n }) {
           </div>
         </div>
       )}
-      <div className="rounded-2xl bg-slate-50/80 p-3.5">
-        <p className="mb-2.5 text-[12px] font-semibold text-ink-500">
-          Продавец
-        </p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field
-            label="Имя продавца"
-            htmlFor="seller-name"
-            error={x.supplierName}
-          >
-            <Input
-              id="seller-name"
-              value={l.supplierName}
-              onChange={(j) => b("supplierName", j.target.value)}
-              placeholder="Иван Петров"
-              autoComplete="off"
-            />
-          </Field>
-          <Field
-            label="Телефон продавца"
-            htmlFor="seller-phone"
-            error={x.supplierPhone}
-          >
-            <Input
-              id="seller-phone"
-              value={l.supplierPhone}
-              onChange={(j) =>
-                b("supplierPhone", formatPhoneInput(j.target.value))
-              }
-              placeholder="+7 900 000-00-00"
-              inputMode="tel"
-            />
-          </Field>
-        </div>
-      </div>
       <div className="space-y-3">
         <p className="text-[12px] font-semibold text-ink-500">Телефон</p>
         <Field
@@ -276,7 +242,10 @@ export function PurchaseForm({ phone: s, onDone: t, onCancel: n }) {
               inputMode="numeric"
               className={cx("font-mono tracking-wide")}
             />
-            <Button type="button" variant="secondary" aria-label="Сканировать IMEI" title="Сканировать IMEI" onClick={() => setScannerOpen(true)}>
+            <Button type="button" variant="secondary" aria-label="Сканировать IMEI" title="Сканировать IMEI" onClick={event => {
+              event.currentTarget.focus({ preventScroll: true });
+              setScannerOpen(true);
+            }}>
               <Camera size={20} />
             </Button>
           </div>
@@ -440,6 +409,13 @@ export function PurchaseForm({ phone: s, onDone: t, onCancel: n }) {
           </Field>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Статус" htmlFor="purchase-status" error={x.status}>
+            <Select id="purchase-status" value={l.status ?? "in_stock"} disabled={s?.status === "repair"}
+              onChange={event => b("status", event.target.value)}>
+              {["in_stock", "reserved", "repair"].map(status =>
+                <option value={status} key={status}>{PHONE_STATUS_LABELS[status]}</option>)}
+            </Select>
+          </Field>
           <Field
             label="Счёт списания"
             required={!0}
@@ -489,6 +465,41 @@ export function PurchaseForm({ phone: s, onDone: t, onCancel: n }) {
           />
         </Field>
       </div>
+      <div className="rounded-2xl bg-slate-50/80 p-3.5">
+        <p className="mb-2.5 text-[12px] font-semibold text-ink-500">
+          Продавец
+        </p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field
+            label="Имя продавца"
+            htmlFor="seller-name"
+            error={x.supplierName}
+          >
+            <Input
+              id="seller-name"
+              value={l.supplierName}
+              onChange={(j) => b("supplierName", j.target.value)}
+              placeholder="Иван Петров"
+              autoComplete="off"
+            />
+          </Field>
+          <Field
+            label="Телефон продавца"
+            htmlFor="seller-phone"
+            error={x.supplierPhone}
+          >
+            <Input
+              id="seller-phone"
+              value={l.supplierPhone}
+              onChange={(j) =>
+                b("supplierPhone", formatPhoneInput(j.target.value))
+              }
+              placeholder="+7 900 000-00-00"
+              inputMode="tel"
+            />
+          </Field>
+        </div>
+      </div>
       <Field label="Комментарий" htmlFor="comment">
         <Textarea
           id="comment"
@@ -514,7 +525,7 @@ export function PurchaseForm({ phone: s, onDone: t, onCancel: n }) {
           </span>
         </span>
       </div>
-      <div className="sticky bottom-0 -mx-5 flex gap-2 border-t border-slate-100 bg-white px-5 pb-[max(16px,env(safe-area-inset-bottom))] pt-3 sm:-mx-5">
+      <div className="pb-form-actions flex gap-2 border-t border-slate-100 pt-3">
         <Button variant="secondary" className="flex-1" onClick={n}>
           Отмена
         </Button>

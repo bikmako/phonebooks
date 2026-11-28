@@ -4,6 +4,7 @@
  * Восстановлено из production-бандла PhoneBooks. Логика и разметка сохранены без изменений;
  * локальные имена переменных в теле функций оставлены как в бандле.
  */
+import { warehouseLabels, warehouseEvents } from "../domain/warehouse.js";
 import { getSaleProfit, getSaleRevenue } from "./calculations.js";
 import { roundMoney } from "./format.js";
 export function getAllOperations(state) {
@@ -201,6 +202,16 @@ export function getAllOperations(state) {
         saleId: m.id,
       },
     });
+  }
+  for (const operation of warehouseEvents(state)) {
+    c.push({ id: operation.id, kind: 'warehouse', type: ['repair','historical_expense'].includes(operation.type) ? 'expense' :
+      ({ historical_sale: 'sale', opening: 'stock_adjustment' }[operation.type] ?? operation.type),
+      date: operation.date, createdAt: operation.createdAt, title: warehouseLabels[operation.type] + ' · ' + operation.name,
+      subtitle: [operation.units ? operation.units + ' шт.' : '', operation.reason].filter(Boolean).join(' · '), amount: operation.cashMinor / 100, moneyEffect: operation.cashMinor / 100,
+      status: 'completed', accountId: operation.accountId, icon: operation.type === 'sale' ? 'sale' : 'package',
+      meta: { account: n.get(operation.accountId)?.name ?? '—', productId: operation.productId,
+        phoneId: operation.productId?.startsWith('phone:') ? operation.productId.slice(6) : undefined,
+        profit: operation.type === 'sale' ? (operation.revenueMinor - operation.costMinor) / 100 : undefined } });
   }
   return c.sort((m, f) =>
     m.date === f.date

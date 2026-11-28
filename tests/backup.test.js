@@ -9,6 +9,9 @@ import { captureSnapshot, exportFullBackup, prepareImport, recoverInterruptedImp
 import { createPhone, deletePhone } from '../src/domain/phones.js';
 import { createSale, cancelSale } from '../src/domain/sales.js';
 import { createAccessoryBatch, createAccessorySale } from '../src/domain/accessories.js';
+import { INVENTORY_KEY, saveInventoryCategory, saveInventoryProduct } from '../src/domain/inventory.js';
+import { loadInventory, updateInventory } from '../src/storage/inventoryStore.js';
+import { realisticSnapshot } from './fixtures/realistic.js';
 
 const storage = () => {
   const data = {};
@@ -39,6 +42,101 @@ async function target(name = 'Перенос') {
   snapshot.localStorage = [{ key: 'phonebooks.theme', value: 'light' }];
   return parseImportFile(JSON.stringify(buildExportFile(snapshot)));
 }
+
+const category = {
+  id: 'projectors', name: 'Проекторы',
+  attributes: [{ id: 'lumens', name: 'Люмены', type: 'number' }, { id: 'portable', name: 'Портативный', type: 'boolean' }],
+};
+const projector = {
+  id: 'product:projector', name: 'Складской проектор', categoryId: category.id, tracking: 'quantity',
+  attributes: { lumens: 2000, portable: false },
+};
+const createProjector = catalog => saveInventoryProduct(saveInventoryCategory(catalog, category), projector);
+
+test('old IndexedDB is projected without rewriting legacy records, backups or drafts; first catalogue write migrates atomically', async () => {
+  const rich = realisticSnapshot();
+  await (await prepareImport(parseImportFile(JSON.stringify(buildExportFile(rich))))).commit(options());
+  const before = await captureSnapshot();
+  const inventory = await loadInventory();
+  assert.equal(inventory.version, 2);
+  assert.equal(inventory.revision, 0);
+  assert.equal(inventory.categories.length, 9);
+  assert.equal(inventory.products.filter(item => item.tracking === 'unit').length, 3);
+  assert.equal(inventory.products.filter(item => item.tracking === 'quantity').length, 2);
+  assert.deepEqual(await captureSnapshot(), before);
+
+  const migrated = await updateInventory(inventory.revisionId, createProjector);
+  assert.equal(migrated.revision, 1);
+  assert.equal(migrated.products.at(-1).attributes.lumens, 2000);
+  assert.deepEqual(await loadInventory(), migrated);
+  const after = await captureSnapshot();
+  const catalogEntry = after.indexedDB.meta.find(entry => entry.key === INVENTORY_KEY);
+  assert.deepEqual(catalogEntry.value.products[0], { ...projector, version: 1 });
+  after.indexedDB.meta = after.indexedDB.meta.filter(entry => entry.key !== INVENTORY_KEY);
+  assert.deepEqual(after, before);
+});
+
+test('catalogue writes reject stale revisions and invalid attributes and recover after an aborted IndexedDB write', async () => {
+  const originalSnapshot = await captureSnapshot();
+  await assert.rejects(updateInventory(null, value => saveInventoryProduct(saveInventoryCategory(value, category), {
+    ...projector, attributes: { lumens: '2000' },
+  })), /характеристики/);
+  assert.deepEqual(await captureSnapshot(), originalSnapshot);
+
+  const db = await openDatabase();
+  const transaction = db.transaction;
+  db.transaction = function (...args) {
+    const tx = transaction.apply(this, args);
+    if (args[1] === 'readwrite') {
+      const objectStore = tx.objectStore.bind(tx);
+      tx.objectStore = name => {
+        const store = objectStore(name);
+        if (name === 'meta') {
+          const put = store.put.bind(store);
+          store.put = (...values) => {
+            const request = put(...values);
+            request.onsuccess = () => tx.abort();
+            return request;
+          };
+        }
+        return store;
+      };
+    }
+    return tx;
+  };
+  try {
+    await assert.rejects(updateInventory(null, createProjector), /прервана/);
+  } finally {
+    db.transaction = transaction;
+  }
+  assert.deepEqual(await captureSnapshot(), originalSnapshot);
+
+  const writes = await Promise.allSettled([updateInventory(null, createProjector), updateInventory(null, createProjector)]);
+  assert.equal(writes.filter(result => result.status === 'fulfilled').length, 1);
+  assert.match(writes.find(result => result.status === 'rejected').reason.message, /другой вкладкой/);
+  const catalog = await loadInventory();
+  await assert.rejects(updateInventory(catalog.revisionId, value => saveInventoryProduct(value, projector, 0)), /Карточка товара изменилась/);
+  assert.equal((await loadInventory()).revision, 1);
+});
+
+test('full backups restore the new inventory and legacy copies never take the current catalogue with them', async () => {
+  const old = await updateInventory(null, createProjector);
+  const exported = await exportFullBackup();
+  const backup = parseImportFile(JSON.stringify(exported));
+  assert.equal(backup.error, null);
+  const legacy = parseImportFile(JSON.stringify({ app: 'PhoneBooks', version: 1, data: original }));
+  const legacyPlan = await prepareImport(legacy);
+  await legacyPlan.commit(options());
+  assert.equal((await loadInventory()).products.length, 0);
+  const replacement = await updateInventory(null, createProjector);
+  assert.equal(replacement.revision, old.revision);
+  await assert.rejects(updateInventory(old.revisionId, createProjector), /другой вкладкой/);
+  await (await prepareImport(backup)).commit(options());
+  assert.equal((await loadInventory()).products.at(-1).id, projector.id);
+  const malformed = structuredClone(exported);
+  malformed.snapshot.indexedDB.meta.find(entry => entry.key === INVENTORY_KEY).value.version = 999;
+  assert.match(parseImportFile(JSON.stringify(malformed)).error, /версия/);
+});
 
 test('full export includes all stores, audit, accessories, drafts, legacy, metadata and preserves unknown fields', async () => {
   const rich = createInitialState(); rich.settings.businessName = 'Тест'; rich.futureField = { kept: true };

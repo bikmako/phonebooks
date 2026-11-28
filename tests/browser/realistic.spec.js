@@ -5,10 +5,16 @@ import { buildExportFile } from '../../src/storage/backupFormat.js';
 async function confirm(page, successful = true) {
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Скачать предварительную полную копию' }).click(); await download;
+  const extraDownloads = [];
+  const onDownload = file => extraDownloads.push(file.suggestedFilename());
+  page.on('download', onDownload);
   await page.getByLabel('Я сохранил предварительную копию и подтверждаю импорт').check();
   await page.getByLabel('Отдельно разрешаю заменить существующие данные, тему и черновики').check();
-  if (successful) await commitAndReload(page);
-  else await page.getByRole('button', { name: 'Подтвердить импорт', exact: true }).click();
+  try {
+    if (successful) await commitAndReload(page);
+    else await page.getByRole('button', { name: 'Подтвердить импорт', exact: true }).click();
+    expect(extraDownloads).toEqual([]);
+  } finally { page.off('download', onDownload); }
 }
 async function ready(page) {
   await expect(page.getByRole('button', { name: 'Скачать полную копию', exact: true })).toBeEnabled();

@@ -4,8 +4,18 @@ import { StrictMode } from "react";
 import { App } from "./App.jsx";
 import { StoreProvider } from "./hooks/useStore.jsx";
 import { initTheme } from "./hooks/useTheme.jsx";
-import "./styles/app.css";
+import "./product/legacy-entry.css";
+import "./product/product.css";
+import "./product/legacy-theme.css";
+import "./product/solo.css";
 import { startUpdates } from "./updates/service.js";
+import { demoSoloUrl, isDemo } from './demo/mode.js';
+
+if (isDemo && location.origin !== new URL(demoSoloUrl).origin) {
+  document.getElementById('boot')?.remove();
+  document.getElementById('root').textContent = 'Откройте демоверсию по адресу ' + demoSoloUrl;
+  throw new Error('Demo origin required');
+}
 
 // Убираем splash с первого экрана сразу после первого кадра (как в готовой сборке).
 requestAnimationFrame(() => {

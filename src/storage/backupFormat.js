@@ -1,4 +1,7 @@
 /** Portable local backup format. Never coerce or discard unknown state fields. */
+import { INVENTORY_KEY, validateInventory } from '../domain/inventory.js';
+import { validateWarehouse } from '../domain/warehouse.js';
+
 export const FORMAT_VERSION = 2;
 export const MAX_FILE_BYTES = 32 * 1024 * 1024;
 export const COLLECTIONS = ['accounts', 'phones', 'sales', 'expenses', 'transfers', 'cashOps', 'audit', 'accessoryItems', 'accessoryBatches', 'accessorySales'];
@@ -72,7 +75,7 @@ export function validateState(input, { legacy = false } = {}) {
   const repairIds = new Set();
   for (const row of state.phones) {
     ref(row.purchaseAccountId, 'accounts', 'phones.purchaseAccountId');
-    choice(row.status, ['in_stock', 'reserved', 'repair', 'sold'], 'phones.status');
+    choice(row.status, ['in_stock', 'reserved', 'repair', 'sold', 'supplier_returned'], 'phones.status');
     // Optional nested extension: old v1 phones and backups remain byte-for-byte
     // intact. No extra object store or duplicated expense/payment is created.
     if (row.repairSessionId !== undefined && row.repairSessionId !== null) {
@@ -131,6 +134,36 @@ export function validateState(input, { legacy = false } = {}) {
       }
     }
   }
+  if (state.catalog !== undefined) validateInventory(state.catalog);
+  if (state.sheetImports !== undefined && (!Array.isArray(state.sheetImports) ||
+    state.sheetImports.some(value => typeof value !== 'string' || !/^[a-f0-9]{64}$/.test(value)) ||
+    new Set(state.sheetImports).size !== state.sheetImports.length)) fail('Неверные квитанции импорта таблиц');
+  if (state.legacyTrade !== undefined) {
+    if (!Array.isArray(state.legacyTrade)) fail('Неверный журнал возвратов и броней');
+    const products = new Set([...state.phones.map(row => 'phone:' + row.id), ...state.accessoryItems.map(row => 'accessory:' + row.id)]);
+    const seen = new Set();
+    for (const row of state.legacyTrade) {
+      if (!object(row) || typeof row.id !== 'string' || seen.has(row.id) || !products.has(row.productId)) fail('Неверная запись возврата или брони');
+      seen.add(row.id);
+      text(row.date, 'legacyTrade.date');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(row.date) || !Number.isFinite(Date.parse(row.date))) fail('Неверная дата возврата или брони');
+      if (row.type === 'reserve') {
+        if (!Number.isSafeInteger(row.quantity) || row.quantity < 0 || !Number.isSafeInteger(row.unitMinor) || row.unitMinor <= 0 ||
+          !Number.isFinite(Date.parse(row.expiresAt)) || !['active', 'cancelled', 'sold'].includes(row.status)) fail('Неверная бронь');
+        for (const key of ['buyer', 'contact', 'note']) text(row[key], 'legacyTrade.' + key);
+      } else {
+        choice(row.type, ['customer_return', 'supplier_return', 'void_sale', 'compensation'], 'legacyTrade.type');
+        for (const key of ['units','amountMinor','cashMinor','revenueMinor','costMinor','expenseMinor','stockDelta','originalLine'])
+          if (!Number.isSafeInteger(row[key])) fail('Неверная сумма или количество возврата');
+        for (const key of ['originalId', 'name', 'reason', 'createdAt']) text(row[key], 'legacyTrade.' + key);
+        if (row.amountMinor) ref(row.accountId, 'accounts', 'legacyTrade.accountId');
+        const supplier = row.type === 'supplier_return';
+        if (row.units < 0 || row.amountMinor < 0 || row.originalLine < 1 || row.cashMinor !== (supplier ? row.amountMinor : -row.amountMinor) ||
+          row.revenueMinor !== (supplier ? 0 : row.cashMinor) || row.stockDelta !== (supplier ? -row.units : row.units)) fail('Финансы возврата не сходятся');
+      }
+    }
+  }
+  validateWarehouse(state);
   return state;
 }
 export function validateLocal(entries) {
@@ -173,17 +206,19 @@ export function validateSnapshot(snapshot) {
     for (const entry of db[name]) {
       if (!object(entry) || typeof entry.key !== 'string' || keys.has(entry.key) || !('value' in entry)) fail(`Неверная запись ${name}`);
       keys.add(entry.key);
-      if (name === 'state') validateState(entry.value);
+      if (name === 'state' && validateState(entry.value).demoData) fail('Демонстрационная копия');
       if (name === 'backups') {
         const backup = entry.value;
         if (!object(backup) || backup.id !== entry.key || typeof backup.payload !== 'string') fail('Неверная точка восстановления');
         date(backup.at, 'backups.at');
         const data = validateState(JSON.parse(backup.payload), { legacy: true });
+        if (data.demoData) fail('Демонстрационная точка восстановления');
         number(backup.phones, 'backups.phones'); number(backup.sales, 'backups.sales'); text(backup.reason, 'backups.reason');
         if (backup.phones !== data.phones.length || backup.sales !== data.sales.length) fail('Счётчики точки восстановления не соответствуют данным');
       }
       if (name === 'meta' && entry.key === 'lastSaved') date(entry.value?.at, 'lastSaved.at');
       if (name === 'meta' && entry.key === 'pendingImport') fail('Незавершённый импорт в файле');
+      if (name === 'meta' && entry.key === INVENTORY_KEY) validateInventory(entry.value);
       if (name === 'meta' && entry.key.startsWith('recovery:')) validateSnapshot(entry.value);
     }
   }
@@ -211,6 +246,7 @@ export function parseImportFile(source) {
     }
     if ('data' in file && (file.app !== 'PhoneBooks' || file.version !== 1)) fail('Неизвестный старый формат');
     const data = validateState('data' in file ? file.data : file, { legacy: true });
+    if (data.demoData) fail('Демонстрационная копия');
     return { data, snapshot: null, legacy: true, error: null };
   } catch (error) { return { data: null, snapshot: null, error: `Копия не принята: ${error.message}` }; }
 }

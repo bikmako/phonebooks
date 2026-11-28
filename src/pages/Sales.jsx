@@ -4,6 +4,7 @@
  * Восстановлено из production-бандла PhoneBooks. Логика и разметка сохранены без изменений;
  * локальные имена переменных в теле функций оставлены как в бандле.
  */
+import { WarehouseActivity } from "../components/WarehouseActivity.jsx";
 import { SaleForm } from "../components/sales/SaleForm.jsx";
 import {
   Button,
@@ -22,21 +23,27 @@ import {
 } from "../domain/accessories.js";
 import { cancelSale, restoreSale } from "../domain/sales.js";
 import { useStore } from "../hooks/useStore.jsx";
+import { Metrics, PeriodSelect } from "../product/ui.jsx";
 import {
   getSaleMargin,
   getSaleProfit,
   getSaleRevenue,
+  getStats,
 } from "../utils/calculations.js";
 import { PAYMENT_METHODS } from "../utils/constants.js";
 import {
   formatAmount,
   formatDate,
   formatMoney,
+  formatPreciseMoney,
   plural,
-  today,
+  getPeriod,
+  inPeriod,
 } from "../utils/format.js";
 import {
   ArrowUpRight,
+  ChartNoAxesCombined,
+  Coins,
   Package,
   Pencil,
   Plus,
@@ -47,19 +54,30 @@ import {
 } from "lucide-react";
 import React from "react";
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
+import { SpreadsheetExportDialog } from '../product/SoloSpreadsheet.jsx';
+import { isDemo } from '../demo/mode.js';
 export function SalesPage({
   formOpen: s,
   onOpenForm: t,
   onCloseForm: n,
   presetPhoneId: a,
+  onOpenWarehouse,
 }) {
+  const [exporting, setExporting] = React.useState(false);
   const { data: c, mutate: r, notify: i } = useStore(),
+    [period, setPeriod] = React.useState("all"),
+    range = React.useMemo(() => getPeriod(period), [period]),
+    stats = React.useMemo(() => getStats(c, range), [c, range]),
     [o, l] = React.useState(""),
     [d, x] = React.useState("completed"),
     [v, p] = React.useState(null),
     [w, A] = React.useState(null),
     [L, O] = React.useState(null),
     [m, f] = React.useState(20),
+    accessorySales = React.useMemo(() => c.accessorySales.filter(sale =>
+      (d === "all" || sale.status === d) && inPeriod(sale.date, range) &&
+      [sale.buyerName, ...sale.items.map(item => item.name)].join(" ").toLocaleLowerCase("ru").includes(o.trim().toLocaleLowerCase("ru"))),
+      [c.accessorySales, range, d, o]),
     C = React.useMemo(
       () => new Map(c.phones.map((u) => [u.id, u])),
       [c.phones],
@@ -67,7 +85,7 @@ export function SalesPage({
     S = React.useMemo(() => {
       const u = o.trim().toLowerCase();
       return [...c.sales]
-        .filter((N) => (d === "all" ? !0 : N.status === d))
+        .filter((N) => (d === "all" || N.status === d) && inPeriod(N.date, range))
         .filter((N) => {
           if (!u) return !0;
           const E = C.get(N.phoneId);
@@ -88,34 +106,7 @@ export function SalesPage({
             ? E.createdAt.localeCompare(N.createdAt)
             : E.date.localeCompare(N.date),
         );
-    }, [c.sales, d, o, C]),
-    g = today(),
-    b = React.useMemo(() => {
-      const u = c.sales.filter((_) => _.status === "completed"),
-        N = u.filter((_) => _.date === g),
-        E = g.slice(0, 7),
-        R = u.filter((_) => _.date.startsWith(E)),
-        M = c.accessorySales.filter((_) => _.status === "completed"),
-        G = M.filter((_) => _.date === g),
-        ee = M.filter((_) => _.date.startsWith(E)),
-        W = G.reduce((_, k) => _ + getAccessorySaleTotals(k).qty, 0),
-        ie = G.reduce((_, k) => _ + getAccessorySaleTotals(k).revenue, 0),
-        Q = ee.reduce((_, k) => _ + getAccessorySaleTotals(k).qty, 0),
-        V = ee.reduce((_, k) => _ + getAccessorySaleTotals(k).profit, 0);
-      return {
-        todayCount: N.length,
-        accTodayQty: W,
-        accTodaySum: ie,
-        accMonthQty: Q,
-        accMonthProfit: V,
-        todaySum: N.reduce((_, k) => _ + getSaleRevenue(k), 0),
-        todayProfit: N.reduce((_, k) => _ + getSaleProfit(k, c.phones), 0),
-        monthCount: R.length,
-        monthSum: R.reduce((_, k) => _ + getSaleRevenue(k), 0),
-        monthProfit: R.reduce((_, k) => _ + getSaleProfit(k, c.phones), 0),
-        available: c.phones.filter((_) => _.status === "in_stock").length,
-      };
-    }, [c.sales, c.phones, g]),
+    }, [c.sales, d, o, C, range]),
     B = () => {
       if (!w) return;
       (r((N) => cancelSale(N, w.id)).ok &&
@@ -146,71 +137,19 @@ export function SalesPage({
     };
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card className="p-3.5">
-          <p className="text-[11.5px] text-ink-500">Продаж сегодня</p>
-          <p className="mt-0.5 text-[17px] font-bold tabular-nums text-ink-900">
-            {b.todayCount}
-            {" шт"}
-          </p>
-          <p className="text-[11px] text-emerald-600">
-            +{formatAmount(b.todaySum)}
-            {" ₽"}
-          </p>
-          {b.accTodayQty > 0 && (
-            <p className="text-[11px] text-ink-400">
-              {"аксессуары: "}
-              {b.accTodayQty}
-              {" шт · "}
-              <span className="font-semibold text-emerald-600">
-                +{formatAmount(b.accTodaySum)}
-                {" ₽"}
-              </span>
-            </p>
-          )}
-        </Card>
-        <Card className="p-3.5">
-          <p className="text-[11.5px] text-ink-500">Прибыль сегодня</p>
-          <p
-            className={cx(
-              "mt-0.5 text-[17px] font-bold tabular-nums",
-              b.todayProfit >= 0 ? "text-emerald-600" : "text-red-500",
-            )}
-          >
-            {b.todayProfit >= 0 ? "+" : ""}
-            {formatAmount(b.todayProfit)}
-            {" ₽"}
-          </p>
-          <p className="text-[11px] text-ink-400">с проданных устройств</p>
-        </Card>
-        <Card className="p-3.5">
-          <p className="text-[11.5px] text-ink-500">За месяц</p>
-          <p className="mt-0.5 text-[17px] font-bold tabular-nums text-ink-900">
-            {b.monthCount}
-            {" шт"}
-          </p>
-          <p className="text-[11px] text-emerald-600">
-            прибыль +{formatAmount(b.monthProfit)}
-            {" ₽"}
-          </p>
-        </Card>
-        <Card className="col-span-2 flex items-center justify-between gap-3 p-3.5 lg:col-span-1">
-          <div>
-            <p className="text-[11.5px] text-ink-500">Доступно к продаже</p>
-            <p className="mt-0.5 text-[17px] font-bold tabular-nums text-ink-900">
-              {b.available}
-              {" шт"}
-            </p>
-          </div>
-          <Button
-            icon={<Plus className="h-4 w-4" />}
-            onClick={t}
-            className="shrink-0"
-          >
-            Продажа
-          </Button>
-        </Card>
+
+      <div className="pb-actions pb-sales-toolbar">
+        <PeriodSelect value={period} onChange={setPeriod} />
+        <Button icon={<Plus className="h-4 w-4" />} onClick={t}>Продажа</Button>
+        {!isDemo && <Button variant="secondary" onClick={() => setExporting(true)}>Экспорт продаж</Button>}
       </div>
+      {exporting && <SpreadsheetExportDialog filter={{ kind: 'sale', ...range, query: o,
+        operationStatus: d === 'all' ? '' : d === 'completed' ? 'posted' : 'cancelled' }} onClose={() => setExporting(false)} />}
+      <Metrics items={[
+        { label: "Продажи", value: stats.salesCount, Icon: TrendingUp },
+        { label: "Выручка", value: formatPreciseMoney(stats.revenue), Icon: Coins },
+        { label: "Валовая прибыль", value: formatPreciseMoney(stats.grossProfit), Icon: ChartNoAxesCombined },
+      ]} />
       {s && (
         <Card className="border-emerald-200 p-4 sm:p-5 animate-fade-up">
           <CardHeader
@@ -321,7 +260,7 @@ export function SalesPage({
                       <tr
                         className={cx(
                           "group transition-colors hover:bg-slate-50/60",
-                          M && "opacity-60",
+                          M && "pb-sale-cancelled",
                         )}
                         key={u.id}
                       >
@@ -391,7 +330,7 @@ export function SalesPage({
                           )}
                         </td>
                         <td className="px-5 py-3 text-right">
-                          <div className="flex justify-end gap-1 opacity-70 transition-opacity group-hover:opacity-100">
+                          <div className="flex justify-end gap-1">
                             {M ? (
                               <button
                                 onClick={() => j(u)}
@@ -435,7 +374,7 @@ export function SalesPage({
                   <div
                     className={cx(
                       "rounded-xl border border-slate-100 bg-white p-3",
-                      R && "opacity-70",
+                      R && "pb-sale-cancelled",
                     )}
                     key={u.id}
                   >
@@ -530,23 +469,24 @@ export function SalesPage({
           </Fragment>
         )}
       </Card>
-      {c.accessorySales.length > 0 && (
+      {d !== "cancelled" && <WarehouseActivity range={range} query={o} onOpen={onOpenWarehouse} />}
+      {accessorySales.length > 0 && (
         <Card>
           <div className="card-pad pb-3">
             <CardHeader
               title="Продажи аксессуаров"
-              subtitle={`${c.accessorySales.length} ${plural(c.accessorySales.length, "чек", "чека", "чеков")}`}
+              subtitle={`${accessorySales.length} ${plural(accessorySales.length, "чек", "чека", "чеков")}`}
             />
           </div>
           <ul className="stagger divide-y divide-slate-50">
-            {c.accessorySales.map((u) => {
+            {accessorySales.map((u) => {
               const N = getAccessorySaleTotals(u),
                 E = u.status === "cancelled";
               return (
                 <li
                   className={cx(
                     "card-pad flex items-start justify-between gap-3 py-3",
-                    E && "opacity-60",
+                    E && "pb-sale-cancelled",
                   )}
                   key={u.id}
                 >

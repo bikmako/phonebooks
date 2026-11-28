@@ -24,6 +24,7 @@ export function formatAmount(s) {
       : moneyFormatterPrecise.format(s)
     : "0";
 }
+export const formatPreciseMoney = value => formatAmount(value) + " ₽";
 export function formatCompactMoney(s) {
   const t = Math.abs(s);
   return t >= 1e6
@@ -145,14 +146,14 @@ export function getPeriod(s, t = today()) {
       };
     default:
       return {
-        from: "2000-01-01",
+        from: "1900-01-01",
         to: "2100-12-31",
         label: "Всё время",
       };
   }
 }
 export function getPreviousPeriod(s, t = today()) {
-  if (s.from === "2000-01-01") return null;
+  if (s.from === "1900-01-01") return null;
   const n = parseDate(s.from);
   if (!n) return null;
   const a = daysBetween(s.from, s.to) + 1,
@@ -171,4 +172,15 @@ export function getPreviousPeriod(s, t = today()) {
 export function inPeriod(s, t) {
   const n = s.slice(0, 10);
   return n >= t.from && n <= t.to;
+}
+
+const minorMoneyFormatter = new Intl.NumberFormat('ru', { style: 'currency', currency: 'RUB', maximumFractionDigits: 2 });
+export function formatMinorMoney(value) {
+  const minor = BigInt(value);
+  const rubles = minor / 100n;
+  const kopecks = minor % 100n;
+  const amount = rubles === 0n && kopecks < 0n ? -0 : rubles;
+  return minorMoneyFormatter.formatToParts(amount).flatMap(({ type, value }) =>
+    type === 'fraction' ? (kopecks ? [String(kopecks < 0 ? -kopecks : kopecks).padStart(2, '0')] : [])
+      : type === 'decimal' && !kopecks ? [] : [value]).join('');
 }

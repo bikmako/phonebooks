@@ -9,10 +9,11 @@ async function settings(page) {
   await expect(page.getByRole('button', { name: 'Скачать полную копию', exact: true })).toBeEnabled();
 }
 async function openPhone(page) {
-  await page.locator('main').getByText(model).filter({ visible: true }).first().click();
+  await page.getByRole('region', { name: 'Смартфоны на складе' })
+    .getByRole('button').filter({ has: page.getByText(model, { exact: true }) }).click();
   const finance = page.getByRole('region', { name: 'Финансовая информация' });
   await expect(finance).toBeVisible();
-  await expect(finance.locator('..').locator('..').getByRole('button', { name: 'Закрыть', exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole('region', { name: 'Карточка устройства' }).getByRole('button', { name: 'Закрыть', exact: true })).toBeInViewport({ ratio: 1 });
 }
 async function buy(page) {
   await page.goto('./#/purchase?action=purchase');
@@ -22,10 +23,10 @@ async function buy(page) {
   await openPhone(page);
 }
 async function start(page) {
-  await page.getByRole('button', { name: 'Ремонт', exact: true }).click();
+  await page.getByRole('button', { name: 'Передать в ремонт', exact: true }).click();
   await expect.poll(async () => (await state(page)).phones[0].status).toBe('repair');
   await openPhone(page);
-  await expect(page.getByRole('button', { name: 'На складе', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Вернуть на склад', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Продать', exact: true })).toHaveCount(0);
 }
 async function dialog(page, amount) {
@@ -101,17 +102,21 @@ test('purchase, repair cancellation/validation, double-click, stock cost and 600
 test('repeat repairs, correction across accounts, deletion, zero, reload and actual export/import', async ({ page }) => {
   await buy(page); await start(page); await finish(page, 2000);
   await start(page); await finish(page, 500, bank); await cost(page, '22 500');
+  await page.getByRole('button', { name: 'Ремонты', exact: true }).click();
   await page.getByRole('button', { name: 'Исправить ремонт 1', exact: true }).click();
   let modal = page.getByRole('dialog', { name: 'Исправить ремонт', exact: true });
   await modal.getByLabel('Стоимость ремонта, ₽').fill('1500'); await modal.getByLabel('Счёт списания').selectOption(bank);
   await modal.getByRole('button', { name: 'Сохранить', exact: true }).click(); await expect(modal).toBeHidden();
   let data = await state(page); expect(data.phones[0].repairs).toHaveLength(2);
   expect(getAccountBalance(data, cash)).toBe(80000); expect(getAccountBalance(data, bank)).toBe(8000);
+  await page.getByRole('button', { name: 'Информация', exact: true }).click();
   await cost(page, '22 000');
+  await page.getByRole('button', { name: 'Ремонты', exact: true }).click();
   await page.getByRole('button', { name: 'Удалить ремонт 2', exact: true }).click();
   modal = page.getByRole('dialog', { name: 'Удалить ремонт?', exact: true });
   await modal.getByRole('button', { name: 'Удалить', exact: true }).click(); await expect(modal).toBeHidden();
   expect(getAccountBalance(await state(page), bank)).toBe(8500);
+  await page.getByRole('button', { name: 'Информация', exact: true }).click();
   await start(page); await finish(page, 0); await cost(page, '21 500');
   data = await state(page); expect(data.phones[0].repairs).toHaveLength(2); expect(data.phones[0].repairs[1].accountId).toBeNull();
   await page.reload(); await openPhone(page); await cost(page, '21 500'); expect(await state(page)).toEqual(data);

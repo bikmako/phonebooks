@@ -6,7 +6,6 @@ import { buildServiceWorker } from "./tools/build-service-worker.js";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
-const distDir = path.resolve(projectRoot, "dist");
 const swTemplatePath = path.resolve(projectRoot, "public/sw.js");
 
 // Прозрачный Service Worker для dev: не кеширует, чистит унаследованные кеши
@@ -29,8 +28,10 @@ self.addEventListener('activate', (event) => {
  * dist/index.html, а '/' в dev-сервере отдаёт app.html.
  */
 function entryPointPlugin() {
+  let distDir;
   return {
     name: "phonebooks-entry-point",
+    configResolved(config) { distDir = path.resolve(config.root, config.build.outDir); },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         // В dev нельзя отдавать legacy sw.js (кеш phonebooks-v8 со старыми хэшами):
@@ -54,8 +55,10 @@ function entryPointPlugin() {
 }
 
 function serviceWorkerPlugin() {
+  let distDir;
   return {
     name: "phonebooks-service-worker",
+    configResolved(config) { distDir = path.resolve(config.root, config.build.outDir); },
     apply: "build",
     closeBundle() {
       const template = fs.readFileSync(swTemplatePath, "utf8");
@@ -77,14 +80,11 @@ export default defineConfig({
     },
   },
   server: {
-    host: "0.0.0.0",
+    host: "127.0.0.1",
     port: 5173,
-    // Превью проксируется на другой host — разрешаем его явно.
-    allowedHosts: true,
   },
   preview: {
-    host: "0.0.0.0",
+    host: "127.0.0.1",
     port: 4173,
-    allowedHosts: true,
   },
 });

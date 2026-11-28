@@ -88,7 +88,11 @@ export function getHistoryIcon(s) {
       ? ArrowDownLeft
       : (HISTORY_ICONS[s.icon] ?? Receipt);
 }
+import { SpreadsheetExportDialog } from '../product/SoloSpreadsheet.jsx';
+import { isDemo } from '../demo/mode.js';
+
 export function HistoryPage() {
+  const [exporting, setExporting] = React.useState(false);
   const { data: s } = useStore(),
     t = React.useMemo(() => getAllOperations(s), [s]),
     [n, a] = React.useState("all"),
@@ -112,7 +116,7 @@ export function HistoryPage() {
             }
           : i === "all"
             ? {
-                from: "2000-01-01",
+                from: "1900-01-01",
                 to: "2100-01-01",
               }
             : {
@@ -176,27 +180,28 @@ export function HistoryPage() {
   let S = 0;
   return (
     <div className="space-y-4">
+      {!isDemo && <button className="pb-action pb-action-secondary" onClick={() => setExporting(true)}>Экспорт истории</button>}
+      {exporting && <SpreadsheetExportDialog filter={{ kind: 'history', ...O, query: c, ids: m.map(row => row.id) }}
+        onClose={() => setExporting(false)} />}
       <Card className="p-4">
-        <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-xl bg-emerald-50/70 px-3 py-2">
-            <p className="text-[11px] text-emerald-700">Приход</p>
-            <p className="text-[14px] font-bold tabular-nums leading-tight text-emerald-600">
+        <dl className="pb-cash-summary">
+          <div>
+            <dt>Приход</dt>
+            <dd className="pb-money-in">
               +{formatCompactMoney(f.income)}
-            </p>
+            </dd>
           </div>
-          <div className="rounded-xl bg-red-50/70 px-3 py-2">
-            <p className="text-[11px] text-red-600">Расход</p>
-            <p className="text-[14px] font-bold tabular-nums leading-tight text-red-500">
+          <div>
+            <dt>Расход</dt>
+            <dd className="pb-money-out">
               −{formatCompactMoney(f.outcome)}
-            </p>
+            </dd>
           </div>
-          <div className="rounded-xl bg-slate-100/70 px-3 py-2">
-            <p className="text-[11px] text-ink-500">Операций</p>
-            <p className="text-[14.5px] font-bold tabular-nums text-ink-900">
-              {m.length}
-            </p>
+          <div>
+            <dt>Операций</dt>
+            <dd>{m.length}</dd>
           </div>
-        </div>
+        </dl>
         <p className="mt-2 text-[11px] text-ink-400">
           Переводы между счетами не входят в приход и расход
         </p>
@@ -249,7 +254,7 @@ export function HistoryPage() {
                     label: "Свой период",
                   },
                 ].map((g) => (
-                  <button
+                  <button type="button" aria-pressed={i === g.id}
                     onClick={() => o(g.id)}
                     className={cx(
                       "h-9 rounded-lg px-3 text-[12px] font-medium transition-colors",
@@ -291,16 +296,10 @@ export function HistoryPage() {
               )}
             </div>
           )}
-          <div className="no-scrollbar -mx-1 mt-3 flex gap-1.5 overflow-x-auto px-1">
+          <div className="pb-tabs pb-history-filters mt-3" aria-label="Тип операции">
             {HISTORY_FILTERS.map((g) => (
-              <button
+              <button type="button" aria-pressed={n === g.id}
                 onClick={() => a(g.id)}
-                className={cx(
-                  "h-9 shrink-0 rounded-full px-3.5 text-[12.5px] font-medium transition-colors",
-                  n === g.id
-                    ? "bg-brand-600 text-white"
-                    : "bg-slate-100 text-ink-600 active:bg-slate-200",
-                )}
                 key={g.id}
               >
                 {g.label}
@@ -336,7 +335,7 @@ export function HistoryPage() {
                 (S += B.length),
                 (
                   <div key={g}>
-                    <div className="sticky top-0 z-10 flex items-center justify-between border-y border-slate-100 bg-slate-50/95 px-4 py-1.5 backdrop-blur sm:px-5">
+                    <div className="pb-history-date sticky top-0 z-10 flex items-center justify-between border-y px-4 py-1.5 sm:px-5">
                       <span className="flex items-center gap-1.5 text-[11.5px] font-semibold text-ink-500">
                         <CalendarDays className="h-3.5 w-3.5" /> {formatDate(g)}
                       </span>
@@ -345,12 +344,12 @@ export function HistoryPage() {
                         {plural(b.length, "операция", "операции", "операций")}
                       </span>
                     </div>
-                    <div className="divide-y divide-slate-50">
+                    <div>
                       {B.map((y) => {
                         const j = getHistoryIcon(y);
                         return (
                           <div
-                            className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50/60 sm:px-5"
+                            className="pb-history-entry flex items-center gap-3 px-4 py-2.5 transition-colors sm:px-5"
                             key={y.id}
                           >
                             <span
